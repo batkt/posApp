@@ -11,7 +11,7 @@ class CategoryService {
   /// API: GET /api/BaraaniiAngilal
   Future<CategoryResult> getCategories({
     String search = '',
-    String baiguullagiinId = '65fa71b863d5f2fa70101963',
+    required String baiguullagiinId,
     int page = 1,
     int limit = 100,
   }) async {
@@ -53,9 +53,12 @@ class CategoryService {
   }
 
   /// Get category by ID
-  Future<Category?> getCategoryById(String id) async {
+  Future<Category?> getCategoryById(
+    String id, {
+    required String baiguullagiinId,
+  }) async {
     try {
-      final result = await getCategories();
+      final result = await getCategories(baiguullagiinId: baiguullagiinId);
       if (result.success) {
         return result.categories.firstWhere(
           (category) => category.id == id,

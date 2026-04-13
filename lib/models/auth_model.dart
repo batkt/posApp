@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../auth/staff_screen_access.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import 'pos_session.dart';
@@ -65,12 +66,15 @@ class AuthModel extends ChangeNotifier {
   bool _requiresTwoFactor = false;
   String _pending2FAUsername = '';
   PosSession? _posSession;
+  StaffScreenAccess _staffAccess = StaffScreenAccess.denied;
 
   User? get currentUser => _currentUser;
   bool get isAuthenticated => _isAuthenticated;
   bool get requiresTwoFactor => _requiresTwoFactor;
   String get pending2FAUsername => _pending2FAUsername;
   bool get isLoggedIn => _currentUser != null;
+
+  StaffScreenAccess get staffAccess => _staffAccess;
 
   /// Branch + org for `posBack` sale APIs (set on real API login).
   PosSession? get posSession => _posSession;
@@ -80,49 +84,6 @@ class AuthModel extends ChangeNotifier {
       _posSession != null &&
       (posApiService.token != null && posApiService.token!.isNotEmpty);
 
-  // Demo credentials - username + password (used when API login fails)
-  final Map<String, String> _demoCredentials = {
-    'admin': 'admin123',
-    'manager': 'manager123',
-    'cash1': '1516',
-  };
-
-  final Map<String, User> _demoUsers = {
-    'admin': User(
-      id: 'user-001',
-      username: 'admin',
-      name: 'Дэлгүүрийн Админ',
-      email: 'admin@pos.mn',
-      phone: '99119911',
-      isTwoFactorEnabled: true,
-      isBiometricEnabled: true,
-      createdAt: DateTime(2024, 1, 15),
-      role: UserRole.admin,
-    ),
-    'manager': User(
-      id: 'user-002',
-      username: 'manager',
-      name: 'Дэлгүүрийн Менежер',
-      email: 'manager@pos.mn',
-      phone: '99119922',
-      isTwoFactorEnabled: false,
-      isBiometricEnabled: false,
-      createdAt: DateTime(2024, 3, 10),
-      role: UserRole.manager,
-    ),
-    'cash1': User(
-      id: 'user-003',
-      username: 'cash1',
-      name: 'Кассчин',
-      email: 'cashier@pos.mn',
-      phone: '99119933',
-      isTwoFactorEnabled: false,
-      isBiometricEnabled: false,
-      createdAt: DateTime(2024, 6, 1),
-      role: UserRole.cashier,
-    ),
-  };
-
   Future<bool> login(String username, String password) async {
     // Call real API
     final result = await authService.login(
@@ -131,6 +92,7 @@ class AuthModel extends ChangeNotifier {
     );
 
     if (result.success) {
+      _staffAccess = result.staffAccess ?? StaffScreenAccess.denied;
       if (result.requiresTwoFactor) {
         _requiresTwoFactor = true;
         _pending2FAUsername = username.trim();
@@ -141,16 +103,6 @@ class AuthModel extends ChangeNotifier {
 
       _currentUser = result.user;
       _posSession = result.posSession;
-      _isAuthenticated = true;
-      notifyListeners();
-      return true;
-    }
-
-    // Fallback to demo users if API fails
-    if (_demoCredentials.containsKey(username) &&
-        _demoCredentials[username] == password) {
-      _currentUser = _demoUsers[username];
-      _posSession = null;
       _isAuthenticated = true;
       notifyListeners();
       return true;
@@ -167,6 +119,9 @@ class AuthModel extends ChangeNotifier {
     );
 
     if (result.success) {
+      if (result.staffAccess != null) {
+        _staffAccess = result.staffAccess!;
+      }
       _currentUser = result.user ?? _currentUser;
       _posSession = result.posSession ?? _posSession;
       _isAuthenticated = true;
@@ -180,31 +135,18 @@ class AuthModel extends ChangeNotifier {
   }
 
   Future<bool> loginWithBiometric() async {
-    // Simulate biometric check
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    // For demo, automatically log in as admin if biometric enabled
-    final user = _demoUsers['admin'];
-    if (user != null && user.isBiometricEnabled) {
-      _currentUser = user;
-      _isAuthenticated = true;
-      notifyListeners();
-      return true;
-    }
-
     return false;
   }
 
   Future<bool> isBiometricAvailable() async {
-    // Simulate checking biometric availability
-    await Future.delayed(const Duration(milliseconds: 200));
-    return true; // Always available for demo
+    return false;
   }
 
   Future<void> logout() async {
     await authService.logout();
     _currentUser = null;
     _posSession = null;
+    _staffAccess = StaffScreenAccess.denied;
     _isAuthenticated = false;
     _requiresTwoFactor = false;
     _pending2FAUsername = '';
@@ -239,9 +181,6 @@ class AuthModel extends ChangeNotifier {
       isTwoFactorEnabled: isTwoFactorEnabled,
       isBiometricEnabled: isBiometricEnabled,
     );
-
-    // Update demo user reference
-    _demoUsers[_currentUser!.username] = _currentUser!;
 
     notifyListeners();
   }

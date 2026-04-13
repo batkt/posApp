@@ -1,6 +1,18 @@
 import 'api_service.dart';
+import '../auth/staff_screen_access.dart';
 import '../models/auth_model.dart';
 import '../models/pos_session.dart';
+
+UserRole _roleHintFromAccess(StaffScreenAccess access) {
+  if (access.hasFullAccess) return UserRole.admin;
+  if (access.allowsKiosk &&
+      !access.allowsPosSystem &&
+      !access.allowsAguulakh &&
+      !access.allowsKhariltsagch) {
+    return UserRole.cashier;
+  }
+  return UserRole.manager;
+}
 
 class AuthService {
   final ApiService _apiService;
@@ -37,12 +49,12 @@ class AuthService {
           _apiService.setToken(token);
           posApiService.setToken(token);
 
-          // Parse user from response
+          final staffAccess = StaffScreenAccess.fromAjiltan(userData);
           final user = User(
             id: userData?['_id'] ?? userData?['id'] ?? '',
             username: userData?['burtgeliinDugaar'] ?? username,
             name: userData?['ner'] ?? userData?['name'] ?? '',
-            email: userData?['email'],
+            email: userData?['mail']?.toString() ?? userData?['email']?.toString(),
             phone: userData?['utas'] ?? userData?['phone'],
             isTwoFactorEnabled: userData?['isTwoFactorEnabled'] ?? false,
             isBiometricEnabled: userData?['isBiometricEnabled'] ?? false,
@@ -50,6 +62,7 @@ class AuthService {
                     userData?['createdAt'] ??
                     '') ??
                 DateTime.now(),
+            role: _roleHintFromAccess(staffAccess),
           );
 
           final posSession = PosSession.tryParse(userData);
@@ -60,6 +73,7 @@ class AuthService {
             requiresTwoFactor: response.data!['requires2FA'] ?? false,
             organizations: organizations?.cast<Map<String, dynamic>>(),
             posSession: posSession,
+            staffAccess: staffAccess,
           );
         }
       }
@@ -96,12 +110,14 @@ class AuthService {
           posApiService.setToken(token);
 
           final userData = response.data!['result'] as Map<String, dynamic>?;
+          final staffAccess = StaffScreenAccess.fromAjiltan(userData);
           final user = userData != null
               ? User(
                   id: userData['_id'] ?? userData['id'] ?? '',
                   username: userData['burtgeliinDugaar'] ?? '',
                   name: userData['ner'] ?? userData['name'] ?? '',
-                  email: userData['email'],
+                  email: userData['mail']?.toString() ??
+                      userData['email']?.toString(),
                   phone: userData['utas'] ?? userData['phone'],
                   isTwoFactorEnabled:
                       userData['isTwoFactorEnabled'] ?? false,
@@ -111,6 +127,7 @@ class AuthService {
                           userData['createdAt'] ??
                           '') ??
                       DateTime.now(),
+                  role: _roleHintFromAccess(staffAccess),
                 )
               : null;
           final posSession = PosSession.tryParse(userData);
@@ -119,6 +136,7 @@ class AuthService {
             user: user,
             token: token,
             posSession: posSession,
+            staffAccess: staffAccess,
           );
         }
       }
@@ -263,6 +281,7 @@ class AuthResult {
   final bool requiresTwoFactor;
   final List<Map<String, dynamic>>? organizations;
   final PosSession? posSession;
+  final StaffScreenAccess? staffAccess;
 
   const AuthResult._({
     required this.success,
@@ -272,6 +291,7 @@ class AuthResult {
     this.requiresTwoFactor = false,
     this.organizations,
     this.posSession,
+    this.staffAccess,
   });
 
   factory AuthResult.success({
@@ -280,6 +300,7 @@ class AuthResult {
     bool requiresTwoFactor = false,
     List<Map<String, dynamic>>? organizations,
     PosSession? posSession,
+    StaffScreenAccess? staffAccess,
   }) =>
       AuthResult._(
         success: true,
@@ -288,6 +309,7 @@ class AuthResult {
         requiresTwoFactor: requiresTwoFactor,
         organizations: organizations,
         posSession: posSession,
+        staffAccess: staffAccess,
       );
 
   factory AuthResult.error(String error) => AuthResult._(

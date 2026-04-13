@@ -1,75 +1,184 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../data/mock_payment_data.dart';
+
+import '../data/payment_display_config.dart';
+import '../models/auth_model.dart';
 import '../models/sales_model.dart';
+import '../services/guilgee_service.dart';
 import '../theme/app_theme.dart';
 
-class SalesHistoryScreen extends StatelessWidget {
+class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
+
+  @override
+  State<SalesHistoryScreen> createState() => _SalesHistoryScreenState();
+}
+
+class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
+  Future<GuilgeeListResult>? _remoteFuture;
+  String? _lastSessionKey;
+
+  List<CompletedSale> _mergeRemoteAndLocal(
+    List<CompletedSale> remote,
+    List<CompletedSale> local,
+  ) {
+    final ids = remote.map((e) => e.id).toSet();
+    final extra = local.where((s) => !ids.contains(s.id)).toList();
+    return [...remote, ...extra];
+  }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final auth = context.watch<AuthModel>();
+    final sales = context.watch<SalesModel>();
+
+    final allow = auth.staffAccess.allowsSalesHistory;
+    final pos = auth.posSession;
+    final sessionKey = (allow && pos != null)
+        ? '${pos.baiguullagiinId}|${pos.salbariinId}'
+        : null;
+
+    if (sessionKey != _lastSessionKey) {
+      _lastSessionKey = sessionKey;
+      _remoteFuture = (allow && pos != null)
+          ? guilgeeService.listGuilgeeniiTuukh(
+              baiguullagiinId: pos.baiguullagiinId,
+              salbariinId: pos.salbariinId,
+            )
+          : null;
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Борлуулалтын түүх'),
         centerTitle: true,
       ),
-      body: Consumer<SalesModel>(
-        builder: (context, sales, child) {
-          if (sales.salesHistory.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.receipt_long_outlined,
-                    size: 64,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Борлуулалт бүртгэгдээгүй',
-                    style: textTheme.titleMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Борлуулалт хийж энд харна уу',
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
+      body: _buildBody(context, colorScheme, textTheme, auth, sales),
+    );
+  }
 
-          // Group sales by date
-          final groupedSales = _groupSalesByDate(sales.salesHistory);
-
-          return ListView.builder(
+  Widget _buildBody(
+    BuildContext context,
+    ColorScheme colorScheme,
+    TextTheme textTheme,
+    AuthModel auth,
+    SalesModel sales,
+  ) {
+    if (!auth.staffAccess.allowsSalesHistory) {
+      return _salesListOrEmpty(sales.salesHistory, colorScheme, textTheme);
+    }
+    if (auth.posSession == null || _remoteFuture == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
             padding: const EdgeInsets.all(16),
-            itemCount: groupedSales.length,
-            itemBuilder: (context, index) {
-              final dateGroup = groupedSales[index];
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _DateHeader(date: dateGroup.date),
-                  const SizedBox(height: 8),
-                  ...dateGroup.sales.map((sale) => _SaleCard(sale: sale)),
-                  const SizedBox(height: 24),
-                ],
-              );
-            },
+            child: Text(
+              'Салбарын мэдээлэл байхгүй. Зөвхөн энэ төхөөрөмжийн түүх харагдана.',
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(
+            child: _salesListOrEmpty(sales.salesHistory, colorScheme, textTheme),
+          ),
+        ],
+      );
+    }
+
+    return FutureBuilder<GuilgeeListResult>(
+      future: _remoteFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final result = snapshot.data;
+        if (result != null && result.success) {
+          final merged =
+              _mergeRemoteAndLocal(result.sales, sales.salesHistory);
+          return _salesListOrEmpty(merged, colorScheme, textTheme);
+        }
+        if (result != null && !result.success) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  result.error ?? 'Ачаалахад алдаа',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.error,
+                  ),
+                ),
+              ),
+              Expanded(
+                child:
+                    _salesListOrEmpty(sales.salesHistory, colorScheme, textTheme),
+              ),
+            ],
           );
-        },
-      ),
+        }
+        return _salesListOrEmpty(sales.salesHistory, colorScheme, textTheme);
+      },
+    );
+  }
+
+  Widget _salesListOrEmpty(
+    List<CompletedSale> list,
+    ColorScheme colorScheme,
+    TextTheme textTheme,
+  ) {
+    if (list.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.receipt_long_outlined,
+              size: 64,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Борлуулалт бүртгэгдээгүй',
+              style: textTheme.titleMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Борлуулалт хийж энд харна уу',
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final groupedSales = _groupSalesByDate(list);
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: groupedSales.length,
+      itemBuilder: (context, index) {
+        final dateGroup = groupedSales[index];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _DateHeader(date: dateGroup.date),
+            const SizedBox(height: 8),
+            ...dateGroup.sales.map((sale) => _SaleCard(sale: sale)),
+            const SizedBox(height: 24),
+          ],
+        );
+      },
     );
   }
 
@@ -147,8 +256,8 @@ class _SaleCard extends StatelessWidget {
     final currencyFormat =
         NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
-    final paymentIcon = MockPaymentData.iconForMethod(sale.paymentMethod);
-    final paymentLabel = MockPaymentData.labelEn(sale.paymentMethod);
+    final paymentIcon = PaymentDisplayConfig.iconForMethod(sale.paymentMethod);
+    final paymentLabel = PaymentDisplayConfig.labelEn(sale.paymentMethod);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),

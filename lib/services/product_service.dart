@@ -11,8 +11,8 @@ class ProductService {
   /// API: GET /api/aguulakh
   Future<ProductResult> getProducts({
     String search = '',
-    String baiguullagiinId = '65fa71b863d5f2fa70101963',
-    String salbariinId = '65fa73c763d5f2fa7010198c',
+    required String baiguullagiinId,
+    required String salbariinId,
     int page = 1,
     int limit = 100,
   }) async {
@@ -53,9 +53,16 @@ class ProductService {
   }
 
   /// Get product by ID
-  Future<Product?> getProductById(String id) async {
+  Future<Product?> getProductById(
+    String id, {
+    required String baiguullagiinId,
+    required String salbariinId,
+  }) async {
     try {
-      final result = await getProducts();
+      final result = await getProducts(
+        baiguullagiinId: baiguullagiinId,
+        salbariinId: salbariinId,
+      );
       if (result.success) {
         return result.products.firstWhere(
           (product) => product.id == id,
@@ -69,9 +76,16 @@ class ProductService {
   }
 
   /// Get products by category
-  Future<ProductResult> getProductsByCategory(String category) async {
+  Future<ProductResult> getProductsByCategory(
+    String category, {
+    required String baiguullagiinId,
+    required String salbariinId,
+  }) async {
     try {
-      final result = await getProducts();
+      final result = await getProducts(
+        baiguullagiinId: baiguullagiinId,
+        salbariinId: salbariinId,
+      );
       if (result.success) {
         final filteredProducts = result.products
             .where((product) => product.angilal?.contains(category) ?? false)
@@ -91,8 +105,16 @@ class ProductService {
   }
 
   /// Search products
-  Future<ProductResult> searchProducts(String query) async {
-    return getProducts(search: query);
+  Future<ProductResult> searchProducts(
+    String query, {
+    required String baiguullagiinId,
+    required String salbariinId,
+  }) async {
+    return getProducts(
+      search: query,
+      baiguullagiinId: baiguullagiinId,
+      salbariinId: salbariinId,
+    );
   }
 }
 

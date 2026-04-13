@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../auth/staff_screen_access.dart';
 import '../models/auth_model.dart';
 import '../models/locale_model.dart';
 import '../theme/app_theme.dart';
@@ -12,65 +13,145 @@ import 'profile_screen.dart';
 import 'login_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  const MainScreen({super.key, this.initialSection});
+
+  /// Optional drawer section id: `dashboard`, `pos`, `inventory`, `customers`, `history`, `profile`.
+  final String? initialSection;
 
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
+class _NavEntry {
+  _NavEntry({required this.screen, required this.menu});
+
+  final Widget screen;
+  final _MenuItem menu;
+}
+
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+  bool _appliedInitialSection = false;
 
-  final _screens = const [
-    DashboardScreen(),
-    POSScreen(),
-    InventoryScreen(),
-    CustomersScreen(),
-    SalesHistoryScreen(),
-    ProfileScreen(),
-  ];
+  List<_NavEntry> _entriesFor(StaffScreenAccess access) {
+    final list = <_NavEntry>[];
+    void push(Widget screen, _MenuItem menu) {
+      final idx = list.length;
+      list.add(_NavEntry(
+        screen: screen,
+        menu: _MenuItem(
+          icon: menu.icon,
+          selectedIcon: menu.selectedIcon,
+          label: menu.label,
+          section: menu.section,
+          index: idx,
+        ),
+      ));
+    }
 
-  final _menuItems = [
-    _MenuItem(
-      icon: Icons.dashboard_outlined,
-      selectedIcon: Icons.dashboard,
-      label: 'dashboard',
-      index: 0,
-    ),
-    _MenuItem(
-      icon: Icons.point_of_sale_outlined,
-      selectedIcon: Icons.point_of_sale,
-      label: 'pos',
-      index: 1,
-    ),
-    _MenuItem(
-      icon: Icons.inventory_2_outlined,
-      selectedIcon: Icons.inventory_2,
-      label: 'inventory',
-      index: 2,
-    ),
-    _MenuItem(
-      icon: Icons.people_outline,
-      selectedIcon: Icons.people,
-      label: 'customers',
-      index: 3,
-    ),
-    _MenuItem(
-      icon: Icons.receipt_long_outlined,
-      selectedIcon: Icons.receipt_long,
-      label: 'history',
-      index: 4,
-    ),
-    _MenuItem(
-      icon: Icons.person_outline,
-      selectedIcon: Icons.person,
-      label: 'profile',
-      index: 5,
-    ),
-  ];
+    if (access.allowsDashboard) {
+      push(
+        const DashboardScreen(),
+        _MenuItem(
+          icon: Icons.dashboard_outlined,
+          selectedIcon: Icons.dashboard,
+          label: 'dashboard',
+          section: 'dashboard',
+          index: 0,
+        ),
+      );
+    }
+    if (access.allowsPosSystem) {
+      push(
+        const POSScreen(),
+        _MenuItem(
+          icon: Icons.point_of_sale_outlined,
+          selectedIcon: Icons.point_of_sale,
+          label: 'pos',
+          section: 'pos',
+          index: 0,
+        ),
+      );
+    }
+    if (access.allowsAguulakh) {
+      push(
+        const InventoryScreen(),
+        _MenuItem(
+          icon: Icons.inventory_2_outlined,
+          selectedIcon: Icons.inventory_2,
+          label: 'inventory',
+          section: 'inventory',
+          index: 0,
+        ),
+      );
+    }
+    if (access.allowsKhariltsagch) {
+      push(
+        const CustomersScreen(),
+        _MenuItem(
+          icon: Icons.people_outline,
+          selectedIcon: Icons.people,
+          label: 'customers',
+          section: 'customers',
+          index: 0,
+        ),
+      );
+    }
+    if (access.allowsSalesHistory) {
+      push(
+        const SalesHistoryScreen(),
+        _MenuItem(
+          icon: Icons.receipt_long_outlined,
+          selectedIcon: Icons.receipt_long,
+          label: 'history',
+          section: 'history',
+          index: 0,
+        ),
+      );
+    }
+    push(
+      const ProfileScreen(),
+      _MenuItem(
+        icon: Icons.person_outline,
+        selectedIcon: Icons.person,
+        label: 'profile',
+        section: 'profile',
+        index: 0,
+      ),
+    );
+    return list;
+  }
 
   void _onItemSelected(int index) {
     setState(() => _currentIndex = index);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _applyInitialSection());
+  }
+
+  @override
+  void didUpdateWidget(covariant MainScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialSection != widget.initialSection) {
+      _appliedInitialSection = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _applyInitialSection());
+    }
+  }
+
+  void _applyInitialSection() {
+    if (!mounted || _appliedInitialSection || widget.initialSection == null) {
+      return;
+    }
+    final auth = context.read<AuthModel>();
+    final entries = _entriesFor(auth.staffAccess);
+    final i = entries.indexWhere((e) => e.menu.section == widget.initialSection);
+    if (i >= 0) {
+      setState(() => _currentIndex = i);
+    }
+    _appliedInitialSection = true;
   }
 
   @override
@@ -80,6 +161,14 @@ class _MainScreenState extends State<MainScreen> {
     final l10n = AppLocalizations.of(context);
     final auth = context.watch<AuthModel>();
     final user = auth.currentUser;
+    final entries = _entriesFor(auth.staffAccess);
+    final safeIndex =
+        entries.isEmpty ? 0 : _currentIndex.clamp(0, entries.length - 1);
+    if (safeIndex != _currentIndex && entries.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _currentIndex = safeIndex);
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -89,7 +178,11 @@ class _MainScreenState extends State<MainScreen> {
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
-        title: Text(l10n.tr(_menuItems[_currentIndex].label)),
+        title: Text(
+          entries.isEmpty
+              ? ''
+              : l10n.tr(entries[safeIndex].menu.label),
+        ),
         backgroundColor: colorScheme.surface,
         foregroundColor: colorScheme.onSurface,
         elevation: 0,
@@ -242,10 +335,10 @@ class _MainScreenState extends State<MainScreen> {
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: _menuItems.length,
+                itemCount: entries.length,
                 itemBuilder: (context, index) {
-                  final item = _menuItems[index];
-                  final isSelected = _currentIndex == item.index;
+                  final item = entries[index].menu;
+                  final isSelected = safeIndex == item.index;
 
                   return TweenAnimationBuilder<double>(
                     duration: Duration(milliseconds: 400 + (index * 50)),
@@ -455,8 +548,9 @@ class _MainScreenState extends State<MainScreen> {
         ),
       ),
       body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
+        index: entries.isEmpty ? 0 : safeIndex,
+        children:
+            entries.isEmpty ? [const SizedBox.shrink()] : entries.map((e) => e.screen).toList(),
       ),
     );
   }
@@ -467,11 +561,13 @@ class _MenuItem {
   final IconData selectedIcon;
   final String label;
   final int index;
+  final String section;
 
   _MenuItem({
     required this.icon,
     required this.selectedIcon,
     required this.label,
     required this.index,
+    required this.section,
   });
 }

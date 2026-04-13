@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import '../data/mock_payment_data.dart';
+import '../data/payment_display_config.dart';
 import '../payment/pos_payment_core.dart';
 import 'cart_model.dart';
 
@@ -180,7 +180,7 @@ class SalesModel extends ChangeNotifier {
     String? orderId,
   }) {
     final sale = CompletedSale(
-      id: orderId ?? MockPaymentData.generateLegacySaleId(),
+      id: orderId ?? PaymentDisplayConfig.generateLegacySaleId(),
       items: List.from(_currentSale),
       subtotal: subtotal,
       tax: tax,
@@ -208,7 +208,7 @@ class SalesModel extends ChangeNotifier {
       nhhatMnt: nhhatMnt,
     );
     final now = DateTime.now();
-    final resolvedOrderId = orderId ?? MockPaymentData.generateOrderPreview();
+    final resolvedOrderId = orderId ?? PaymentDisplayConfig.generateOrderPreview();
 
     final sale = CompletedSale(
       id: resolvedOrderId,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../data/mock_payment_data.dart';
+import '../data/payment_display_config.dart';
 import '../models/auth_model.dart';
 import '../models/cart_model.dart';
 import '../models/sales_model.dart';
@@ -34,7 +34,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   @override
   void initState() {
     super.initState();
-    _orderPreview = MockPaymentData.generateOrderPreview();
+    _orderPreview = PaymentDisplayConfig.generateOrderPreview();
     WidgetsBinding.instance.addPostFrameCallback((_) => _primeOrderNumber());
   }
 

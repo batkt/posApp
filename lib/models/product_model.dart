@@ -1,32 +1,64 @@
 import 'package:flutter/foundation.dart';
 import 'cart_model.dart';
 import '../services/product_service.dart';
-import '../services/category_service.dart';
+import 'pos_session.dart';
 
 class ProductModel extends ChangeNotifier {
   final List<Product> _products = [];
   String _selectedCategory = 'All';
   String _searchQuery = '';
   final ProductService _productService;
-  final CategoryService _categoryService;
   bool _isLoading = false;
   String? _error;
+  String? _baiguullagiinId;
+  String? _salbariinId;
 
   ProductModel({
     ProductService? productService,
-    CategoryService? categoryService,
-  })  : _productService = productService ?? ProductService(),
-        _categoryService = categoryService ?? CategoryService() {
-    _loadProductsFromAPI();
+  }) : _productService = productService ?? ProductService();
+
+  void syncSession(PosSession? session) {
+    final org = session?.baiguullagiinId;
+    final branch = session?.salbariinId;
+    if (org == _baiguullagiinId && branch == _salbariinId) {
+      return;
+    }
+    _baiguullagiinId = org;
+    _salbariinId = branch;
+    if (org != null &&
+        org.isNotEmpty &&
+        branch != null &&
+        branch.isNotEmpty) {
+      _loadProductsFromAPI();
+    } else {
+      _products.clear();
+      _error = null;
+      notifyListeners();
+    }
   }
 
   Future<void> _loadProductsFromAPI() async {
+    final org = _baiguullagiinId;
+    final branch = _salbariinId;
+    if (org == null ||
+        org.isEmpty ||
+        branch == null ||
+        branch.isEmpty) {
+      _products.clear();
+      _error = 'Салбарын мэдээлэл байхгүй';
+      notifyListeners();
+      return;
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final productResult = await _productService.getProducts();
+      final productResult = await _productService.getProducts(
+        baiguullagiinId: org,
+        salbariinId: branch,
+      );
 
       if (productResult.success) {
         _products.clear();
@@ -47,7 +79,6 @@ class ProductModel extends ChangeNotifier {
     await _loadProductsFromAPI();
   }
 
-  // Getters
   List<Product> get products => List.unmodifiable(_products);
   bool get isLoading => _isLoading;
   String? get error => _error;

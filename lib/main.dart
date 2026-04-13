@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'models/sales_model.dart';
 import 'models/inventory_model.dart';
+import 'models/product_model.dart';
 import 'models/auth_model.dart';
 import 'models/locale_model.dart';
 import 'models/customer_model.dart';
@@ -42,7 +43,22 @@ class POSApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LocaleModel()),
         ChangeNotifierProvider(create: (_) => AuthModel()),
         ChangeNotifierProvider(create: (_) => SalesModel()),
-        ChangeNotifierProvider(create: (_) => InventoryModel()),
+        ChangeNotifierProxyProvider<AuthModel, InventoryModel>(
+          create: (_) => InventoryModel(),
+          update: (_, auth, previous) {
+            final model = previous ?? InventoryModel();
+            model.syncSession(auth.posSession);
+            return model;
+          },
+        ),
+        ChangeNotifierProxyProvider<AuthModel, ProductModel>(
+          create: (_) => ProductModel(),
+          update: (_, auth, previous) {
+            final model = previous ?? ProductModel();
+            model.syncSession(auth.posSession);
+            return model;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => CustomerModel()),
         ChangeNotifierProvider(create: (_) => TransactionModel()),
       ],

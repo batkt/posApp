@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../data/mock_payment_data.dart';
+import '../data/payment_display_config.dart';
 import '../models/cart_model.dart';
 import '../theme/app_theme.dart';
 import '../utils/mongolian_date_formatter.dart';
@@ -21,10 +21,10 @@ class ReceiptScreen extends StatelessWidget {
   });
 
   String get _paymentMethodName =>
-      MockPaymentData.labelMn(paymentMethod);
+      PaymentDisplayConfig.labelMn(paymentMethod);
 
   IconData get _paymentMethodIcon =>
-      MockPaymentData.iconForMethod(paymentMethod);
+      PaymentDisplayConfig.iconForMethod(paymentMethod);
 
   void _startNewOrder(BuildContext context) {
     Navigator.of(context).popUntil((route) => route.isFirst);
@@ -41,7 +41,7 @@ class ReceiptScreen extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final subtotal =
         items.fold<double>(0, (sum, item) => sum + item.total);
-    final vatAmount = subtotal * MockPaymentData.vatRate;
+    final vatAmount = subtotal * PaymentDisplayConfig.vatRate;
 
     return Scaffold(
       body: SafeArea(
@@ -181,7 +181,7 @@ class ReceiptScreen extends StatelessWidget {
                                 const SizedBox(height: 8),
                                 _buildReceiptTotalRow(
                                   context,
-                                  'НӨАТ (${(MockPaymentData.vatRate * 100).round()}%)',
+                                  'НӨАТ (${(PaymentDisplayConfig.vatRate * 100).round()}%)',
                                   vatAmount,
                                 ),
                                 const SizedBox(height: 16),

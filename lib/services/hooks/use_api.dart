@@ -45,9 +45,9 @@ class UseApi<T> extends ChangeNotifier {
   Timer? _debounceTimer;
 
   UseApi({
-    ApiService? apiService,
+    ApiService? injected,
     this.parser,
-  }) : _apiService = apiService ?? apiService;
+  }) : _apiService = injected ?? apiService;
 
   ApiState<T> get state => _state;
   T? get data => _state.data;
@@ -206,7 +206,7 @@ class UseApi<T> extends ChangeNotifier {
 // Specialized hooks for POS operations
 class UseBaraa extends UseApi<Map<String, dynamic>> {
   UseBaraa() : super(
-    apiService: posApiService,
+    injected: posApiService,
     parser: (data) => data as Map<String, dynamic>,
   );
 
@@ -237,7 +237,7 @@ class UseBaraa extends UseApi<Map<String, dynamic>> {
 
 class UseKhariltsagch extends UseApi<Map<String, dynamic>> {
   UseKhariltsagch() : super(
-    apiService: apiService,
+    injected: apiService,
     parser: (data) => data as Map<String, dynamic>,
   );
 
@@ -263,7 +263,7 @@ class UseKhariltsagch extends UseApi<Map<String, dynamic>> {
 
 class UseBorluulalt extends UseApi<Map<String, dynamic>> {
   UseBorluulalt() : super(
-    apiService: posApiService,
+    injected: posApiService,
     parser: (data) => data as Map<String, dynamic>,
   );
 
@@ -291,7 +291,7 @@ class UseBorluulalt extends UseApi<Map<String, dynamic>> {
 
 class UseTailan extends UseApi<Map<String, dynamic>> {
   UseTailan() : super(
-    apiService: apiService,
+    injected: apiService,
     parser: (data) => data as Map<String, dynamic>,
   );
 

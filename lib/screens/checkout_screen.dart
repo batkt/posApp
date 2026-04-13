@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../data/mock_payment_data.dart';
+import '../data/payment_display_config.dart';
 import '../models/auth_model.dart';
 import '../models/cart_model.dart';
 import '../models/sales_model.dart';
@@ -17,7 +17,7 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  String _selectedPaymentMethod = MockPaymentData.defaultCheckoutMethodId;
+  String _selectedPaymentMethod = PaymentDisplayConfig.defaultCheckoutMethodId;
   bool _isProcessing = false;
 
   @override
@@ -231,7 +231,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      ...MockPaymentData.checkoutMethods
+                      ...PaymentDisplayConfig.checkoutMethods
                           .map((method) => _buildPaymentMethodTile(method)),
                     ],
                   ),
@@ -364,7 +364,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _buildPriceRow('Subtotal', sales.subtotal),
         const SizedBox(height: 8),
         _buildPriceRow(
-          'Tax (${(MockPaymentData.vatRate * 100).round()}%)',
+          'Tax (${(PaymentDisplayConfig.vatRate * 100).round()}%)',
           sales.tax,
         ),
         const Padding(
@@ -416,7 +416,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Widget _buildPaymentMethodTile(MockPaymentMethodOption method) {
+  Widget _buildPaymentMethodTile(PaymentDisplayMethodOption method) {
     final colorScheme = Theme.of(context).colorScheme;
     final isSelected = _selectedPaymentMethod == method.id;
 

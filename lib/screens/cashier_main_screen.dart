@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/auth_model.dart';
 import '../models/locale_model.dart';
 import 'login_screen.dart';
+import 'main_screen.dart';
 import 'pos_screen.dart';
 
 /// Cashier role: POS only, no inventory or admin destinations.
@@ -47,6 +48,26 @@ class CashierMainScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          if (auth.staffAccess.canOpenFullPosFromKiosk)
+            PopupMenuButton<String>(
+              tooltip: l10n.tr('pos'),
+              child: const Icon(Icons.more_vert_rounded),
+              onSelected: (value) {
+                if (value == 'full_pos') {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const MainScreen(initialSection: 'pos'),
+                    ),
+                  );
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: 'full_pos',
+                  child: Text(l10n.tr('pos')),
+                ),
+              ],
+            ),
           IconButton(
             tooltip: l10n.tr('logout'),
             icon: const Icon(Icons.logout_rounded),

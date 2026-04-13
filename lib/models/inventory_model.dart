@@ -1,9 +1,8 @@
 import 'package:flutter/foundation.dart';
 
-import '../data/mock_inventory_data.dart';
 import 'cart_model.dart';
-import '../services/category_service.dart';
 import '../services/product_service.dart';
+import 'pos_session.dart';
 
 class InventoryItem {
   final Product product;
@@ -55,56 +54,80 @@ class InventoryModel extends ChangeNotifier {
   String _searchQuery = '';
   String _selectedCategory = 'Бүгд';
   final ProductService _productService;
-  final CategoryService _categoryService;
   bool _isLoading = false;
   String? _error;
+  String? _baiguullagiinId;
+  String? _salbariinId;
 
   InventoryModel({
     ProductService? productService,
-    CategoryService? categoryService,
-  })  : _productService = productService ?? ProductService(),
-        _categoryService = categoryService ?? CategoryService() {
-    _loadInventoryFromAPI();
+  }) : _productService = productService ?? ProductService();
+
+  /// Called from [ChangeNotifierProxyProvider] when [PosSession] changes after login.
+  void syncSession(PosSession? session) {
+    final org = session?.baiguullagiinId;
+    final branch = session?.salbariinId;
+    if (org == _baiguullagiinId && branch == _salbariinId) {
+      return;
+    }
+    _baiguullagiinId = org;
+    _salbariinId = branch;
+    if (org != null &&
+        org.isNotEmpty &&
+        branch != null &&
+        branch.isNotEmpty) {
+      _loadInventoryFromAPI();
+    } else {
+      _inventory.clear();
+      _error = null;
+      notifyListeners();
+    }
   }
 
   Future<void> _loadInventoryFromAPI() async {
+    final org = _baiguullagiinId;
+    final branch = _salbariinId;
+    if (org == null ||
+        org.isEmpty ||
+        branch == null ||
+        branch.isEmpty) {
+      _inventory.clear();
+      _error = 'Салбарын мэдээлэл байхгүй';
+      notifyListeners();
+      return;
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final productResult = await _productService.getProducts();
+      final productResult = await _productService.getProducts(
+        baiguullagiinId: org,
+        salbariinId: branch,
+      );
 
       if (productResult.success) {
         _inventory.clear();
         _inventory.addAll(productResult.products.map((product) => InventoryItem(
               product: product,
               currentStock: product.uldegdel ?? product.stock,
-              minStockLevel: 5, // Default minimum stock
+              minStockLevel: 5,
               costPrice: product.urtugUne,
               lastRestocked: product.createdAt,
             )));
-        if (_inventory.isEmpty) {
-          _applyMockInventory();
-        }
         _error = null;
       } else {
-        _applyMockInventory();
-        _error = null;
+        _inventory.clear();
+        _error = productResult.error ?? 'Бараа ачаалахад алдаа';
       }
     } catch (e) {
-      _applyMockInventory();
-      _error = null;
+      _inventory.clear();
+      _error = e.toString();
     } finally {
       _isLoading = false;
       notifyListeners();
     }
-  }
-
-  void _applyMockInventory() {
-    _inventory
-      ..clear()
-      ..addAll(MockInventoryData.items);
   }
 
   Future<void> refreshInventory() async {
@@ -181,7 +204,6 @@ class InventoryModel extends ChangeNotifier {
     final existingIndex =
         _inventory.indexWhere((item) => item.product.id == product.id);
     if (existingIndex >= 0) {
-      // Update existing
       _inventory[existingIndex] = _inventory[existingIndex].copyWith(
         currentStock: _inventory[existingIndex].currentStock + initialStock,
         costPrice: costPrice ?? _inventory[existingIndex].costPrice,
@@ -189,7 +211,6 @@ class InventoryModel extends ChangeNotifier {
         lastRestocked: DateTime.now(),
       );
     } else {
-      // Add new
       _inventory.add(InventoryItem(
         product: product,
         currentStock: initialStock,

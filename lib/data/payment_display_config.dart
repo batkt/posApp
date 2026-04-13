@@ -2,20 +2,20 @@ import 'package:flutter/material.dart';
 
 import '../payment/pos_payment_core.dart';
 
-/// Checkout UI: only **how** the customer pays (cash vs card). Totals come from the sale.
-abstract final class MockPaymentData {
-  MockPaymentData._();
+/// Checkout UI: payment method labels and icons only (totals come from the sale).
+abstract final class PaymentDisplayConfig {
+  PaymentDisplayConfig._();
 
   static double get vatRate => PosPaymentCore.vatRate;
 
-  static const List<MockPaymentMethodOption> checkoutMethods = [
-    MockPaymentMethodOption(
+  static const List<PaymentDisplayMethodOption> checkoutMethods = [
+    PaymentDisplayMethodOption(
       id: PosPaymentCore.methodCash,
       label: 'Cash',
       labelMn: 'Бэлэн мөнгө',
       icon: Icons.payments_outlined,
     ),
-    MockPaymentMethodOption(
+    PaymentDisplayMethodOption(
       id: PosPaymentCore.methodCard,
       label: 'Card',
       labelMn: 'Карт',
@@ -81,8 +81,8 @@ abstract final class MockPaymentData {
   }
 }
 
-class MockPaymentMethodOption {
-  const MockPaymentMethodOption({
+class PaymentDisplayMethodOption {
+  const PaymentDisplayMethodOption({
     required this.id,
     required this.label,
     required this.labelMn,
