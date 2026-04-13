@@ -284,7 +284,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 // App Version
                 Text(
-                  'POS Pro v1.0.0 • Монгол хэл',
+                  'posEase v1.0.0 • Монгол хэл',
                   style: textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),

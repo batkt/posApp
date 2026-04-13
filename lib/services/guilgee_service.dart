@@ -31,8 +31,8 @@ class GuilgeeService {
         queryParams: {
           'query': jsonEncode(queryMap),
           'order': jsonEncode({'ognoo': -1}),
-          'khuadasniiDugaar': page.toString(),
-          'khuadasniiKhemjee': pageSize.toString(),
+          'khuudasniiDugaar': page.toString(),
+          'khuudasniiKhemjee': pageSize.toString(),
           'baiguullagiinId': baiguullagiinId,
         },
         parser: (data) => data as Map<String, dynamic>,

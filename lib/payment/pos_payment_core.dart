@@ -19,12 +19,17 @@ class CashierTotals {
 class StandardSaleTotals {
   const StandardSaleTotals({
     required this.subtotal,
+    required this.net,
     required this.vat,
     required this.total,
   });
 
+  /// Gross amount (VAT included).
   final double subtotal;
+  /// Net amount (VAT excluded).
+  final double net;
   final double vat;
+  /// Final payable amount (for standard sale this equals gross).
   final double total;
 }
 
@@ -43,9 +48,15 @@ abstract final class PosPaymentCore {
     double subtotal, {
     double vatRate = PosPaymentCore.vatRate,
   }) {
-    final s = subtotal;
-    final vat = s * vatRate;
-    return StandardSaleTotals(subtotal: s, vat: vat, total: s + vat);
+    final gross = subtotal.clamp(0.0, double.infinity).toDouble();
+    final net = gross / (1 + vatRate);
+    final vat = gross - net;
+    return StandardSaleTotals(
+      subtotal: gross,
+      net: net,
+      vat: vat,
+      total: gross,
+    );
   }
 
   static CashierTotals calculateCashierTotals({
@@ -55,10 +66,12 @@ abstract final class PosPaymentCore {
     double vatRate = PosPaymentCore.vatRate,
   }) {
     final cappedDiscount = discountMnt.clamp(0.0, subtotal).toDouble();
-    final net = (subtotal - cappedDiscount).clamp(0.0, double.infinity);
-    final vat = net * vatRate;
+    final grossAfterDiscount =
+        (subtotal - cappedDiscount).clamp(0.0, double.infinity).toDouble();
+    final net = grossAfterDiscount / (1 + vatRate);
+    final vat = grossAfterDiscount - net;
     final nh = nhhatMnt.clamp(0.0, double.infinity).toDouble();
-    final total = net + vat + nh;
+    final total = grossAfterDiscount + nh;
     return CashierTotals(
       cappedDiscount: cappedDiscount,
       net: net,

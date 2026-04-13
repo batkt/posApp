@@ -21,6 +21,12 @@ abstract final class PaymentDisplayConfig {
       labelMn: 'Карт',
       icon: Icons.credit_card_outlined,
     ),
+    PaymentDisplayMethodOption(
+      id: PosPaymentCore.methodAccount,
+      label: 'Account transfer',
+      labelMn: 'Данс',
+      icon: Icons.account_balance_outlined,
+    ),
   ];
 
   static const String defaultCheckoutMethodId = PosPaymentCore.methodCash;

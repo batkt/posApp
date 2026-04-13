@@ -65,7 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'POS Pro',
+                          'posEase',
                           style: textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -125,7 +125,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       itemCount: productModel.categories.length,
                       itemBuilder: (context, index) {
                         final category = productModel.categories[index];
-                        final isSelected = productModel.selectedCategory == category;
+                        final isSelected =
+                            productModel.selectedCategory == category;
                         return Padding(
                           padding: const EdgeInsets.only(right: 8),
                           child: CategoryChip(
@@ -173,7 +174,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   return GridView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       childAspectRatio: 0.75,
                       crossAxisSpacing: 12,
@@ -220,7 +222,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: Theme.of(context).colorScheme.onSurface,
               ),
               style: IconButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                backgroundColor:
+                    Theme.of(context).colorScheme.surfaceContainerHighest,
               ),
             ),
             if (!cart.isEmpty)

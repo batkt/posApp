@@ -1,11 +1,22 @@
 import 'api_service.dart';
 import '../models/cart_model.dart';
 
+/// Matches zevback CRUD / posBack list handlers (`khuudasniiDugaar`, `khuudasniiKhemjee`).
+const _khuudasniiDugaar = 'khuudasniiDugaar';
+const _khuudasniiKhemjee = 'khuudasniiKhemjee';
+
 class ProductService {
   final ApiService _apiService;
 
   ProductService({ApiService? apiService})
       : _apiService = apiService ?? posApiService;
+
+  int _readPage(Map<String, dynamic> data, int fallback) {
+    final v = data[_khuudasniiDugaar] ?? data['khuadasniiDugaar'];
+    if (v is int) return v;
+    if (v is String) return int.tryParse(v) ?? fallback;
+    return fallback;
+  }
 
   /// Fetch products from aguulakh endpoint
   /// API: GET /api/aguulakh
@@ -20,10 +31,12 @@ class ProductService {
       final response = await _apiService.get<Map<String, dynamic>>(
         '/aguulakh',
         queryParams: {
-          'query': '{\"\$or\":[{\"ner\":{\"\$regex\":\"$search\",\"\$options\":\"i\"}},{\"barCode\":{\"\$regex\":\"$search\",\"\$options\":\"i\"}},{\"code\":{\"\$regex\":\"$search\",\"\$options\":\"i\"}},{\"boginoNer\":{\"\$regex\":\"$search\",\"\$options\":\"i\"}}],\"uldegdel\":{\"\$gt\":0},\"idevkhteiEsekh\":{\"\$ne\":false},\"baiguullagiinId\":\"$baiguullagiinId\",\"salbariinId\":\"$salbariinId\"}',
+          // No `uldegdel` filter: show zero-stock items in POS (tap can still block sale).
+          'query':
+              '{\"\$or\":[{\"ner\":{\"\$regex\":\"$search\",\"\$options\":\"i\"}},{\"barCode\":{\"\$regex\":\"$search\",\"\$options\":\"i\"}},{\"code\":{\"\$regex\":\"$search\",\"\$options\":\"i\"}},{\"boginoNer\":{\"\$regex\":\"$search\",\"\$options\":\"i\"}}],\"idevkhteiEsekh\":{\"\$ne\":false},\"baiguullagiinId\":\"$baiguullagiinId\",\"salbariinId\":\"$salbariinId\"}',
           'order': '{"createdAt":-1}',
-          'khuadasniiDugaar': page.toString(),
-          'khuadasniiKhemjee': limit.toString(),
+          _khuudasniiDugaar: page.toString(),
+          _khuudasniiKhemjee: limit.toString(),
           'baiguullagiinId': baiguullagiinId,
         },
         parser: (data) => data as Map<String, dynamic>,
@@ -36,11 +49,18 @@ class ProductService {
                 .toList() ??
             [];
 
+        final d = response.data!;
+        final totalPages = d['niitKhuudas'] is int
+            ? d['niitKhuudas'] as int
+            : (d['niitKhuudas'] is num
+                ? (d['niitKhuudas'] as num).toInt()
+                : 1);
+
         return ProductResult.success(
           products: products,
-          currentPage: response.data!['khuadasniiDugaar'] ?? page,
+          currentPage: _readPage(d, page),
           totalItems: products.length,
-          totalPages: 1,
+          totalPages: totalPages,
         );
       }
 
@@ -52,27 +72,69 @@ class ProductService {
     }
   }
 
+  /// Loads every page from `/aguulakh` for this branch (POS catalog).
+  Future<ProductResult> getAllProductsForBranch({
+    String search = '',
+    required String baiguullagiinId,
+    required String salbariinId,
+    int pageSize = 200,
+    int maxPages = 100,
+  }) async {
+    final merged = <Product>[];
+    final seen = <String>{};
+    for (var page = 1; page <= maxPages; page++) {
+      final batch = await getProducts(
+        search: search,
+        baiguullagiinId: baiguullagiinId,
+        salbariinId: salbariinId,
+        page: page,
+        limit: pageSize,
+      );
+      if (!batch.success) {
+        return merged.isEmpty
+            ? batch
+            : ProductResult.success(
+                products: merged.toList(),
+                currentPage: page - 1,
+                totalItems: merged.length,
+                totalPages: page - 1,
+              );
+      }
+      for (final p in batch.products) {
+        if (seen.add(p.id)) merged.add(p);
+      }
+      if (batch.products.length < pageSize) break;
+    }
+    return ProductResult.success(
+      products: merged,
+      currentPage: 1,
+      totalItems: merged.length,
+      totalPages: 1,
+    );
+  }
+
   /// Get product by ID
   Future<Product?> getProductById(
     String id, {
     required String baiguullagiinId,
     required String salbariinId,
   }) async {
-    try {
+    const pageSize = 200;
+    const maxPages = 100;
+    for (var page = 1; page <= maxPages; page++) {
       final result = await getProducts(
         baiguullagiinId: baiguullagiinId,
         salbariinId: salbariinId,
+        page: page,
+        limit: pageSize,
       );
-      if (result.success) {
-        return result.products.firstWhere(
-          (product) => product.id == id,
-          orElse: () => throw Exception('Product not found'),
-        );
+      if (!result.success) return null;
+      for (final p in result.products) {
+        if (p.id == id) return p;
       }
-      return null;
-    } catch (e) {
-      return null;
+      if (result.products.length < pageSize) break;
     }
+    return null;
   }
 
   /// Get products by category
@@ -82,7 +144,7 @@ class ProductService {
     required String salbariinId,
   }) async {
     try {
-      final result = await getProducts(
+      final result = await getAllProductsForBranch(
         baiguullagiinId: baiguullagiinId,
         salbariinId: salbariinId,
       );
@@ -110,7 +172,7 @@ class ProductService {
     required String baiguullagiinId,
     required String salbariinId,
   }) async {
-    return getProducts(
+    return getAllProductsForBranch(
       search: query,
       baiguullagiinId: baiguullagiinId,
       salbariinId: salbariinId,

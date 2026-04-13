@@ -75,7 +75,7 @@ class AppLocalizations {
       'change': 'Change',
       'edit': 'Edit',
       'save': 'Save',
-      'app_version': 'POS Pro v1.0.0',
+      'app_version': 'posEase v1.0.0',
 
       // Language
       'language': 'Language',
@@ -280,7 +280,7 @@ class AppLocalizations {
       'change': 'Солих',
       'edit': 'Засах',
       'save': 'Хадгалах',
-      'app_version': 'POS Pro v1.0.0 • Монгол хэл',
+      'app_version': 'posEase v1.0.0 • Монгол хэл',
 
       // Language
       'language': 'Хэл',

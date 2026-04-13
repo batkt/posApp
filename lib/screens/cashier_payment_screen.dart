@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -11,7 +12,8 @@ import '../services/pos_transaction_service.dart';
 import '../theme/app_theme.dart';
 import 'receipt_screen.dart';
 
-/// Cashier: choose **Бэлэн** or **Карт** only; төлөх дүн = сагсны нийт (no tender / numpad).
+/// Cashier: **Бэлэн** / **Карт** / **Данс** (`khariltsakh`), then confirm sheet
+/// (бэлэн: олгосон дүн, хариулт; карт/данс: нийт баталгаажуулах).
 class CashierPaymentScreen extends StatefulWidget {
   const CashierPaymentScreen({super.key});
 
@@ -19,17 +21,21 @@ class CashierPaymentScreen extends StatefulWidget {
   State<CashierPaymentScreen> createState() => _CashierPaymentScreenState();
 }
 
-enum _PayKind { cash, card }
+enum _PayKind { cash, card, dans }
+
+String _fmtMnt(double v) {
+  final s = NumberFormat('#,###', 'en_US').format(v.round());
+  return '$s₮';
+}
 
 class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   _PayKind _kind = _PayKind.cash;
   double _discountMnt = 0;
   double _nhhatMnt = 0;
   bool _busy = false;
+  Map<String, dynamic>? _lastEbarimt;
 
   late final String _orderPreview;
-
-  static const _surface = Color(0xFF151A21);
 
   @override
   void initState() {
@@ -55,17 +61,25 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     } catch (_) {}
   }
 
-  String _fmt(double v) {
-    final s = NumberFormat('#,###', 'en_US').format(v.round());
-    return '$s₮';
-  }
-
   String _methodId(_PayKind k) {
     switch (k) {
       case _PayKind.cash:
         return PosPaymentCore.methodCash;
       case _PayKind.card:
         return PosPaymentCore.methodCard;
+      case _PayKind.dans:
+        return PosPaymentCore.methodAccount;
+    }
+  }
+
+  String _paymentKindLabelMn(_PayKind k) {
+    switch (k) {
+      case _PayKind.cash:
+        return 'Бэлэн мөнгө';
+      case _PayKind.card:
+        return 'Карт';
+      case _PayKind.dans:
+        return 'Данс';
     }
   }
 
@@ -88,8 +102,12 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Болих')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Хадгалах')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Болих')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Хадгалах')),
         ],
       ),
     );
@@ -117,8 +135,12 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Болих')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Хадгалах')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Болих')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Хадгалах')),
         ],
       ),
     );
@@ -129,18 +151,44 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     controller.dispose();
   }
 
-  Future<void> _submit(SalesModel sales, double due) async {
+  /// [tender] = бэлэн олгосон дүн (вэб `tulburTuluhModal`: `tulsunDun`); картын үед = нийт дүн.
+  Future<void> _submit(
+    SalesModel sales,
+    double tender, {
+    required CashierTotals totals,
+  }) async {
     if (sales.isSaleEmpty || _busy) return;
+
+    final due = totals.total;
+    final isCash = _kind == _PayKind.cash; // карт + данс: бүтэн дүн, хариултгүй
+    if (isCash && tender + 0.5 < due) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Олгосон дүн (${_fmtMnt(tender)}) нийт дүнгээс (${_fmtMnt(due)}) багасан байна'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    final tulsunDun = isCash ? tender : due;
+    final hariult = isCash ? (tender - due).clamp(0.0, double.infinity) : 0.0;
 
     final auth = context.read<AuthModel>();
     final useApi = auth.canSubmitPosSales;
 
     setState(() => _busy = true);
+    _lastEbarimt = null;
     try {
       if (useApi) {
         final session = auth.posSession!;
         final svc = PosTransactionService();
         var orderNo = sales.guilgeeniiDugaar;
+        String? guilgeeMongoId;
         if (orderNo == null || orderNo.isEmpty) {
           final d = await svc.fetchZakhialgiinDugaar();
           if (d == null || d.isEmpty) {
@@ -150,27 +198,32 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           sales.setGuilgeeniiDugaar(d);
         }
 
-        final totals = PosPaymentCore.calculateCashierTotals(
-          subtotal: sales.subtotal,
-          discountMnt: _discountMnt,
-          nhhatMnt: _nhhatMnt,
-        );
-
-        await svc.submitGuilgeeniiTuukh(
+        final saveResp =         await svc.submitGuilgeeniiTuukh(
           session: session,
           sales: sales,
           paymentTurul: PosTransactionService.paymentMethodToTurul(
-            _methodId(_kind),
+            _methodId(_kind), // belen | cart | khariltsakh
           ),
-          niitUne: totals.total,
-          tulsunDun: totals.total,
-          hariult: 0,
+          niitUne: due,
+          tulsunDun: tulsunDun,
+          hariult: hariult,
           hungulsunDun: totals.cappedDiscount,
           noatiinDun: totals.vat,
           noatguiDun: totals.net,
           nhatiinDun: totals.nhhat,
           guilgeeniiDugaar: orderNo,
         );
+
+        guilgeeMongoId =
+            PosTransactionService.parseGuilgeeniiMongoIdFromSaveResponse(
+                saveResp);
+        if (guilgeeMongoId != null && guilgeeMongoId.isNotEmpty) {
+          _lastEbarimt = await svc.requestCitizenEbarimtAfterSale(
+            guilgeeniiMongoId: guilgeeMongoId,
+            baiguullagiinId: session.baiguullagiinId,
+            salbariinId: session.salbariinId,
+          );
+        }
 
         if (!mounted) return;
         final completed = sales.completeCashierSale(
@@ -179,7 +232,13 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           nhhatMnt: _nhhatMnt,
           orderId: orderNo,
         );
-        _goReceipt(completed);
+        _goReceipt(
+          completed,
+          ebarimt: _lastEbarimt,
+          guilgeeMongoId: guilgeeMongoId,
+          baiguullagiinId: session.baiguullagiinId,
+          salbariinId: session.salbariinId,
+        );
       } else {
         if (!mounted) return;
         final completed = sales.completeCashierSale(
@@ -215,7 +274,13 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     }
   }
 
-  void _goReceipt(CompletedSale completed) {
+  void _goReceipt(
+    CompletedSale completed, {
+    Map<String, dynamic>? ebarimt,
+    String? guilgeeMongoId,
+    String? baiguullagiinId,
+    String? salbariinId,
+  }) {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -226,42 +291,60 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           total: completed.total,
           paymentMethod: completed.paymentMethod,
           orderNumber: completed.id,
+          ebarimt: ebarimt,
+          guilgeeMongoId: guilgeeMongoId,
+          baiguullagiinId: baiguullagiinId,
+          salbariinId: salbariinId,
         ),
       ),
     );
+  }
+
+  Future<void> _startPayFlow(SalesModel sales, CashierTotals totals) async {
+    final due = totals.total;
+    final tender = await showModalBottomSheet<double>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
+      builder: (ctx) => Theme(
+        data: Theme.of(context),
+        child: _TulburConfirmSheet(kind: _kind, due: due),
+      ),
+    );
+    if (tender != null && mounted) {
+      await _submit(sales, tender, totals: totals);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final usePosBackend = context.watch<AuthModel>().canSubmitPosSales;
 
-    return Theme(
-      data: Theme.of(context).copyWith(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: _surface,
-      ),
-      child: Scaffold(
-        backgroundColor: _surface,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text(
-            'Төлбөр тооцоо',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
-          ),
-          centerTitle: true,
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.pop(context),
         ),
-        body: Consumer<SalesModel>(
-          builder: (context, sales, _) {
+        title: const Text(
+          'Төлбөр тооцоо',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        ),
+        centerTitle: true,
+      ),
+      body: Consumer<SalesModel>(
+        builder: (context, sales, _) {
             if (sales.isSaleEmpty) {
+              final cs = Theme.of(context).colorScheme;
               return Center(
                 child: Text(
                   'Сагс хоосон',
-                  style: TextStyle(color: Colors.white.withOpacity(0.6)),
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               );
             }
@@ -292,18 +375,17 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                   vat: totals.vat,
                   nhhat: totals.nhhat,
                   total: totals.total,
-                  paymentKindLabel:
-                      _kind == _PayKind.cash ? 'Бэлэн мөнгө' : 'Карт',
+                  paymentKindLabel: _paymentKindLabelMn(_kind),
                   onDiscount: _showDiscountDialog,
                   onNhhat: _showNhhatDialog,
                 );
 
                 final payment = _PaymentPanel(
                   kind: _kind,
-                  dueFormatted: _fmt(due),
+                  dueFormatted: _fmtMnt(due),
                   onKind: (k) => setState(() => _kind = k),
                   onCancel: () => Navigator.pop(context),
-                  onPay: _busy ? null : () => _submit(sales, due),
+                  onPay: _busy ? null : () => _startPayFlow(sales, totals),
                   busy: _busy,
                 );
 
@@ -336,7 +418,6 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             );
           },
         ),
-      ),
     );
   }
 }
@@ -364,24 +445,20 @@ class _SummaryPanel extends StatelessWidget {
   final VoidCallback onDiscount;
   final VoidCallback onNhhat;
 
-  String _fmt(double v) {
-    final s = NumberFormat('#,###', 'en_US').format(v.round());
-    return '$s₮';
-  }
-
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E252E),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF2A3441)),
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.35),
+            color: cs.shadow.withValues(alpha: 0.06),
             blurRadius: 16,
-            offset: const Offset(0, 8),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -394,7 +471,7 @@ class _SummaryPanel extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppColors.success.withOpacity(0.2),
+                  color: AppColors.success.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -409,23 +486,25 @@ class _SummaryPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          _row('Дэд дүн', _fmt(subtotal)),
-          _row('Хөнгөлөлт', _fmt(discount), onTap: onDiscount, hint: 'Засах'),
-          _row('НӨАТ', _fmt(vat)),
-          _row('НХАТ', _fmt(nhhat), onTap: onNhhat, hint: 'Засах'),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: Divider(color: Color(0xFF2A3441), height: 1),
+          _row(context, 'Дэд дүн', _fmtMnt(subtotal)),
+          _row(context, 'Хөнгөлөлт', _fmtMnt(discount),
+              onTap: onDiscount, hint: 'Засах'),
+          _row(context, 'НӨАТ', _fmtMnt(vat)),
+          _row(context, 'НХАТ', _fmtMnt(nhhat), onTap: onNhhat, hint: 'Засах'),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Divider(color: cs.outlineVariant, height: 1),
           ),
-          _row('Нийт дүн', _fmt(total), emphasize: true),
+          _row(context, 'Нийт дүн', _fmtMnt(total), emphasize: true),
           const SizedBox(height: 6),
-          _row('Төлбөрийн төрөл', paymentKindLabel, sub: true),
+          _row(context, 'Төлбөрийн төрөл', paymentKindLabel, sub: true),
         ],
       ),
     );
   }
 
   Widget _row(
+    BuildContext context,
     String label,
     String value, {
     bool emphasize = false,
@@ -434,6 +513,7 @@ class _SummaryPanel extends StatelessWidget {
     VoidCallback? onTap,
     String? hint,
   }) {
+    final cs = Theme.of(context).colorScheme;
     final child = Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
@@ -444,14 +524,18 @@ class _SummaryPanel extends StatelessWidget {
               Text(
                 label,
                 style: TextStyle(
-                  color: sub ? const Color(0xFF94A3B8) : const Color(0xFFCBD5E1),
+                  color: sub ? cs.onSurfaceVariant : cs.onSurface,
                   fontSize: sub ? 12 : 13,
                   fontWeight: emphasize ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
               if (onTap != null && hint != null) ...[
                 const SizedBox(width: 6),
-                Icon(Icons.edit_outlined, size: 14, color: Colors.white.withOpacity(0.35)),
+                Icon(
+                  Icons.edit_outlined,
+                  size: 14,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.7),
+                ),
               ],
             ],
           ),
@@ -460,7 +544,7 @@ class _SummaryPanel extends StatelessWidget {
             style: TextStyle(
               color: positive
                   ? AppColors.successDark
-                  : (emphasize ? Colors.white : Colors.white.withOpacity(0.92)),
+                  : (emphasize ? cs.primary : cs.onSurface),
               fontSize: emphasize ? 18 : (sub ? 13 : 14),
               fontWeight: emphasize ? FontWeight.w800 : FontWeight.w600,
               fontFeatures: const [FontFeature.tabularFigures()],
@@ -501,17 +585,26 @@ class _PaymentPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     const methods = [
       (_PayKind.cash, 'Бэлэн', Icons.payments_rounded),
       (_PayKind.card, 'Карт', Icons.credit_card_rounded),
+      (_PayKind.dans, 'Данс', Icons.account_balance_rounded),
     ];
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E252E),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF2A3441)),
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: cs.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -519,26 +612,33 @@ class _PaymentPanel extends StatelessWidget {
           Text(
             'Төлбөрийн төрөл сонгох',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.55),
+              color: cs.onSurfaceVariant,
               fontSize: 12,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.4,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Row(
             children: [
               for (var i = 0; i < methods.length; i++) ...[
                 if (i > 0) const SizedBox(width: 8),
-                Expanded(child: _methodTile(methods[i].$1, methods[i].$2, methods[i].$3)),
+                Expanded(
+                  child: _methodTile(
+                    context,
+                    methods[i].$1,
+                    methods[i].$2,
+                    methods[i].$3,
+                  ),
+                ),
               ],
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
           Text(
             'Төлөх дүн (сагснаас)',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.55),
+              color: cs.onSurfaceVariant,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -546,21 +646,44 @@ class _PaymentPanel extends StatelessWidget {
           const SizedBox(height: 8),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
-              color: const Color(0xFF1A2028),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF2A3441)),
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.65),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: cs.outlineVariant),
             ),
             child: Text(
               dueFormatted,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: cs.onSurface,
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
-                fontFeatures: [FontFeature.tabularFigures()],
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: onPay,
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: busy
+                ? SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: cs.onPrimary,
+                    ),
+                  )
+                : const Text(
+                    'Төлбөр үргэлжлүүлэх',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                  ),
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
@@ -568,68 +691,885 @@ class _PaymentPanel extends StatelessWidget {
             icon: const Icon(Icons.close_rounded, size: 20),
             label: const Text('Цуцлах'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFF87171),
-              side: const BorderSide(color: Color(0xFF4B2C2C)),
+              foregroundColor: cs.error,
+              side: BorderSide(color: cs.error.withValues(alpha: 0.45)),
               padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: onPay,
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.success,
-              foregroundColor: Colors.black87,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              elevation: 0,
-            ),
-            child: busy
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.black54,
-                    ),
-                  )
-                : const Text(
-                    'Төлбөр баталгаажуулах',
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                  ),
           ),
         ],
       ),
     );
   }
 
-  Widget _methodTile(_PayKind k, String label, IconData icon) {
+  Widget _methodTile(
+    BuildContext context,
+    _PayKind k,
+    String label,
+    IconData icon,
+  ) {
+    final cs = Theme.of(context).colorScheme;
     final sel = kind == k;
     return Material(
-      color: sel ? AppColors.success.withOpacity(0.22) : const Color(0xFF252D38),
-      borderRadius: BorderRadius.circular(14),
+      color: sel
+          ? cs.primaryContainer.withValues(alpha: 0.65)
+          : cs.surfaceContainerHighest.withValues(alpha: 0.4),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: () => onKind(k),
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: sel ? cs.primary : cs.outlineVariant,
+              width: sel ? 1.5 : 1,
+            ),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 20, color: sel ? AppColors.successDark : Colors.white70),
+              Icon(
+                icon,
+                size: 22,
+                color: sel ? cs.primary : cs.onSurfaceVariant,
+              ),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
                   label,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: sel ? Colors.white : Colors.white70,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
+                    color: sel ? cs.onPrimaryContainer : cs.onSurface,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
                   ),
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet: card/dans = confirm total; cash = tender + change (вэб `tulburTuluhModal`).
+class _TulburConfirmSheet extends StatefulWidget {
+  const _TulburConfirmSheet({
+    required this.kind,
+    required this.due,
+  });
+
+  final _PayKind kind;
+  final double due;
+
+  @override
+  State<_TulburConfirmSheet> createState() => _TulburConfirmSheetState();
+}
+
+class _TulburConfirmSheetState extends State<_TulburConfirmSheet> {
+  late String _digits;
+
+  static const _sheetRadius = 28.0;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.due.ceil();
+    _digits = d <= 0 ? '' : d.toString();
+  }
+
+  double get _tender =>
+      (int.tryParse(_digits.isEmpty ? '0' : _digits) ?? 0).toDouble();
+
+  double get _hariult => (_tender - widget.due).clamp(0.0, double.infinity);
+
+  bool get _tenderOk => _tender + 0.5 >= widget.due;
+
+  void _tapKey(String key) {
+    HapticFeedback.lightImpact();
+    _press(key);
+  }
+
+  void _press(String key) {
+    setState(() {
+      switch (key) {
+        case '⌫':
+          if (_digits.isNotEmpty) {
+            _digits = _digits.substring(0, _digits.length - 1);
+          }
+          break;
+        case 'C':
+          _digits = '';
+          break;
+        case '00':
+          if (_digits.length < 11) _digits += '00';
+          break;
+        default:
+          if (_digits.length < 12) _digits += key;
+      }
+    });
+  }
+
+  void _setExactDue() {
+    HapticFeedback.selectionClick();
+    setState(() => _digits = widget.due.ceil().toString());
+  }
+
+  void _addQuick(int add) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      final base = int.tryParse(_digits) ?? 0;
+      _digits = (base + add).toString();
+    });
+  }
+
+  Widget _dragHandle(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 6),
+      child: Center(
+        child: Container(
+          width: 48,
+          height: 5,
+          decoration: BoxDecoration(
+            color: cs.onSurfaceVariant.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(100),
+          ),
+        ),
+      ),
+    );
+  }
+
+  BoxDecoration _sheetDecoration(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return BoxDecoration(
+      color: cs.surface,
+      borderRadius:
+          const BorderRadius.vertical(top: Radius.circular(_sheetRadius)),
+      border: Border(top: BorderSide(color: cs.outlineVariant)),
+      boxShadow: [
+        BoxShadow(
+          color: cs.shadow.withValues(alpha: 0.12),
+          blurRadius: 24,
+          offset: const Offset(0, -4),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pad = MediaQuery.paddingOf(context);
+    final due = widget.due;
+    final cs = Theme.of(context).colorScheme;
+    final isSimpleConfirm =
+        widget.kind == _PayKind.card || widget.kind == _PayKind.dans;
+    final confirmTitle = widget.kind == _PayKind.dans
+        ? 'Дансаар төлөх'
+        : 'Картаар төлөх';
+    final confirmIcon = widget.kind == _PayKind.dans
+        ? Icons.account_balance_rounded
+        : Icons.credit_card_rounded;
+
+    if (isSimpleConfirm) {
+      return Padding(
+        padding: EdgeInsets.only(bottom: pad.bottom),
+        child: ClipRRect(
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(_sheetRadius)),
+          child: Container(
+            decoration: _sheetDecoration(context),
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _dragHandle(context),
+                const SizedBox(height: 8),
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: cs.primaryContainer.withValues(alpha: 0.55),
+                    ),
+                    child: Icon(
+                      confirmIcon,
+                      size: 52,
+                      color: cs.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  confirmTitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Нийт төлбөр',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _fmtMnt(due),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: cs.primary,
+                    fontSize: 38,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: () {
+                          HapticFeedback.mediumImpact();
+                          Navigator.pop(context, due);
+                        },
+                        child: const Text(
+                          'Баталгаажуулах',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: cs.onSurface,
+                          side: BorderSide(color: cs.outlineVariant),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text(
+                          'Болих',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final media = MediaQuery.of(context);
+    final viewH = media.size.height;
+    final viewW = media.size.width;
+    final kb = media.viewInsets.bottom;
+    final maxSheetH = (viewH * 0.92) - kb;
+    final padH = viewW < 320 ? 10.0 : (viewW < 400 ? 14.0 : 20.0);
+    final tenderFont = viewW < 300 ? 22.0 : (viewW < 360 ? 28.0 : (viewW < 420 ? 32.0 : 36.0));
+    final titleSize = viewW < 340 ? 16.0 : 18.0;
+    final numpadGap = viewW < 340 ? 3.0 : 5.0;
+    final keyAspect = viewW < 340 ? 1.85 : (viewW < 400 ? 1.55 : 1.4);
+    final keyFontMul = viewW < 340 ? 0.82 : 1.0;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: pad.bottom),
+      child: ClipRRect(
+        borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(_sheetRadius)),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: maxSheetH.clamp(200.0, viewH),
+            maxWidth: viewW,
+          ),
+          child: DecoratedBox(
+            decoration: _sheetDecoration(context),
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              padding: EdgeInsets.fromLTRB(padH, 0, padH, 12 + kb * 0.02),
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                _dragHandle(context),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(viewW < 340 ? 8 : 10),
+                      decoration: BoxDecoration(
+                        color: cs.primaryContainer.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        Icons.payments_rounded,
+                        color: cs.primary,
+                        size: viewW < 340 ? 22 : 26,
+                      ),
+                    ),
+                    SizedBox(width: viewW < 340 ? 8 : 12),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Бэлэн мөнгө',
+                            style: TextStyle(
+                              color: cs.onSurface,
+                              fontWeight: FontWeight.w800,
+                              fontSize: titleSize,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          Text(
+                            'Олгосон дүнг оруулна уу',
+                            style: TextStyle(
+                              color: cs.onSurfaceVariant,
+                              fontSize: viewW < 340 ? 11 : 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: viewW < 340 ? 12 : 18),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: cs.outlineVariant),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Flexible(
+                        flex: 2,
+                        child: Text(
+                          'Төлөх дүн',
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: viewW < 340 ? 12 : 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Flexible(
+                        flex: 3,
+                        child: Text(
+                          _fmtMnt(due),
+                          textAlign: TextAlign.end,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontSize: viewW < 340 ? 14 : 17,
+                            fontWeight: FontWeight.w800,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: _tenderOk ? cs.primary : cs.error,
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: cs.shadow.withValues(alpha: 0.06),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Олгосон',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 200),
+                        style: TextStyle(
+                          color: _tenderOk ? cs.onSurface : cs.error,
+                          fontSize: tenderFont,
+                          fontWeight: FontWeight.w800,
+                          height: 1.05,
+                          fontFeatures: const [
+                            FontFeature.tabularFigures(),
+                          ],
+                        ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            _fmtMnt(_tender),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                          ),
+                        ),
+                      ),
+                      if (!_tenderOk) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.info_outline_rounded,
+                              size: 16,
+                              color: cs.error,
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                'Олгосон дүн төлөх дүнгээс багагүй байх ёстой',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: cs.error,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: _hariult > 0
+                      ? Container(
+                          key: const ValueKey('change'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: cs.primaryContainer.withValues(alpha: 0.45),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: cs.primary.withValues(alpha: 0.35),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.savings_outlined,
+                                size: viewW < 340 ? 18 : 20,
+                                color: cs.primary,
+                              ),
+                              SizedBox(width: viewW < 340 ? 6 : 8),
+                              Expanded(
+                                child: Text(
+                                  'Хариулт',
+                                  style: TextStyle(
+                                    color: cs.onSurface,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: viewW < 340 ? 13 : 14,
+                                  ),
+                                ),
+                              ),
+                              Flexible(
+                                child: Text(
+                                  _fmtMnt(_hariult),
+                                  textAlign: TextAlign.end,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: cs.primary,
+                                    fontSize: viewW < 340 ? 16 : 20,
+                                    fontWeight: FontWeight.w800,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : const SizedBox(key: ValueKey('nochange'), height: 0),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Хурдан нэмэх',
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.start,
+                  children: [
+                    _QuickAmountChip(
+                      label: 'Нийт дүн',
+                      selected: _digits == due.ceil().toString(),
+                      onTap: _setExactDue,
+                      compact: viewW < 360,
+                    ),
+                    _QuickAmountChip(
+                      label: '+1,000',
+                      onTap: () => _addQuick(1000),
+                      compact: viewW < 360,
+                    ),
+                    _QuickAmountChip(
+                      label: '+5,000',
+                      onTap: () => _addQuick(5000),
+                      compact: viewW < 360,
+                    ),
+                    _QuickAmountChip(
+                      label: '+10,000',
+                      onTap: () => _addQuick(10000),
+                      compact: viewW < 360,
+                    ),
+                    _QuickAmountChip(
+                      label: '+20,000',
+                      onTap: () => _addQuick(20000),
+                      compact: viewW < 360,
+                    ),
+                  ],
+                ),
+                SizedBox(height: viewW < 340 ? 12 : 16),
+                _numpad(
+                  keyGap: numpadGap,
+                  keyAspectRatio: keyAspect,
+                  fontScale: keyFontMul,
+                ),
+                SizedBox(height: viewW < 340 ? 12 : 20),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          padding: EdgeInsets.symmetric(
+                            vertical: viewW < 340 ? 14 : 18,
+                            horizontal: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: _tenderOk
+                            ? () {
+                                HapticFeedback.mediumImpact();
+                                Navigator.pop(context, _tender);
+                              }
+                            : null,
+                        child: Text(
+                          'Төлбөр баталгаажуулах',
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: viewW < 340 ? 12 : 15,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: viewW < 340 ? 8 : 12),
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: cs.onSurface,
+                          side: BorderSide(color: cs.outlineVariant),
+                          padding: EdgeInsets.symmetric(
+                            vertical: viewW < 340 ? 14 : 16,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          'Болих',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: viewW < 340 ? 13 : 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+    );
+  }
+
+  Widget _numpad({
+    double keyGap = 5,
+    double keyAspectRatio = 1.35,
+    double fontScale = 1,
+  }) {
+    const keys = <List<String>>[
+      ['1', '2', '3'],
+      ['4', '5', '6'],
+      ['7', '8', '9'],
+    ];
+    final hPad = EdgeInsets.symmetric(horizontal: keyGap);
+    return Column(
+      children: [
+        for (final row in keys)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                for (final k in row)
+                  Expanded(
+                    child: Padding(
+                      padding: hPad,
+                      child: _NumpadKey(
+                        label: k,
+                        onTap: () => _tapKey(k),
+                        aspectRatio: keyAspectRatio,
+                        fontSize: 22 * fontScale,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: hPad,
+                  child: _NumpadKey(
+                    label: 'C',
+                    onTap: () => _tapKey('C'),
+                    tone: _NumpadKeyTone.danger,
+                    aspectRatio: keyAspectRatio,
+                    fontSize: 18 * fontScale,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: hPad,
+                  child: _NumpadKey(
+                    label: '0',
+                    onTap: () => _tapKey('0'),
+                    aspectRatio: keyAspectRatio,
+                    fontSize: 22 * fontScale,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: hPad,
+                  child: _NumpadKey(
+                    label: '00',
+                    onTap: () => _tapKey('00'),
+                    aspectRatio: keyAspectRatio,
+                    fontSize: 17 * fontScale,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: hPad,
+                  child: _NumpadKey(
+                    label: '⌫',
+                    onTap: () => _tapKey('⌫'),
+                    tone: _NumpadKeyTone.muted,
+                    aspectRatio: keyAspectRatio,
+                    fontSize: 20 * fontScale,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+enum _NumpadKeyTone { normal, danger, muted }
+
+class _NumpadKey extends StatelessWidget {
+  const _NumpadKey({
+    required this.label,
+    required this.onTap,
+    this.tone = _NumpadKeyTone.normal,
+    this.fontSize = 22,
+    this.aspectRatio = 1.35,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final _NumpadKeyTone tone;
+  final double fontSize;
+  final double aspectRatio;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final Color bg;
+    final Color fg;
+    switch (tone) {
+      case _NumpadKeyTone.danger:
+        bg = cs.errorContainer;
+        fg = cs.error;
+        break;
+      case _NumpadKeyTone.muted:
+        bg = cs.surfaceContainerHighest.withValues(alpha: 0.85);
+        fg = cs.onSurfaceVariant;
+        break;
+      case _NumpadKeyTone.normal:
+        bg = cs.surfaceContainerHighest.withValues(alpha: 0.55);
+        fg = cs.onSurface;
+        break;
+    }
+
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(16),
+      elevation: 0,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        splashColor: cs.primary.withValues(alpha: 0.12),
+        highlightColor: cs.primary.withValues(alpha: 0.06),
+        child: AspectRatio(
+          aspectRatio: aspectRatio,
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.w700,
+                  color: fg,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickAmountChip extends StatelessWidget {
+  const _QuickAmountChip({
+    required this.label,
+    required this.onTap,
+    this.selected = false,
+    this.compact = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final bool selected;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: selected
+          ? cs.primaryContainer.withValues(alpha: 0.65)
+          : cs.surfaceContainerHighest.withValues(alpha: 0.4),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 14,
+            vertical: compact ? 8 : 10,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? cs.primary : cs.outlineVariant,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? cs.onPrimaryContainer : cs.onSurface,
+              fontWeight: FontWeight.w700,
+              fontSize: compact ? 12 : 13,
+            ),
           ),
         ),
       ),

@@ -56,11 +56,16 @@ class StaffScreenAccess {
     bool match(String fragment) =>
         paths.any((p) => p.contains(fragment.toLowerCase()));
 
-    final kiosk = full || match('kiosk');
+    // Full URLs like `https://pos.zevtabs.mn/khyanalt/kiosk` → `/khyanalt/kiosk`
+    final kiosk = full ||
+        match('kiosk') ||
+        match('/khyanalt/kiosk') ||
+        match('khyanalt/kiosk');
     final pos = full ||
         match('possystem') ||
         match('pos-system') ||
-        match('/khyanalt/possystem');
+        match('/khyanalt/possystem') ||
+        match('khyanalt/possystem');
     final aguulakh = full || match('aguulakh');
     final khariltsagch = full || match('khariltsagch');
     final dashboard = full;
@@ -99,13 +104,20 @@ class StaffScreenAccess {
     return false;
   }
 
-  /// Strip scheme/host; lowercase path for substring checks.
+  /// Strip scheme/host, query, and hash; lowercase path for substring checks.
   static String _normalizePath(String key) {
     var s = key.trim();
     final schemeIdx = s.indexOf('://');
     if (schemeIdx != -1) {
       final pathStart = s.indexOf('/', schemeIdx + 3);
       s = pathStart == -1 ? '' : s.substring(pathStart);
+    }
+    final q = s.indexOf('?');
+    if (q >= 0) s = s.substring(0, q);
+    final h = s.indexOf('#');
+    if (h >= 0) s = s.substring(0, h);
+    if (s.length > 1 && s.endsWith('/')) {
+      s = s.substring(0, s.length - 1);
     }
     return s.toLowerCase();
   }

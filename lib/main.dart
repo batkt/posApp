@@ -65,7 +65,7 @@ class POSApp extends StatelessWidget {
       child: Consumer<LocaleModel>(
         builder: (context, localeModel, child) {
           return MaterialApp(
-            title: 'POS Pro',
+            title: 'posEase',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,

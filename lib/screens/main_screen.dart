@@ -495,14 +495,13 @@ class _MainScreenState extends State<MainScreen> {
 
                     if (confirm == true) {
                       await auth.logout();
-                      if (mounted) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const LoginScreen(),
-                          ),
-                        );
-                      }
+                      if (!mounted) return;
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(
+                          builder: (_) => const LoginScreen(),
+                        ),
+                        (_) => false,
+                      );
                     }
                   },
                   borderRadius: BorderRadius.circular(14),

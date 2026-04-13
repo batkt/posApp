@@ -55,7 +55,7 @@ class ProductModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final productResult = await _productService.getProducts(
+      final productResult = await _productService.getAllProductsForBranch(
         baiguullagiinId: org,
         salbariinId: branch,
       );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/auth_model.dart';
 import '../models/sales_model.dart';
@@ -10,6 +11,18 @@ import 'cashier_payment_screen.dart';
 import 'checkout_screen.dart';
 import '../widgets/test_image_widget.dart';
 import '../widgets/authenticated_image.dart';
+
+String _formatMntAmount(double v) {
+  return NumberFormat('#,###.##', 'en_US').format(v.round());
+}
+
+/// How many of this product are in the current sale (0 = not in cart).
+int _saleQtyForProduct(SalesModel sales, String productId) {
+  for (final line in sales.currentSaleItems) {
+    if (line.product.id == productId) return line.quantity;
+  }
+  return 0;
+}
 
 class POSScreen extends StatefulWidget {
   const POSScreen({super.key, this.cashierMode = false});
@@ -25,10 +38,51 @@ class _POSScreenState extends State<POSScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedCategory = 'Бүгд';
 
+  /// Cashier phone: product step (0) vs cart / payment step (1).
+  PageController? _cashierPageController;
+  int _cashierMobilePage = 0;
+
+  static const Duration _cashierPageAnim = Duration(milliseconds: 320);
+  static const Curve _cashierPageCurve = Curves.easeOutCubic;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.cashierMode) {
+      _cashierPageController = PageController();
+    }
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
+    _cashierPageController?.dispose();
     super.dispose();
+  }
+
+  void _goCashierProductsStep() {
+    final c = _cashierPageController;
+    if (c == null || !c.hasClients) return;
+    c.animateToPage(0, duration: _cashierPageAnim, curve: _cashierPageCurve);
+  }
+
+  void _goCashierCheckoutStep() {
+    final c = _cashierPageController;
+    if (c == null || !c.hasClients) return;
+    c.animateToPage(1, duration: _cashierPageAnim, curve: _cashierPageCurve);
+  }
+
+  void _openPaymentScreen(BuildContext context) {
+    final cashier =
+        context.read<AuthModel>().currentUser?.isCashier == true;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => cashier
+            ? const CashierPaymentScreen()
+            : const CheckoutScreen(),
+      ),
+    );
   }
 
   @override
@@ -101,7 +155,7 @@ class _POSScreenState extends State<POSScreen> {
   // Mobile layout - single column, optimized for phones
   Widget _buildMobileLayout(BuildContext context) {
     if (widget.cashierMode && ResponsiveHelper.isMobile(context)) {
-      return _buildCashierMobileDraggableSheet(context);
+      return _buildCashierMobileTwoStepFlow(context);
     }
 
     // Flex split avoids fixed 200px cart height (overflowed header + summary + list).
@@ -112,7 +166,11 @@ class _POSScreenState extends State<POSScreen> {
         _buildSearchAndCategories(context),
         Expanded(
           flex: gridFlex,
-          child: _buildProductsGrid(context),
+          child: _buildProductsGrid(
+            context,
+            gridCrossAxisCount: context.isMobile ? 2 : null,
+            gridChildAspectRatio: context.isMobile ? 0.74 : null,
+          ),
         ),
         Expanded(
           flex: cartFlex,
@@ -132,36 +190,265 @@ class _POSScreenState extends State<POSScreen> {
     );
   }
 
-  /// Cashier on phone: full-width product grid + swipeable bottom sheet for cart.
-  Widget _buildCashierMobileDraggableSheet(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Column(
+  /// Cashier on phone: 2-column product grid, then cart + totals + pay after "next".
+  Widget _buildCashierMobileTwoStepFlow(BuildContext context) {
+    final controller = _cashierPageController!;
+    return PopScope(
+      canPop: _cashierMobilePage == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _cashierMobilePage == 1) {
+          _goCashierProductsStep();
+        }
+      },
+      child: Column(
+        children: [
+          Expanded(
+            child: PageView(
+              controller: controller,
+              physics: const BouncingScrollPhysics(),
+              onPageChanged: (i) => setState(() => _cashierMobilePage = i),
+              children: [
+                Column(
+                  children: [
+                    _buildSearchAndCategories(context),
+                    Expanded(
+                      child: _buildProductsGrid(
+                        context,
+                        gridCrossAxisCount: 2,
+                        gridChildAspectRatio: 0.74,
+                      ),
+                    ),
+                  ],
+                ),
+                _buildCashierMobileCheckoutPage(context),
+              ],
+            ),
+          ),
+          if (_cashierMobilePage == 0) _buildCashierMobileProductBar(context),
+        ],
+      ),
+    );
+  }
+
+  /// Step 2: line items, totals, and payment (only after user taps next on step 1).
+  Widget _buildCashierMobileCheckoutPage(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Consumer<SalesModel>(
+      builder: (context, sales, _) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildSearchAndCategories(context),
-            Expanded(child: _buildProductsGrid(context)),
+            Material(
+              color: cs.surface,
+              elevation: 0,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 4,
+                  right: 8,
+                  top: MediaQuery.paddingOf(context).top > 0 ? 4 : 8,
+                  bottom: 8,
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      tooltip: 'Бараа руу буцах',
+                      onPressed: _goCashierProductsStep,
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Сагс ба төлбөр',
+                            style: tt.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          Text(
+                            sales.isSaleEmpty
+                                ? 'Эхлээд бараа сонгоно уу'
+                                : '${sales.uniqueSaleItems} төрөл · ${sales.saleItemCount} ширхэг',
+                            style: tt.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!sales.isSaleEmpty)
+                      IconButton.filledTonal(
+                        tooltip: 'Сагс цэвэрлэх',
+                        onPressed: () => sales.clearSale(),
+                        icon: Icon(
+                          Icons.delete_sweep_rounded,
+                          color: cs.error,
+                        ),
+                        style: IconButton.styleFrom(
+                          backgroundColor:
+                              cs.errorContainer.withValues(alpha: 0.45),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            Divider(height: 1, color: cs.outlineVariant),
+            Expanded(
+              child: sales.isSaleEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.shopping_basket_outlined,
+                              size: 56,
+                              color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Сагс хоосон',
+                              style: tt.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Бараа нэмсний дараа энд харагдана',
+                              textAlign: TextAlign.center,
+                              style: tt.bodyMedium?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            FilledButton.tonalIcon(
+                              onPressed: _goCashierProductsStep,
+                              icon: const Icon(Icons.storefront_rounded),
+                              label: const Text('Бараа сонгох'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      physics: const BouncingScrollPhysics(),
+                      children: [
+                        for (final item in sales.currentSaleItems)
+                          _buildSaleItemTile(context, item, sheetStyle: true),
+                      ],
+                    ),
+            ),
+            if (!sales.isSaleEmpty) _buildSheetSaleSummary(context, sales),
           ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCashierMobileProductBar(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Material(
+      elevation: 8,
+      shadowColor: Colors.black38,
+      color: cs.surface,
+      child: SafeArea(
+        top: false,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: cs.outlineVariant),
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Consumer<SalesModel>(
+            builder: (context, sales, _) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Сагс',
+                              style: tt.labelLarge?.copyWith(
+                                color: cs.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              sales.isSaleEmpty
+                                  ? 'Бараа сонгоно уу'
+                                  : '${sales.uniqueSaleItems} төрөл · ${sales.saleItemCount} ширхэг',
+                              style: tt.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (!sales.isSaleEmpty)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              'Нийт',
+                              style: tt.labelSmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                            Text(
+                              '${_formatMntAmount(sales.total)} ₮',
+                              style: tt.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: cs.primary,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: sales.isSaleEmpty ? null : _goCashierCheckoutStep,
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 22),
+                    label: const Text(
+                      'Дараагийн алхам',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
-        DraggableScrollableSheet(
-          initialChildSize: 0.22,
-          minChildSize: 0.12,
-          maxChildSize: 0.92,
-          snap: true,
-          snapSizes: const [0.12, 0.38, 0.92],
-          builder: (context, scrollController) {
-            return Material(
-              color: colorScheme.surfaceContainerHighest,
-              elevation: 6,
-              shadowColor: Colors.black38,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-              clipBehavior: Clip.antiAlias,
-              child: _buildSalePanel(context, sheetScrollController: scrollController),
-            );
-          },
-        ),
-      ],
+      ),
     );
   }
 
@@ -352,12 +639,19 @@ class _POSScreenState extends State<POSScreen> {
   }
 
   // Products grid section
-  Widget _buildProductsGrid(BuildContext context) {
-    return Consumer<InventoryModel>(
-      builder: (context, inventory, child) {
+  Widget _buildProductsGrid(
+    BuildContext context, {
+    int? gridCrossAxisCount,
+    double? gridChildAspectRatio,
+  }) {
+    final crossCount = gridCrossAxisCount ?? context.gridColumns;
+    final aspect = gridChildAspectRatio ?? 1.0;
+
+    return Consumer2<InventoryModel, SalesModel>(
+      builder: (context, inventory, sales, child) {
         final products = inventory.filteredInventory.where((item) {
-          final showAll = _selectedCategory == 'Бүгд' ||
-              _selectedCategory == 'All';
+          final showAll =
+              _selectedCategory == 'Бүгд' || _selectedCategory == 'All';
           final matchesCategory = showAll ||
               item.product.angilal?.contains(_selectedCategory) == true ||
               item.product.category == _selectedCategory;
@@ -402,20 +696,26 @@ class _POSScreenState extends State<POSScreen> {
         return GridView.builder(
           padding: context.responsivePadding,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: context.gridColumns,
-            childAspectRatio:
-                1.0, // Fixed aspect ratio for consistent card sizes
+            crossAxisCount: crossCount,
+            childAspectRatio: aspect,
             crossAxisSpacing: context.spacing,
             mainAxisSpacing: context.spacing,
+          ),
+          cacheExtent: 280,
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
           ),
           itemCount: products.length,
           itemBuilder: (context, index) {
             final item = products[index];
+            final inSale = _saleQtyForProduct(sales, item.product.id);
             return _ProductCard(
+              key: ValueKey(item.product.id),
               item: item,
+              inSaleQuantity: inSale,
               onTap: () {
                 if (item.currentStock > 0) {
-                  context.read<SalesModel>().addToSale(item.product);
+                  sales.addToSale(item.product);
                   inventory.deductStock(item.product.id, 1);
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -433,135 +733,56 @@ class _POSScreenState extends State<POSScreen> {
     );
   }
 
-  // Sale panel section
-  Widget _buildSalePanel(
-    BuildContext context, {
-    ScrollController? sheetScrollController,
-  }) {
+  // Sale panel section (split layouts: tablet / desktop / non-cashier mobile).
+  Widget _buildSalePanel(BuildContext context) {
     return Consumer<SalesModel>(
       builder: (context, sales, child) {
-        final colorScheme = Theme.of(context).colorScheme;
-
-        final children = <Widget>[
-          if (sheetScrollController != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 10, bottom: 6),
-              child: Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: colorScheme.onSurfaceVariant.withOpacity(0.35),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-            ),
-          ..._salePanelListChildren(context, sales),
-        ];
-
         return ListView(
-          controller: sheetScrollController,
           padding: EdgeInsets.zero,
-          physics: sheetScrollController != null
-              ? const AlwaysScrollableScrollPhysics()
-              : const ClampingScrollPhysics(),
-          children: children,
+          physics: const ClampingScrollPhysics(),
+          children: _salePanelListChildren(context, sales),
         );
       },
     );
   }
 
-  List<Widget> _salePanelListChildren(BuildContext context, SalesModel sales) {
+  Widget _buildSaleItemTile(
+    BuildContext context,
+    SaleItem item, {
+    required bool sheetStyle,
+  }) {
+    final sales = context.read<SalesModel>();
+    return _SaleItemTile(
+      sheetMode: sheetStyle,
+      item: item,
+      onIncrement: () {
+        final inventory = context.read<InventoryModel>();
+        inventory.deductStock(item.product.id, 1);
+        sales.incrementSaleQuantity(item.product.id);
+      },
+      onDecrement: () {
+        if (item.quantity > 1) {
+          final inventory = context.read<InventoryModel>();
+          inventory.restock(item.product.id, 1);
+          sales.decrementSaleQuantity(item.product.id);
+        }
+      },
+      onRemove: () {
+        final inventory = context.read<InventoryModel>();
+        sales.removeFromSale(item.product.id);
+        inventory.restock(item.product.id, item.quantity);
+      },
+    );
+  }
+
+  List<Widget> _salePanelListChildren(
+    BuildContext context,
+    SalesModel sales,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    Widget saleTile(SaleItem item) {
-      return _SaleItemTile(
-        item: item,
-        onIncrement: () {
-          final inventory = context.read<InventoryModel>();
-          inventory.deductStock(item.product.id, 1);
-          sales.incrementSaleQuantity(item.product.id);
-        },
-        onDecrement: () {
-          if (item.quantity > 1) {
-            final inventory = context.read<InventoryModel>();
-            inventory.restock(item.product.id, 1);
-            sales.decrementSaleQuantity(item.product.id);
-          }
-        },
-        onRemove: () {
-          final inventory = context.read<InventoryModel>();
-          sales.removeFromSale(item.product.id);
-          inventory.restock(item.product.id, item.quantity);
-        },
-      );
-    }
-
-    final summaryBlock = Container(
-      padding: context.responsivePadding,
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: colorScheme.outlineVariant),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildSummaryRow(
-            context: context,
-            label: 'Дүн',
-            amount: sales.subtotal,
-            isTotal: false,
-          ),
-          SizedBox(height: context.spacing * 0.5),
-          _buildSummaryRow(
-            context: context,
-            label: 'НӨАТ',
-            amount: sales.tax,
-            isTotal: false,
-          ),
-          SizedBox(height: context.spacing * 0.5),
-          _buildSummaryRow(
-            context: context,
-            label: 'Нийт',
-            amount: sales.total,
-            isTotal: true,
-          ),
-          SizedBox(height: context.spacing),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: sales.isSaleEmpty
-                  ? null
-                  : () {
-                      final cashier =
-                          context.read<AuthModel>().currentUser?.isCashier ==
-                              true;
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => cashier
-                              ? const CashierPaymentScreen()
-                              : const CheckoutScreen(),
-                        ),
-                      );
-                    },
-              icon: Icon(Icons.payment, size: context.responsiveIconSize(20)),
-              label: Text(
-                'Төлөх',
-                style: TextStyle(fontSize: context.responsiveFontSize(16)),
-              ),
-              style: FilledButton.styleFrom(
-                padding: EdgeInsets.symmetric(vertical: context.spacing * 0.75),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    final summaryBlock = _buildClassicSaleSummary(context, sales);
 
     return [
       Container(
@@ -590,8 +811,8 @@ class _POSScreenState extends State<POSScreen> {
                 if (!sales.isSaleEmpty)
                   TextButton.icon(
                     onPressed: () => sales.clearSale(),
-                    icon: Icon(Icons.clear,
-                        size: context.responsiveIconSize(18)),
+                    icon:
+                        Icon(Icons.clear, size: context.responsiveIconSize(18)),
                     label: Text(
                       'Цэвэрлэх',
                       style:
@@ -629,7 +850,7 @@ class _POSScreenState extends State<POSScreen> {
               ),
               SizedBox(height: context.spacing),
               Text(
-                'Сагланг хоосон',
+                'Сагс хоосон',
                 style: textTheme.titleMedium?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                   fontSize: context.responsiveFontSize(16),
@@ -645,12 +866,185 @@ class _POSScreenState extends State<POSScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              for (final item in sales.currentSaleItems) saleTile(item),
+              for (final item in sales.currentSaleItems)
+                _buildSaleItemTile(context, item, sheetStyle: false),
             ],
           ),
         ),
       summaryBlock,
     ];
+  }
+
+  Widget _buildClassicSaleSummary(BuildContext context, SalesModel sales) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: context.responsivePadding,
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: colorScheme.outlineVariant),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildSummaryRow(
+            context: context,
+            label: 'Дүн',
+            amount: sales.subtotal,
+            isTotal: false,
+          ),
+          SizedBox(height: context.spacing * 0.5),
+          _buildSummaryRow(
+            context: context,
+            label: 'НӨАТ',
+            amount: sales.tax,
+            isTotal: false,
+          ),
+          SizedBox(height: context.spacing * 0.5),
+          _buildSummaryRow(
+            context: context,
+            label: 'Нийт',
+            amount: sales.total,
+            isTotal: true,
+          ),
+          SizedBox(height: context.spacing),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: sales.isSaleEmpty
+                  ? null
+                  : () => _openPaymentScreen(context),
+              icon: Icon(Icons.payment, size: context.responsiveIconSize(20)),
+              label: Text(
+                'Төлөх',
+                style: TextStyle(fontSize: context.responsiveFontSize(16)),
+              ),
+              style: FilledButton.styleFrom(
+                padding: EdgeInsets.symmetric(vertical: context.spacing * 0.75),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSheetSaleSummary(BuildContext context, SalesModel sales) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+      child: Material(
+        color: cs.surfaceContainerLow,
+        elevation: 0,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: cs.outlineVariant),
+            boxShadow: [
+              BoxShadow(
+                color: cs.shadow.withValues(alpha: 0.06),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Тооцоо',
+                style: tt.labelLarge?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _sheetSummaryLine(context, 'Дэд дүн', sales.subtotal, false),
+              const SizedBox(height: 8),
+              _sheetSummaryLine(context, 'НӨАТ (10%)', sales.tax, false),
+              const SizedBox(height: 12),
+              Divider(height: 1, color: cs.outlineVariant),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Нийт төлөх',
+                    style: tt.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                    ),
+                  ),
+                  Text(
+                    '${_formatMntAmount(sales.total)} ₮',
+                    style: tt.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: cs.primary,
+                      fontSize: 22,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                onPressed: sales.isSaleEmpty
+                    ? null
+                    : () => _openPaymentScreen(context),
+                icon: const Icon(Icons.payments_rounded, size: 22),
+                label: const Text(
+                  'Төлбөр төлөх',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sheetSummaryLine(
+    BuildContext context,
+    String label,
+    double amount,
+    bool emphasize,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: tt.bodyLarge?.copyWith(
+            color: cs.onSurfaceVariant,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Text(
+          '${_formatMntAmount(amount)} ₮',
+          style: tt.bodyLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildSummaryRow({
@@ -701,21 +1095,48 @@ class _POSScreenState extends State<POSScreen> {
 class _ProductCard extends StatelessWidget {
   final InventoryItem item;
   final VoidCallback onTap;
+  /// Units of this SKU in the active sale (drives border + badge).
+  final int inSaleQuantity;
 
   const _ProductCard({
+    super.key,
     required this.item,
     required this.onTap,
+    this.inSaleQuantity = 0,
   });
+
+  static const Color _stockPlentyGreen = Color(0xFF16A34A);
+  static const Color _stockLowRed = Color(0xFFDC2626);
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final inCart = inSaleQuantity > 0;
+    final multiInCart = inSaleQuantity >= 2;
+    final stock = item.currentStock;
+    final stockHealthy = stock > 20;
+    final stockColor = stockHealthy ? _stockPlentyGreen : _stockLowRed;
 
-    return Card(
+    final borderColor = inCart ? colorScheme.primary : colorScheme.outlineVariant;
+    final borderWidth = inCart ? 2.5 : 1.0;
+
+    return Material(
+      color: inCart
+          ? colorScheme.primaryContainer.withValues(alpha: 0.35)
+          : colorScheme.surface,
+      elevation: 1,
+      shadowColor: Colors.black26,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: borderColor, width: borderWidth),
+      ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: item.isOutOfStock ? null : onTap,
+        splashFactory: NoSplash.splashFactory,
+        splashColor: Colors.transparent,
+        highlightColor: colorScheme.primary.withValues(alpha: 0.06),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -727,35 +1148,89 @@ class _ProductCard extends StatelessWidget {
                     imageUrl: item.product.imageUrl,
                     fit: BoxFit.cover,
                   ),
-                  if (item.isOutOfStock)
-                    Container(
-                      color: Colors.black54,
-                      child: Center(
-                        child: Text(
-                          'ДУУССАН',
-                          style: textTheme.labelSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: 44,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.55),
+                          ],
                         ),
                       ),
                     ),
-                  if (item.isLowStock && !item.isOutOfStock)
-                    Positioned(
+                  ),
+                  if (item.isOutOfStock)
+                    Container(
+                      color: Colors.black54,
+                      alignment: Alignment.center,
+                      child: Text(
+                        'ДУУССАН',
+                        style: textTheme.labelMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  if (inCart)
+                    const Positioned(
                       top: 8,
-                      right: 8,
+                      left: 8,
+                      child: Icon(
+                        Icons.check_circle_rounded,
+                        size: 22,
+                        color: Colors.white,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black54,
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (inCart)
+                    Positioned(
+                      top: 6,
+                      right: 6,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: multiInCart ? 10 : 8,
+                          vertical: 5,
+                        ),
                         decoration: BoxDecoration(
-                          color: AppColors.warning,
-                          borderRadius: BorderRadius.circular(4),
+                          color: multiInCart
+                              ? colorScheme.primary
+                              : colorScheme.primary.withValues(alpha: 0.92),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: Colors.white,
+                            width: multiInCart ? 2 : 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
                         child: Text(
-                          '${item.currentStock} үлдсэн',
-                          style: textTheme.labelSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
+                          '×$inSaleQuantity',
+                          style: textTheme.labelLarge?.copyWith(
+                            color: colorScheme.onPrimary,
+                            fontWeight: FontWeight.w900,
+                            fontSize: multiInCart ? 15 : 13,
+                            height: 1,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures(),
+                            ],
                           ),
                         ),
                       ),
@@ -764,49 +1239,70 @@ class _ProductCard extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: EdgeInsets.all(context.spacing * 0.5),
+              padding: EdgeInsets.fromLTRB(
+                10,
+                8,
+                10,
+                context.spacing * 0.5 + 4,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Product name with responsive text
                   Text(
                     item.product.name,
-                    style: textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      fontSize: context.responsiveFontSize(10),
+                    style: textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: context.responsiveFontSize(11),
+                      height: 1.2,
                     ),
-                    maxLines: context.isMobile ? 1 : 2,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  SizedBox(height: context.spacing * 0.25),
-                  // Product code/barcode if available
-                  if (item.product.code != null || item.product.barCode != null)
+                  if (item.product.code != null ||
+                      item.product.barCode != null) ...[
+                    SizedBox(height: context.spacing * 0.2),
                     Text(
                       item.product.code ?? item.product.barCode ?? '',
                       style: textTheme.labelSmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
-                        fontSize: context.responsiveFontSize(8),
+                        fontSize: context.responsiveFontSize(9),
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  // Stock info
-                  Text(
-                    'Stock: ${item.currentStock}',
-                    style: textTheme.labelSmall?.copyWith(
-                      color: item.isLowStock
-                          ? AppColors.warning
-                          : colorScheme.onSurfaceVariant,
-                      fontSize: context.responsiveFontSize(8),
-                      fontWeight: FontWeight.w500,
-                    ),
+                  ],
+                  SizedBox(height: context.spacing * 0.35),
+                  Row(
+                    children: [
+                      Text(
+                        'Үлдэгдэл: ',
+                        style: textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                          fontSize: context.responsiveFontSize(9),
+                        ),
+                      ),
+                      Text(
+                        '$stock',
+                        style: textTheme.labelMedium?.copyWith(
+                          color: stockColor,
+                          fontWeight: FontWeight.w800,
+                          fontSize: context.responsiveFontSize(10),
+                          fontFeatures: const [
+                            FontFeature.tabularFigures(),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                   SizedBox(height: context.spacing * 0.25),
-                  // Price with responsive text
                   Text(
-                    'MNT ${item.product.price.toStringAsFixed(0)}',
-                    style: textTheme.labelSmall?.copyWith(
+                    '${_formatMntAmount(item.product.price)} ₮',
+                    style: textTheme.labelLarge?.copyWith(
                       color: colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: context.responsiveFontSize(10),
+                      fontWeight: FontWeight.w800,
+                      fontSize: context.responsiveFontSize(11),
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
                 ],
@@ -820,97 +1316,236 @@ class _ProductCard extends StatelessWidget {
 }
 
 class _SaleItemTile extends StatelessWidget {
-  final SaleItem item;
-  final VoidCallback onIncrement;
-  final VoidCallback onDecrement;
-  final VoidCallback onRemove;
-
   const _SaleItemTile({
     required this.item,
     required this.onIncrement,
     required this.onDecrement,
     required this.onRemove,
+    this.sheetMode = false,
   });
+
+  final SaleItem item;
+  final VoidCallback onIncrement;
+  final VoidCallback onDecrement;
+  final VoidCallback onRemove;
+  final bool sheetMode;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final lineTotal = item.unitPrice * item.quantity;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          // Product Image
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: AuthenticatedImage(
-              imageUrl: item.product.imageUrl,
-              width: 48,
-              height: 48,
-              fit: BoxFit.cover,
+    if (!sheetMode) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: AuthenticatedImage(
+                imageUrl: item.product.imageUrl,
+                width: 48,
+                height: 48,
+                fit: BoxFit.cover,
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          // Product Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.product.name,
+                    style: textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'MNT ${item.product.price.toStringAsFixed(0)}',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Row(
               children: [
-                Text(
-                  item.product.name,
-                  style: textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
+                IconButton(
+                  onPressed: onDecrement,
+                  icon: const Icon(Icons.remove_circle_outline),
+                  iconSize: 20,
+                ),
+                Container(
+                  width: 40,
+                  alignment: Alignment.center,
+                  child: Text(
+                    '${item.quantity}',
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'MNT ${item.product.price.toStringAsFixed(0)}',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
+                IconButton(
+                  onPressed: onIncrement,
+                  icon: const Icon(Icons.add_circle_outline),
+                  iconSize: 20,
+                ),
+                IconButton(
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.delete_outline),
+                  iconSize: 20,
+                  color: colorScheme.error,
                 ),
               ],
             ),
-          ),
-          // Quantity Controls
-          Row(
-            children: [
-              IconButton(
-                onPressed: onDecrement,
-                icon: const Icon(Icons.remove_circle_outline),
-                iconSize: 20,
-              ),
-              Container(
-                width: 40,
-                alignment: Alignment.center,
-                child: Text(
-                  '${item.quantity}',
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              IconButton(
-                onPressed: onIncrement,
-                icon: const Icon(Icons.add_circle_outline),
-                iconSize: 20,
-              ),
-              IconButton(
-                onPressed: onRemove,
-                icon: const Icon(Icons.delete_outline),
-                iconSize: 20,
-                color: colorScheme.error,
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: colorScheme.surface,
+        elevation: 0,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: colorScheme.outlineVariant),
+            boxShadow: [
+              BoxShadow(
+                color: colorScheme.shadow.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
-        ],
+          padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AuthenticatedImage(
+                  imageUrl: item.product.imageUrl,
+                  width: 56,
+                  height: 56,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.product.name,
+                      style: textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${_formatMntAmount(item.unitPrice)} ₮ × ${item.quantity}',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${_formatMntAmount(lineTotal)} ₮',
+                      style: textTheme.titleMedium?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w800,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Material(
+                    color: colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: 36,
+                          ),
+                          onPressed: onDecrement,
+                          icon: Icon(
+                            Icons.remove_rounded,
+                            size: 20,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 28,
+                          child: Text(
+                            '${item.quantity}',
+                            textAlign: TextAlign.center,
+                            style: textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: 36,
+                          ),
+                          onPressed: onIncrement,
+                          icon: Icon(
+                            Icons.add_rounded,
+                            size: 20,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Хасах',
+                    onPressed: onRemove,
+                    icon: Icon(
+                      Icons.delete_outline_rounded,
+                      size: 22,
+                      color: colorScheme.error,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

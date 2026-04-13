@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/pos_session.dart';
@@ -7,6 +8,19 @@ import '../models/sales_model.dart';
 import 'api_service.dart';
 
 /// POS backend (posBack) — same routes as Next.js `pos` (`posUilchilgee`).
+///
+/// **Гүйлгээ (guilgee)** — `POST /guilgeeniiTuukhKhadgalya` saves the sale, updates
+/// `aguulakh` stock, writes `orlogoZarlagiinTuukh`. Response body is the Mongo
+/// `_id` of the new `guilgeeniiTuukh` row when `tuluv === 1` (payment complete), or
+/// `{ guilgeeniiId }` when not fully paid.
+///
+/// **E-Баримт (ebarimt)** — **not** created inside `guilgeeniiTuukhKhadgalya`. The web
+/// POS calls `POST /ebarimtShivye` **after** a successful save (see
+/// `tulburTuluhModal.js`) with that Mongo id, `baiguullagiinId`, `salbariinId`, and
+/// `register` (empty string = иргэн / B2C). The route builds e-barimt payload from
+/// the saved sale and calls the tax PosAPI (unless the branch disables it). Branches
+/// that use **QPay + eBarimtShine** open a separate modal on web; this app mirrors
+/// the simple **иргэн** `ebarimtShivye` call after each completed API sale.
 class PosTransactionService {
   PosTransactionService({http.Client? httpClient})
       : _http = httpClient ?? http.Client();
@@ -30,6 +44,46 @@ class PosTransactionService {
     } catch (_) {
       return t;
     }
+  }
+
+  static double _finiteDouble(num? value, {double fallback = 0}) {
+    final v = value?.toDouble();
+    if (v == null || !v.isFinite || v.isNaN) return fallback;
+    return v;
+  }
+
+  static double _fixed2Num(num? value, {double fallback = 0}) {
+    return double.parse(_finiteDouble(value, fallback: fallback).toStringAsFixed(2));
+  }
+
+  static String _fixed2String(num? value, {double fallback = 0}) {
+    return _finiteDouble(value, fallback: fallback).toStringAsFixed(2);
+  }
+
+  /// Recursively removes invalid numeric values before sending JSON to backend.
+  static dynamic _sanitizeJson(dynamic value) {
+    if (value is num) {
+      final v = value.toDouble();
+      return (v.isFinite && !v.isNaN) ? value : 0;
+    }
+    if (value is String) {
+      final t = value.trim().toLowerCase();
+      if (t == 'nan' || t == 'infinity' || t == '-infinity') return '0';
+      final parsed = double.tryParse(t);
+      if (parsed != null && (!parsed.isFinite || parsed.isNaN)) return '0';
+      return value;
+    }
+    if (value is List) {
+      return value.map(_sanitizeJson).toList();
+    }
+    if (value is Map) {
+      final out = <String, dynamic>{};
+      value.forEach((k, v) {
+        out[k.toString()] = _sanitizeJson(v);
+      });
+      return out;
+    }
+    return value;
   }
 
   /// Same as web `POST /zakhialgiinDugaarAvya` when the first line item is added.
@@ -63,29 +117,35 @@ class PosTransactionService {
     required double noatguiDun,
     required double nhatiinDun,
     required String guilgeeniiDugaar,
-    bool baraaNUATModalOpen = true,
+    bool baraaNUATModalOpen = false,
     Map<String, dynamic>? khariltsagch,
   }) async {
     final items = sales.currentSaleItems;
     final baraanuud = items.map((line) {
       final p = line.product;
-      final lineTotal = line.unitPrice * line.quantity;
+      final qty = _finiteDouble(line.quantity);
+      final unitPrice = _finiteDouble(line.unitPrice);
+      final lineTotal = unitPrice * qty;
       return {
         'baraa': p.toBaraaDocument(
           fallbackSalbariinId: session.salbariinId,
         ),
-        'niitUne': lineTotal.toStringAsFixed(2),
-        'too': line.quantity,
+        'niitUne': _fixed2String(lineTotal),
+        'too': qty,
         'salbariinId': p.salbariinId ?? session.salbariinId,
       };
     }).toList();
 
+    // Web `tulbur`: `[{ turul: "belen"|"cart"|"khariltsakh", une: number }]`
+    // Cash: `une` = төлсөн дүн minus хариулт; card/dans: full `tulsunDun`.
     final lineUne =
-        paymentTurul == 'belen' ? tulsunDun - hariult : tulsunDun;
+        paymentTurul == 'belen'
+            ? _finiteDouble(tulsunDun) - _finiteDouble(hariult)
+            : _finiteDouble(tulsunDun);
     final tulbur = [
       {
         'turul': paymentTurul,
-        'une': lineUne,
+        'une': _fixed2Num(lineUne),
       }
     ];
 
@@ -93,13 +153,13 @@ class PosTransactionService {
       'baiguullagiinId': session.baiguullagiinId,
       'salbariinId': session.salbariinId,
       'turul': 'pos',
-      'tulsunDun': tulsunDun,
-      'hungulsunDun': double.parse(hungulsunDun.toStringAsFixed(2)),
-      'noatiinDun': double.parse(noatiinDun.toStringAsFixed(2)),
-      'noatguiDun': double.parse(noatguiDun.toStringAsFixed(2)),
-      'nhatiinDun': double.parse(nhatiinDun.toStringAsFixed(2)),
-      'hariult': hariult,
-      'niitUne': double.parse(niitUne.toStringAsFixed(2)),
+      'tulsunDun': _fixed2Num(tulsunDun),
+      'hungulsunDun': _fixed2Num(hungulsunDun),
+      'noatiinDun': _fixed2Num(noatiinDun),
+      'noatguiDun': _fixed2Num(noatguiDun),
+      'nhatiinDun': _fixed2Num(nhatiinDun),
+      'hariult': _fixed2Num(hariult),
+      'niitUne': _fixed2Num(niitUne),
       'khariltsagch': khariltsagch,
       'guilgeeniiDugaar': guilgeeniiDugaar,
       'baraaNUATModalOpen': baraaNUATModalOpen,
@@ -110,9 +170,10 @@ class PosTransactionService {
 
     body.removeWhere((k, v) => v == null);
 
+    final safeBody = _sanitizeJson(body);
     final uri = Uri.parse('${ApiConfig.posBaseUrl}/guilgeeniiTuukhKhadgalya');
     final res = await _http
-        .post(uri, headers: _headers(), body: jsonEncode(body))
+        .post(uri, headers: _headers(), body: jsonEncode(safeBody))
         .timeout(ApiConfig.timeout);
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -123,6 +184,91 @@ class PosTransactionService {
     }
 
     return _decodeBody(res.body);
+  }
+
+  /// Parses [submitGuilgeeniiTuukh] response: plain id string or `{ guilgeeniiId }`.
+  static String? parseGuilgeeniiMongoIdFromSaveResponse(dynamic body) {
+    if (body == null) return null;
+    if (body is String) {
+      final s = body.trim();
+      if (s.isEmpty) return null;
+      if (RegExp(r'^[a-f\d]{24}$', caseSensitive: false).hasMatch(s)) {
+        return s;
+      }
+      return s;
+    }
+    if (body is Map) {
+      final v = body['guilgeeniiId'] ?? body['_id'];
+      return v?.toString();
+    }
+    return body.toString();
+  }
+
+  /// Same as web `POST /ebarimtShivye` after successful sale save.
+  /// Returns decoded response only when e-barimt creation succeeded.
+  Future<Map<String, dynamic>?> requestEbarimtAfterSale({
+    required String guilgeeniiMongoId,
+    required String baiguullagiinId,
+    required String salbariinId,
+    String register = '',
+    String? turul,
+    String? customerTin,
+  }) async {
+    if (guilgeeniiMongoId.isEmpty) return null;
+    final uri = Uri.parse('${ApiConfig.posBaseUrl}/ebarimtShivye');
+    final payload = _sanitizeJson(<String, dynamic>{
+      'guilgeeniiId': guilgeeniiMongoId,
+      'baiguullagiinId': baiguullagiinId,
+      'salbariinId': salbariinId,
+      'register': register,
+      if (turul != null && turul.isNotEmpty) 'turul': turul,
+      if (customerTin != null && customerTin.isNotEmpty) 'customerTin': customerTin,
+    });
+    try {
+      final res = await _http
+          .post(uri, headers: _headers(), body: jsonEncode(payload))
+          .timeout(ApiConfig.timeout);
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        if (kDebugMode) {
+          debugPrint('[ebarimtShivye] HTTP ${res.statusCode}');
+          debugPrint('[ebarimtShivye] payload=${jsonEncode(payload)}');
+          debugPrint('[ebarimtShivye] body=${res.body}');
+        }
+        return null;
+      }
+      final data = _decodeBody(res.body);
+      if (data is Map) {
+        final m = Map<String, dynamic>.from(data);
+        final ok = m['success'] == true ||
+            m['status']?.toString().toUpperCase() == 'SUCCESS';
+        if (!ok && kDebugMode) {
+          debugPrint('[ebarimtShivye] payload=${jsonEncode(payload)}');
+          debugPrint('[ebarimtShivye] response=${jsonEncode(m)}');
+        }
+        return ok ? m : null;
+      }
+      if (kDebugMode) {
+        debugPrint('[ebarimtShivye] payload=${jsonEncode(payload)}');
+        debugPrint('[ebarimtShivye] non-map response=${res.body}');
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Convenience wrapper for citizen e-barimt (`register: ''`).
+  Future<Map<String, dynamic>?> requestCitizenEbarimtAfterSale({
+    required String guilgeeniiMongoId,
+    required String baiguullagiinId,
+    required String salbariinId,
+  }) {
+    return requestEbarimtAfterSale(
+      guilgeeniiMongoId: guilgeeniiMongoId,
+      baiguullagiinId: baiguullagiinId,
+      salbariinId: salbariinId,
+      register: '',
+    );
   }
 
   static String? _messageFromErrorBody(String body) {

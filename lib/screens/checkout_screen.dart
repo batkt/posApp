@@ -19,6 +19,7 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String _selectedPaymentMethod = PaymentDisplayConfig.defaultCheckoutMethodId;
   bool _isProcessing = false;
+  Map<String, dynamic>? _lastEbarimt;
 
   @override
   void initState() {
@@ -44,6 +45,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Future<void> _processPayment() async {
     setState(() => _isProcessing = true);
+    _lastEbarimt = null;
     final sales = context.read<SalesModel>();
     final auth = context.read<AuthModel>();
 
@@ -52,6 +54,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         final session = auth.posSession!;
         final svc = PosTransactionService();
         var orderNo = sales.guilgeeniiDugaar;
+        String? guilgeeMongoId;
         if (orderNo == null || orderNo.isEmpty) {
           final d = await svc.fetchZakhialgiinDugaar();
           if (d == null || d.isEmpty) {
@@ -62,7 +65,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         }
 
         final std = PosPaymentCore.calculateStandardSaleTotals(sales.subtotal);
-        await svc.submitGuilgeeniiTuukh(
+        final saveResp = await svc.submitGuilgeeniiTuukh(
           session: session,
           sales: sales,
           paymentTurul: PosTransactionService.paymentMethodToTurul(
@@ -73,17 +76,34 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           hariult: 0,
           hungulsunDun: 0,
           noatiinDun: std.vat,
-          noatguiDun: std.subtotal,
+          noatguiDun: std.net,
           nhatiinDun: 0,
           guilgeeniiDugaar: orderNo,
         );
+
+        guilgeeMongoId =
+            PosTransactionService.parseGuilgeeniiMongoIdFromSaveResponse(
+                saveResp);
+        if (guilgeeMongoId != null && guilgeeMongoId.isNotEmpty) {
+          _lastEbarimt = await svc.requestCitizenEbarimtAfterSale(
+            guilgeeniiMongoId: guilgeeMongoId,
+            baiguullagiinId: session.baiguullagiinId,
+            salbariinId: session.salbariinId,
+          );
+        }
 
         if (!mounted) return;
         final completedSale = sales.completeSale(
           _selectedPaymentMethod,
           orderId: orderNo,
         );
-        _goReceipt(completedSale);
+        _goReceipt(
+          completedSale,
+          ebarimt: _lastEbarimt,
+          guilgeeMongoId: guilgeeMongoId,
+          baiguullagiinId: session.baiguullagiinId,
+          salbariinId: session.salbariinId,
+        );
       } else {
         if (!mounted) return;
         final completedSale = sales.completeSale(_selectedPaymentMethod);
@@ -106,7 +126,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
-  void _goReceipt(CompletedSale completedSale) {
+  void _goReceipt(
+    CompletedSale completedSale, {
+    Map<String, dynamic>? ebarimt,
+    String? guilgeeMongoId,
+    String? baiguullagiinId,
+    String? salbariinId,
+  }) {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -117,6 +143,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           total: completedSale.total,
           paymentMethod: _selectedPaymentMethod,
           orderNumber: completedSale.id,
+          ebarimt: ebarimt,
+          guilgeeMongoId: guilgeeMongoId,
+          baiguullagiinId: baiguullagiinId,
+          salbariinId: salbariinId,
         ),
       ),
     );

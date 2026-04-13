@@ -143,7 +143,11 @@ class AuthModel extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await authService.logout();
+    try {
+      await authService.logout();
+    } catch (_) {
+      // Offline or /garah failure — still end the session locally.
+    }
     _currentUser = null;
     _posSession = null;
     _staffAccess = StaffScreenAccess.denied;

@@ -24,8 +24,8 @@ class AppColors {
   static const Color tertiaryContainer = Color(0xFFFEF3C7);
   static const Color onTertiaryContainer = Color(0xFF422006);
 
-  // Light theme surfaces
-  static const Color backgroundLight = Color(0xFFFF477E);
+  // Light theme surfaces (scaffold — keep neutral; brand pink is `primary` only)
+  static const Color backgroundLight = Color(0xFFF9FAFB);
   static const Color onBackgroundLight = Color(0xFF374151);
   static const Color surfaceLight = Color(0xFFFFFFFF);
   static const Color onSurfaceLight = Color(0xFF374151);
@@ -134,7 +134,7 @@ class AppTheme {
       appBarTheme: AppBarTheme(
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: AppColors.backgroundLight,
+        backgroundColor: AppColors.surfaceLight,
         foregroundColor: AppColors.onBackgroundLight,
         centerTitle: true,
         titleTextStyle: GoogleFonts.inter(

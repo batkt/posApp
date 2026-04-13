@@ -1,6 +1,9 @@
 import 'api_service.dart';
 import '../models/category_model.dart';
 
+const _khuudasniiDugaar = 'khuudasniiDugaar';
+const _khuudasniiKhemjee = 'khuudasniiKhemjee';
+
 class CategoryService {
   final ApiService _apiService;
 
@@ -22,8 +25,8 @@ class CategoryService {
           'query':
               '{\"\$or\":[{\"angilal\":{\"\$regex\":\"$search\",\"\$options\":\"i\"}},\"baiguullagiinId\":\"$baiguullagiinId\"]}',
           'order': '{"createdAt":-1}',
-          'khuadasniiDugaar': page.toString(),
-          'khuadasniiKhemjee': limit.toString(),
+          _khuudasniiDugaar: page.toString(),
+          _khuudasniiKhemjee: limit.toString(),
           'baiguullagiinId': baiguullagiinId,
         },
         parser: (data) => data as Map<String, dynamic>,
@@ -38,7 +41,9 @@ class CategoryService {
 
         return CategoryResult.success(
           categories: categories,
-          currentPage: response.data!['khuadasniiDugaar'] ?? page,
+          currentPage: response.data![_khuudasniiDugaar] ??
+              response.data!['khuadasniiDugaar'] ??
+              page,
           totalItems: categories.length,
           totalPages: 1,
         );
