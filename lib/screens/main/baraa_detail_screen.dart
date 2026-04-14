@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/inventory_model.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/authenticated_image.dart';
 
 class BaraaDetailScreen extends StatelessWidget {
@@ -135,7 +136,7 @@ class BaraaDetailScreen extends StatelessWidget {
                   Row(
                     children: [
                       Text(
-                        '₮${_formatPrice(product.price)}',
+                        MntAmountFormatter.formatTugrik(product.price),
                         style: textTheme.headlineMedium?.copyWith(
                           color: colorScheme.primary,
                           fontWeight: FontWeight.w800,
@@ -145,7 +146,7 @@ class BaraaDetailScreen extends StatelessWidget {
                           product.urtugUne! > 0) ...[
                         const SizedBox(width: 12),
                         Text(
-                          'Өртөг: ₮${_formatPrice(product.urtugUne!)}',
+                          'Өртөг: ${MntAmountFormatter.formatTugrik(product.urtugUne!)}',
                           style: textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),
@@ -260,7 +261,7 @@ class BaraaDetailScreen extends StatelessWidget {
                         icon: Icons.receipt_long_outlined,
                         label: 'НӨАТ',
                         value: product.noatiinDun != null
-                            ? '₮${_formatPrice(product.noatiinDun!)}'
+                            ? MntAmountFormatter.formatTugrik(product.noatiinDun!)
                             : 'Тийм',
                       ),
                   ]),
@@ -301,16 +302,6 @@ class BaraaDetailScreen extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _formatPrice(double price) {
-    if (price >= 1000) {
-      return price.toStringAsFixed(0).replaceAllMapped(
-            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-            (m) => '${m[1]},',
-          );
-    }
-    return price.toStringAsFixed(0);
   }
 
   String _formatDate(DateTime date) {

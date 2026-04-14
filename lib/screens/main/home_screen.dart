@@ -5,6 +5,7 @@ import '../../models/cart_model.dart';
 import '../../models/product_model.dart';
 import '../../widgets/cart_drawer.dart';
 import '../../widgets/product_card.dart';
+import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/category_chip.dart';
 import 'checkout_screen.dart';
 
@@ -202,7 +203,9 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
             icon: const Icon(Icons.shopping_cart_checkout),
-            label: Text('Checkout \$${cart.total.toStringAsFixed(2)}'),
+            label: Text(
+              'Checkout ${MntAmountFormatter.formatTugrikSpaced(cart.total)}',
+            ),
           );
         },
       ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/payment_display_config.dart';
@@ -12,6 +11,7 @@ import '../../services/pos_transaction_service.dart';
 import '../../services/qpay_service.dart';
 import '../../services/unipos_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/qpay_invoice_dialog.dart';
 import '../shared/receipt_screen.dart';
 
@@ -40,10 +40,7 @@ class CashierPaymentScreen extends StatefulWidget {
 
 enum _PayKind { cash, card, dans }
 
-String _fmtMnt(double v) {
-  final s = NumberFormat('#,###', 'en_US').format(v.round());
-  return '$s₮';
-}
+String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 
 class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   _PayKind _kind = _PayKind.cash;

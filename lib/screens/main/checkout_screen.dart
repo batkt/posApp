@@ -8,6 +8,7 @@ import '../../models/sales_model.dart';
 import '../../payment/pos_payment_core.dart';
 import '../../services/pos_transaction_service.dart';
 import '../../services/unipos_service.dart';
+import '../../utils/mnt_amount_formatter.dart';
 import '../shared/receipt_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -298,7 +299,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             style: textTheme.titleMedium,
                           ),
                           Text(
-                            '\$${sales.total.toStringAsFixed(2)}',
+                            MntAmountFormatter.formatTugrik(sales.total),
                             style: textTheme.headlineSmall?.copyWith(
                               fontWeight: FontWeight.w700,
                               color: colorScheme.primary,
@@ -375,7 +376,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                 ),
                 Text(
-                  '${item.quantity} x \$${item.unitPrice.toStringAsFixed(2)}',
+                  '${item.quantity} × ${MntAmountFormatter.format(item.unitPrice)} ₮',
                   style: textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
@@ -384,7 +385,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
           ),
           Text(
-            '\$${item.total.toStringAsFixed(2)}',
+            MntAmountFormatter.formatTugrik(item.total),
             style: textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
@@ -420,7 +421,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
             Text(
-              '\$${sales.total.toStringAsFixed(2)}',
+              MntAmountFormatter.formatTugrik(sales.total),
               style: textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: colorScheme.primary,
@@ -446,7 +447,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
         ),
         Text(
-          '\$${amount.toStringAsFixed(2)}',
+          MntAmountFormatter.formatTugrik(amount),
           style: textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w500,
           ),

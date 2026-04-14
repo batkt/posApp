@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/inventory_model.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/authenticated_image.dart';
 import 'baraa_detail_screen.dart';
 
@@ -433,7 +434,7 @@ class _InventoryItemTile extends StatelessWidget {
                         ),
                         // ₮ Price — bottom right
                         Text(
-                          '₮${_formatPrice(product.price)}',
+                          MntAmountFormatter.formatTugrik(product.price),
                           style: textTheme.bodyMedium?.copyWith(
                             color: colorScheme.primary,
                             fontWeight: FontWeight.w700,
@@ -503,13 +504,4 @@ class _InventoryItemTile extends StatelessWidget {
     );
   }
 
-  String _formatPrice(double price) {
-    if (price >= 1000) {
-      return price.toStringAsFixed(0).replaceAllMapped(
-            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-            (m) => '${m[1]},',
-          );
-    }
-    return price.toStringAsFixed(0);
-  }
 }

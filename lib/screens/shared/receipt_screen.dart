@@ -6,13 +6,12 @@ import 'package:flutter/rendering.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:intl/intl.dart';
-
 import '../../data/payment_display_config.dart';
 import '../../models/cart_model.dart';
 import '../../models/locale_model.dart';
 import '../../services/printer_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
 
 class ReceiptScreen extends StatelessWidget {
@@ -42,10 +41,7 @@ class ReceiptScreen extends StatelessWidget {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
-  static String _fmtMnt(double v) {
-    final s = NumberFormat('#,###', 'en_US').format(v.round());
-    return '$s₮';
-  }
+  static String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 
   static double _num(dynamic v) {
     if (v == null) return 0;
@@ -122,8 +118,8 @@ class ReceiptScreen extends StatelessWidget {
           children: [
             pw.Text('E-BARIMT'),
             pw.Text('DDTD: $ddtd'),
-            pw.Text('Amount: ${totalAmount.toStringAsFixed(2)}'),
-            pw.Text('VAT: ${totalVat.toStringAsFixed(2)}'),
+            pw.Text('Amount: ${MntAmountFormatter.format(totalAmount)}'),
+            pw.Text('VAT: ${MntAmountFormatter.format(totalVat)}'),
           ],
         ),
       ),

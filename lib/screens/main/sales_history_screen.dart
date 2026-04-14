@@ -8,13 +8,11 @@ import '../../models/locale_model.dart';
 import '../../models/sales_model.dart';
 import '../../services/guilgee_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../widgets/authenticated_image.dart';
 
-String _fmtMnt(double v) {
-  final s = NumberFormat('#,###', 'en_US').format(v.round());
-  return '$s₮';
-}
+String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});

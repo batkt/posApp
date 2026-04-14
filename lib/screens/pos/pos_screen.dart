@@ -1,20 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/sales_model.dart';
 import '../../models/inventory_model.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/responsive_helper.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import 'cashier_payment_screen.dart';
 import '../main/checkout_screen.dart';
 import '../../widgets/test_image_widget.dart';
 import '../../widgets/authenticated_image.dart';
-
-String _formatMntAmount(double v) {
-  return NumberFormat('#,###.##', 'en_US').format(v.round());
-}
 
 /// How many of this product are in the current sale (0 = not in cart).
 int _saleQtyForProduct(SalesModel sales, String productId) {
@@ -437,7 +433,7 @@ class _POSScreenState extends State<POSScreen> {
                               ),
                             ),
                             Text(
-                              '${_formatMntAmount(sales.total)} ₮',
+                              MntAmountFormatter.formatTugrikSpaced(sales.total),
                               style: tt.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w800,
                                 color: cs.primary,
@@ -1028,7 +1024,7 @@ class _POSScreenState extends State<POSScreen> {
                     ),
                   ),
                   Text(
-                    '${_formatMntAmount(sales.total)} ₮',
+                    MntAmountFormatter.formatTugrikSpaced(sales.total),
                     style: tt.titleLarge?.copyWith(
                       fontWeight: FontWeight.w800,
                       color: cs.primary,
@@ -1084,7 +1080,7 @@ class _POSScreenState extends State<POSScreen> {
           ),
         ),
         Text(
-          '${_formatMntAmount(amount)} ₮',
+          MntAmountFormatter.formatTugrikSpaced(amount),
           style: tt.bodyLarge?.copyWith(
             fontWeight: FontWeight.w700,
             fontFeatures: const [FontFeature.tabularFigures()],
@@ -1119,7 +1115,7 @@ class _POSScreenState extends State<POSScreen> {
                 ),
         ),
         Text(
-          'MNT ${amount.toStringAsFixed(0)}',
+          'MNT ${MntAmountFormatter.format(amount)}',
           style: isTotal
               ? textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
@@ -1426,7 +1422,7 @@ class _ProductCard extends StatelessWidget {
                               vertical: 5,
                             ),
                             child: Text(
-                              '${_formatMntAmount(item.product.price)} ₮',
+                              MntAmountFormatter.formatTugrikSpaced(item.product.price),
                               style: textTheme.labelLarge?.copyWith(
                                 color: colorScheme.onPrimaryContainer,
                                 fontWeight: FontWeight.w800,
@@ -1510,7 +1506,7 @@ class _SaleItemTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'MNT ${item.product.price.toStringAsFixed(0)}',
+                        'MNT ${MntAmountFormatter.format(item.product.price)}',
                         style: textTheme.bodyMedium?.copyWith(
                           color: colorScheme.primary,
                           fontWeight: FontWeight.w700,
@@ -1608,7 +1604,7 @@ class _SaleItemTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '${_formatMntAmount(item.unitPrice)} ₮ × ${item.quantity}',
+                      '${MntAmountFormatter.format(item.unitPrice)} × ${item.quantity} ₮',
                       style: textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w500,
@@ -1616,7 +1612,7 @@ class _SaleItemTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${_formatMntAmount(lineTotal)} ₮',
+                      '${MntAmountFormatter.format(lineTotal)} ₮',
                       style: textTheme.titleMedium?.copyWith(
                         color: colorScheme.primary,
                         fontWeight: FontWeight.w800,

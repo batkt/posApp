@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../models/customer_model.dart';
 import '../../models/locale_model.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/mnt_amount_formatter.dart';
 
 class CustomersScreen extends StatefulWidget {
   const CustomersScreen({super.key});
@@ -247,7 +248,7 @@ class _CustomerCard extends StatelessWidget {
                         const SizedBox(width: 12),
                         _StatChip(
                           icon: Icons.payments,
-                          value: '${customer.totalSpent.toStringAsFixed(0)}₮',
+                          value: MntAmountFormatter.formatTugrik(customer.totalSpent),
                           label: 'нийт',
                         ),
                       ],
@@ -612,7 +613,7 @@ class CustomerDetailsSheet extends StatelessWidget {
                     Expanded(
                       child: _StatCard(
                         title: 'Нийт зарцуулалт',
-                        value: '${customer.totalSpent.toStringAsFixed(0)}₮',
+                        value: MntAmountFormatter.formatTugrik(customer.totalSpent),
                         icon: Icons.payments,
                       ),
                     ),
@@ -622,9 +623,10 @@ class CustomerDetailsSheet extends StatelessWidget {
                   const SizedBox(height: 12),
                   _StatCard(
                     title: 'Зээлийн лимит',
-                    value: '${customer.creditLimit!.toStringAsFixed(0)}₮',
+                    value: MntAmountFormatter.formatTugrik(customer.creditLimit!),
                     icon: Icons.credit_card,
-                    subtitle: 'Үлдэгдэл: ${customer.currentCredit?.toStringAsFixed(0)}₮',
+                    subtitle:
+                        'Үлдэгдэл: ${MntAmountFormatter.formatTugrik(customer.currentCredit ?? 0)}',
                   ),
                 ],
                 const SizedBox(height: 24),

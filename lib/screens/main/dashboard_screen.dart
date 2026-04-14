@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/inventory_model.dart';
 import '../../models/locale_model.dart';
 import '../../models/sales_model.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
 
-String _fmtMnt(double v) {
-  final s = NumberFormat('#,###', 'en_US').format(v.round());
-  return '$s₮';
-}
+String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});

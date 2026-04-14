@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import '../models/cart_model.dart';
+import '../utils/mnt_amount_formatter.dart';
 import '../screens/main/checkout_screen.dart';
 
 class CartDrawer extends StatelessWidget {
@@ -11,8 +11,6 @@ class CartDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
-
     return Container(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.75,
@@ -122,7 +120,9 @@ class CartDrawer extends StatelessWidget {
                                   ),
                                 );
                               },
-                        child: Text('Checkout ${currencyFormat.format(cart.total)}'),
+                        child: Text(
+                          'Checkout ${MntAmountFormatter.formatTugrikSpaced(cart.total)}',
+                        ),
                       ),
                     ),
                   ],
@@ -214,7 +214,7 @@ class CartDrawer extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '\$${item.product.price.toStringAsFixed(2)}',
+                  MntAmountFormatter.formatTugrik(item.product.price),
                   style: textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
@@ -286,7 +286,7 @@ class CartDrawer extends StatelessWidget {
                 ),
         ),
         Text(
-          '\$${amount.toStringAsFixed(2)}',
+          MntAmountFormatter.formatTugrik(amount),
           style: isTotal
               ? textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,

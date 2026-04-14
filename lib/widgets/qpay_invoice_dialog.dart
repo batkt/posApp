@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../services/qpay_service.dart';
+import '../utils/mnt_amount_formatter.dart';
 
 /// Same flow as web [QpayModal]: QR + **Шалгах** + background polling.
 class QpayInvoiceDialog extends StatefulWidget {
@@ -119,7 +120,7 @@ class _QpayInvoiceDialogState extends State<QpayInvoiceDialog> {
               Icon(Icons.qr_code_2_rounded, size: 80, color: cs.outline),
             const SizedBox(height: 12),
             Text(
-              '${widget.amountMnt.round()}₮',
+              MntAmountFormatter.formatTugrik(widget.amountMnt),
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
