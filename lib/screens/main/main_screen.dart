@@ -7,6 +7,8 @@ import '../../theme/app_theme.dart';
 import 'dashboard_screen.dart';
 import '../pos/pos_screen.dart';
 import 'inventory_screen.dart';
+import 'baraa_catalog_screen.dart';
+import 'toololt_screen.dart';
 import 'customers_screen.dart';
 import 'sales_history_screen.dart';
 import 'profile_screen.dart';
@@ -17,8 +19,8 @@ import 'ebarimt_menu_screen.dart';
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key, this.initialSection});
 
-  /// Optional drawer section id: `dashboard`, `pos`, `inventory`, `out_of_stock`,
-  /// `ebarimt`, `customers`, `history`, `profile`.
+  /// Optional drawer section id: `dashboard`, `pos`, `baraa_catalog`, `inventory`,
+  /// `out_of_stock`, `toololt`, `ebarimt`, `customers`, `history`, `profile`.
   final String? initialSection;
 
   @override
@@ -78,6 +80,16 @@ class _MainScreenState extends State<MainScreen> {
     }
     if (access.allowsAguulakh) {
       push(
+        const BaraaCatalogScreen(),
+        _MenuItem(
+          icon: Icons.list_alt_rounded,
+          selectedIcon: Icons.list_alt_rounded,
+          label: 'menu_baraa_list',
+          section: 'baraa_catalog',
+          index: 0,
+        ),
+      );
+      push(
         const InventoryScreen(),
         _MenuItem(
           icon: Icons.inventory_2_outlined,
@@ -94,6 +106,16 @@ class _MainScreenState extends State<MainScreen> {
           selectedIcon: Icons.remove_shopping_cart,
           label: 'menu_out_of_stock_baraa',
           section: 'out_of_stock',
+          index: 0,
+        ),
+      );
+      push(
+        const ToololtScreen(),
+        _MenuItem(
+          icon: Icons.calculate_outlined,
+          selectedIcon: Icons.calculate_rounded,
+          label: 'menu_toololt',
+          section: 'toololt',
           index: 0,
         ),
       );

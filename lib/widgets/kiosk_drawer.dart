@@ -5,8 +5,10 @@ import '../models/auth_model.dart';
 import '../models/locale_model.dart';
 import '../screens/main/ebarimt_menu_screen.dart';
 import '../screens/main/login_screen.dart';
+import '../screens/main/baraa_catalog_screen.dart';
 import '../screens/main/out_of_stock_baraa_screen.dart';
 import '../screens/main/sales_history_screen.dart';
+import '../screens/main/toololt_screen.dart';
 import '../theme/app_theme.dart';
 
 /// Side menu for kiosk / mobile POS — same visual design as [MainScreen] drawer.
@@ -26,6 +28,34 @@ class KioskDrawer extends StatelessWidget {
     final user = auth.currentUser;
 
     final menuActions = <_KioskMenuAction>[
+      if (access.allowsAguulakh)
+        _KioskMenuAction(
+          icon: Icons.list_alt_rounded,
+          labelKey: 'menu_baraa_list',
+          onTap: (ctx) {
+            Navigator.pop(ctx);
+            Navigator.push<void>(
+              ctx,
+              MaterialPageRoute<void>(
+                builder: (_) => const BaraaCatalogScreen(),
+              ),
+            );
+          },
+        ),
+      if (access.allowsAguulakh)
+        _KioskMenuAction(
+          icon: Icons.calculate_outlined,
+          labelKey: 'menu_toololt',
+          onTap: (ctx) {
+            Navigator.pop(ctx);
+            Navigator.push<void>(
+              ctx,
+              MaterialPageRoute<void>(
+                builder: (_) => const ToololtScreen(),
+              ),
+            );
+          },
+        ),
       if (access.allowsAguulakh)
         _KioskMenuAction(
           icon: Icons.remove_shopping_cart_outlined,

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
+import '../../services/printer_service.dart';
 import '../../theme/app_theme.dart';
 import 'login_screen.dart';
 
@@ -74,6 +75,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         (route) => false,
       );
     }
+  }
+
+  Future<void> _runTestPrint() async {
+    final result = await PrinterService.testPrint();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor: result.success ? null : AppColors.error,
+      ),
+    );
   }
 
   @override
@@ -271,6 +283,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   icon: Icons.lock_outline,
                   title: 'Нууц үг солих',
                   onTap: () => _showChangePasswordDialog(context),
+                ),
+                const SizedBox(height: 8),
+
+                _ActionTile(
+                  icon: Icons.print_outlined,
+                  title: 'Тест хэвлэх',
+                  onTap: _runTestPrint,
                 ),
                 const SizedBox(height: 8),
 

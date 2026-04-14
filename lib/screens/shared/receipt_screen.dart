@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -6,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../data/payment_display_config.dart';
 import '../../models/cart_model.dart';
 import '../../models/locale_model.dart';
@@ -137,8 +139,6 @@ class ReceiptScreen extends StatelessWidget {
         .tr('receipt_qty_summary')
         .replaceAll('{pieces}', '$pieceCount')
         .replaceAll('{lines}', '${items.length}');
-    final subtotal = items.fold<double>(0, (sum, item) => sum + item.total);
-    final vatAmount = subtotal * PaymentDisplayConfig.vatRate;
     final e = ebarimt;
     final totalAmount =
         _num(e?['amount']) > 0 ? _num(e?['amount']) : _num(e?['totalAmount']);
@@ -147,14 +147,15 @@ class ReceiptScreen extends StatelessWidget {
     final totalCityTax = _num(e?['cityTax']) > 0
         ? _num(e?['cityTax'])
         : _num(e?['totalCityTax']);
-    final totalNoatgui = totalAmount - totalVat - totalCityTax;
     final ebarimtType =
         _str(e?['customerTin']).isNotEmpty || _str(e?['register']).length == 7
             ? 'ААН'
             : 'Иргэн';
-    final ebarimtStatus =
-        _str(e?['status']).isNotEmpty ? _str(e?['status']) : 'SUCCESS';
     final ebarimtDate = _str(e?['date']);
+    final qrData = _str(e?['qrData']);
+    final vatShare = totalAmount > 0
+        ? ((totalVat + totalCityTax) / totalAmount).clamp(0.0, 1.0)
+        : 0.0;
 
     return Scaffold(
       body: SafeArea(
@@ -162,252 +163,479 @@ class ReceiptScreen extends StatelessWidget {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Column(
                   children: [
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            AppColors.success.withValues(alpha: 0.16),
-                            colorScheme.primary.withValues(alpha: 0.07),
+                            AppColors.success.withValues(alpha: 0.14),
+                            colorScheme.primary.withValues(alpha: 0.06),
                           ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: AppColors.success.withValues(alpha: 0.25),
+                          color: AppColors.success.withValues(alpha: 0.22),
                         ),
                       ),
-                      child: Column(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Container(
-                            width: 72,
-                            height: 72,
-                            decoration: BoxDecoration(
-                              color: AppColors.success.withValues(alpha: 0.14),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.check_circle_rounded,
-                              size: 44,
-                              color: AppColors.success,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            'Төлбөр амжилттай',
-                            style: textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Худалдан авалтад баярлалаа',
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 14),
-                          Wrap(
-                            alignment: WrapAlignment.center,
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _buildSummaryChip(
-                                context,
-                                icon: Icons.receipt_long_outlined,
-                                text: qtySummary,
-                              ),
-                              _buildSummaryChip(
-                                context,
-                                icon: _paymentMethodIcon,
-                                text: _paymentMethodName,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            _fmtMnt(total),
-                            style: textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              color: colorScheme.primary,
-                              fontFeatures: const [ui.FontFeature.tabularFigures()],
+                          _SuccessRing(vatShare: vatShare),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Төлбөр амжилттай',
+                                  style: textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.15,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: [
+                                    _buildSummaryChip(
+                                      context,
+                                      icon: Icons.inventory_2_outlined,
+                                      text: qtySummary,
+                                    ),
+                                    _buildSummaryChip(
+                                      context,
+                                      icon: _paymentMethodIcon,
+                                      text: _paymentMethodName,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _fmtMnt(total),
+                                  style: textTheme.headlineMedium?.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                    color: colorScheme.primary,
+                                    fontFeatures: const [
+                                      ui.FontFeature.tabularFigures(),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
 
-                    // Receipt Card
-                    RepaintBoundary(
-                      key: _printKey,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: colorScheme.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: colorScheme.outlineVariant),
-                        ),
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: colorScheme.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: colorScheme.outlineVariant),
+                      ),
+                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.receipt_long_rounded,
+                                color: colorScheme.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'И-Баримт бэлэн',
+                                  style: textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                _fmtMnt(total),
+                                style: textTheme.titleMedium?.copyWith(
+                                  color: colorScheme.primary,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Захиалга: $orderNumber',
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            MongolianDateFormatter.formatDateTime(DateTime.now()),
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          if (qrData.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Center(
+                              child: QrImageView(
+                                data: qrData,
+                                version: QrVersions.auto,
+                                size: 120,
+                                backgroundColor: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    SizedOverflowBox(
+                      size: Size.zero,
+                      alignment: Alignment.topLeft,
+                      child: Transform.translate(
+                        offset: const Offset(-5000, 0),
+                        child: RepaintBoundary(
+                          key: _printKey,
+                          child: Container(
+                        color: Colors.white,
+                        width: 380,
+                        padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-                              child: Column(
-                                children: [
-                                  // Order Info
-                                  _buildInfoRow(
-                                      context, 'Захиалгын дугаар', orderNumber),
-                                  const SizedBox(height: 6),
-                                  _buildInfoRow(
-                                    context,
-                                    'Огноо',
-                                    MongolianDateFormatter.formatDateTime(
-                                        DateTime.now()),
+                            Text(
+                              'POSEASE БАРИМТ',
+                              textAlign: TextAlign.center,
+                              style: textTheme.titleMedium?.copyWith(
+                                color: Colors.black,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.1,
+                                fontSize: 22,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Захиалга: $orderNumber',
+                              textAlign: TextAlign.center,
+                              style: textTheme.labelLarge?.copyWith(
+                                color: Colors.black,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              MongolianDateFormatter.formatDateTime(
+                                DateTime.now(),
+                              ),
+                              textAlign: TextAlign.center,
+                              style: textTheme.bodySmall?.copyWith(
+                                color: Colors.black,
+                                fontSize: 15,
+                                fontFeatures: const [
+                                  ui.FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              '----------------------------------------------',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.black),
+                            ),
+                            Row(
+                              children: [
+                                Text(
+                                  'Бараа',
+                                  style: textTheme.bodyMedium?.copyWith(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 17,
                                   ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        _paymentMethodIcon,
-                                        size: 16,
-                                        color: colorScheme.onSurfaceVariant,
+                                ),
+                                const Spacer(),
+                                Text(
+                                  '${items.length}',
+                                  style: textTheme.bodyMedium?.copyWith(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 17,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            ...items.take(8).map(
+                              (item) => Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '${item.quantity}x ${item.product.name}',
+                                        style: textTheme.bodySmall?.copyWith(
+                                          color: Colors.black,
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 16,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          'Төлбөрийн хэлбэр: $_paymentMethodName',
-                                          style: textTheme.bodyMedium?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
-                                        ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _fmtMnt(item.total),
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 16,
+                                        fontFeatures: const [
+                                          ui.FontFeature.tabularFigures(),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                  const Divider(height: 20),
-
-                                  // Items (scroll when many lines so the page stays compact)
-                                  ConstrainedBox(
-                                    constraints: const BoxConstraints(maxHeight: 220),
-                                    child: ListView.separated(
-                                      shrinkWrap: true,
-                                      physics: const ClampingScrollPhysics(),
-                                      itemCount: items.length,
-                                      separatorBuilder: (_, __) =>
-                                          const SizedBox(height: 4),
-                                      itemBuilder: (context, i) =>
-                                          _buildReceiptItem(context, items[i]),
                                     ),
-                                  ),
-
-                                  const Divider(height: 20),
-
-                                  // Totals
-                                  _buildReceiptTotalRow(
-                                    context,
-                                    'Дэд дүн',
-                                    subtotal,
-                                  ),
-                                  const SizedBox(height: 6),
-                                  _buildReceiptTotalRow(
-                                    context,
-                                    'НӨАТ (${(PaymentDisplayConfig.vatRate * 100).round()}%)',
-                                    vatAmount,
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 10,
-                                      horizontal: 12,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: colorScheme.primaryContainer,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'НИЙТ ТӨЛӨГДСӨН',
-                                          style: textTheme.titleSmall?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                            color:
-                                                colorScheme.onPrimaryContainer,
-                                          ),
-                                        ),
-                                        Text(
-                                          _fmtMnt(total),
-                                          style: textTheme.titleLarge?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                            color:
-                                                colorScheme.onPrimaryContainer,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (e != null) ...[
-                                    const Divider(height: 20),
-                                    _buildInfoRow(context, '№', '1'),
-                                    const SizedBox(height: 6),
-                                    _buildInfoRow(
-                                      context,
-                                      'Огноо',
-                                      ebarimtDate.isNotEmpty
-                                          ? ebarimtDate
-                                          : MongolianDateFormatter
-                                              .formatDateTime(
-                                              DateTime.now(),
-                                            ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    _buildInfoRow(context, 'Баримтын дугаар',
-                                        orderNumber),
-                                    const SizedBox(height: 6),
-                                    _buildInfoRow(
-                                        context, 'Төрөл', ebarimtType),
-                                    const SizedBox(height: 6),
-                                    _buildReceiptTotalRow(
-                                        context, 'Дүн', totalAmount),
-                                    const SizedBox(height: 6),
-                                    _buildInfoRow(
-                                        context, 'Төлөв', ebarimtStatus),
-                                    const SizedBox(height: 6),
-                                    _buildInfoRow(
-                                        context, 'ТТД', _str(e['merchantTin'])),
-                                    const SizedBox(height: 6),
-                                    _buildInfoRow(
-                                        context, 'Касс', _str(e['posNo'])),
-                                    const SizedBox(height: 6),
-                                    _buildReceiptTotalRow(
-                                        context, 'НӨАТ-гүй дүн', totalNoatgui),
-                                    const SizedBox(height: 6),
-                                    _buildReceiptTotalRow(
-                                        context, 'НӨАТ', totalVat),
-                                    const SizedBox(height: 6),
-                                    _buildReceiptTotalRow(
-                                        context, 'НХАТ', totalCityTax),
-                                    const SizedBox(height: 6),
-                                    _buildReceiptTotalRow(
-                                        context, 'Е-Баримт дүн', totalAmount),
-                                    if (_str(e['lottery']).isNotEmpty) ...[
-                                      const SizedBox(height: 6),
-                                      _buildInfoRow(context, 'Сугалааны дугаар',
-                                          _str(e['lottery'])),
-                                    ],
                                   ],
+                                ),
+                              ),
+                            ),
+                            if (items.length > 8)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2, bottom: 4),
+                                child: Text(
+                                  '+${items.length - 8} бараа...',
+                                  style: textTheme.labelSmall?.copyWith(
+                                    color: Colors.black,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              '----------------------------------------------',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.black),
+                            ),
+                            Row(
+                              children: [
+                                Text(
+                                  'Төлбөр',
+                                  style: textTheme.bodyMedium?.copyWith(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 17,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  _paymentMethodName,
+                                  style: textTheme.bodyMedium?.copyWith(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 17,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text(
+                                  'Нийт дүн',
+                                  style: textTheme.bodyMedium?.copyWith(
+                                    color: Colors.black,
+                                    fontSize: 17,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  _fmtMnt(totalAmount > 0 ? totalAmount : total),
+                                  style: textTheme.bodyMedium?.copyWith(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 17,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (totalVat > 0) ...[
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Text(
+                                    'НӨАТ',
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: Colors.black,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    _fmtMnt(totalVat),
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: Colors.black,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            if (totalCityTax > 0) ...[
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Text(
+                                    'НХАТ',
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: Colors.black,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    _fmtMnt(totalCityTax),
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: Colors.black,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text(
+                                  'ТӨЛӨХ ДҮН',
+                                  style: textTheme.titleMedium?.copyWith(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.7,
+                                    fontSize: 23,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  _fmtMnt(total),
+                                  style: textTheme.titleMedium?.copyWith(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 23,
+                                    fontFeatures: const [
+                                      ui.FontFeature.tabularFigures(),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (e != null) ...[
+                              const SizedBox(height: 6),
+                              const Text(
+                                '----------------------------------------------',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.black),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'И-БАРИМТ · $ebarimtType',
+                                textAlign: TextAlign.center,
+                                style: textTheme.labelLarge?.copyWith(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              if (ebarimtDate.isNotEmpty)
+                                Text(
+                                  ebarimtDate,
+                                  textAlign: TextAlign.center,
+                                  style: textTheme.labelSmall?.copyWith(
+                                    color: Colors.black,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              if (_str(e['lottery']).isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    'Сугалаа: ${_str(e['lottery'])}',
+                                    textAlign: TextAlign.center,
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (qrData.isNotEmpty)
+                                    QrImageView(
+                                      data: qrData,
+                                      version: QrVersions.auto,
+                                      size: 280,
+                                      backgroundColor: Colors.white,
+                                      padding: EdgeInsets.zero,
+                                      eyeStyle: const QrEyeStyle(
+                                        eyeShape: QrEyeShape.square,
+                                        color: Colors.black,
+                                      ),
+                                      dataModuleStyle: const QrDataModuleStyle(
+                                        dataModuleShape: QrDataModuleShape.square,
+                                        color: Colors.black,
+                                      ),
+                                    )
+                                  else
+                                    const Icon(
+                                      Icons.qr_code_2_rounded,
+                                      size: 96,
+                                      color: Colors.black,
+                                    ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    qrData.isNotEmpty
+                                        ? 'QR уншуулаад баримтаа шалгана уу'
+                                        : 'QR мэдээлэл олдсонгүй',
+                                    textAlign: TextAlign.center,
+                                    style: textTheme.labelMedium?.copyWith(
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Баярлалаа',
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: Colors.black,
+                                      fontSize: 14,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
                           ],
+                          ),
                         ),
                       ),
+                    ),
                     ),
                   ],
                 ),
@@ -451,29 +679,6 @@ class ReceiptScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoRow(BuildContext context, String label, String value) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-        Text(
-          value,
-          style: textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildSummaryChip(
     BuildContext context, {
     required IconData icon,
@@ -505,83 +710,90 @@ class ReceiptScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildReceiptItem(BuildContext context, CartItem item) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
+}
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
+/// Donut-style ring: colored sweep ≈ (НӨАТ+НХАТ)/дүн when e-barimт totals exist, else full success arc.
+class _SuccessRing extends StatelessWidget {
+  const _SuccessRing({required this.vatShare});
+
+  final double vatShare;
+
+  @override
+  Widget build(BuildContext context) {
+    final track = Theme.of(context)
+        .colorScheme
+        .outlineVariant
+        .withValues(alpha: 0.45);
+    return SizedBox(
+      width: 72,
+      height: 72,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Center(
-              child: Text(
-                '${item.quantity}x',
-                style: textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
+          CustomPaint(
+            size: const Size(72, 72),
+            painter: _ReceiptRingPainter(
+              vatShare: vatShare,
+              trackColor: track,
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.product.name,
-                  style: textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  '${_fmtMnt(item.product.price)} / нэгж',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            _fmtMnt(item.total),
-            style: textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+          const Icon(
+            Icons.check_rounded,
+            size: 34,
+            color: AppColors.success,
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildReceiptTotalRow(
-      BuildContext context, String label, double amount) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
+class _ReceiptRingPainter extends CustomPainter {
+  _ReceiptRingPainter({
+    required this.vatShare,
+    required this.trackColor,
+  });
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-        Text(
-          _fmtMnt(amount),
-          style: textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
+  final double vatShare;
+  final Color trackColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final r = (size.shortestSide / 2) - 4;
+    final rect = Rect.fromCircle(center: c, radius: r);
+    const stroke = 5.0;
+    const start = -math.pi / 2;
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+    final vatPaint = Paint()
+      ..color = AppColors.success
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+    final netPaint = Paint()
+      ..color = AppColors.success.withValues(alpha: 0.38)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(rect, start, math.pi * 2, false, trackPaint);
+    final vatAngle = math.pi * 2 * vatShare;
+    final rest = math.pi * 2 - vatAngle;
+    if (vatAngle > 0.01) {
+      canvas.drawArc(rect, start, vatAngle, false, vatPaint);
+    }
+    if (rest > 0.01) {
+      canvas.drawArc(rect, start + vatAngle, rest, false, netPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ReceiptRingPainter oldDelegate) {
+    return oldDelegate.vatShare != vatShare ||
+        oldDelegate.trackColor != trackColor;
   }
 }

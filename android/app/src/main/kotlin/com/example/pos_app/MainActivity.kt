@@ -48,7 +48,8 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "android.epos.tasks.testPrint" -> {
                         try {
-                            val bitmap = buildTestBitmap()
+                            val text = call.argument<String>("text")
+                            val bitmap = buildTestBitmap(text)
                             printBitmapOnPax(bitmap)
                             result.success("printed")
                         } catch (e: Throwable) {
@@ -160,8 +161,9 @@ class MainActivity : FlutterFragmentActivity() {
     private fun printBitmapOnPax(bitmap: Bitmap) {
         try {
             val neptuneClass = Class.forName("com.pax.neptunelite.api.NeptuneLiteUser")
-            val neptune = resolveNeptuneInstance(neptuneClass)
-            val dal = resolveDal(neptuneClass, neptune, this)
+            val neptune = neptuneClass.getMethod("getInstance").invoke(null)
+                ?: throw IllegalStateException("NeptuneLiteUser.getInstance() returned null")
+            val dal = resolveDalWithFallback(neptuneClass, neptune)
 
             val dalClass = dal.javaClass
             val getPrinter = dalClass.getMethod("getPrinter")
@@ -208,66 +210,42 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    private fun resolveNeptuneInstance(neptuneClass: Class<*>): Any {
-        // NeptuneLite API v3.x: static getInstance() only. Some device ROMs may ship a different
-        // implementation; exceptions were previously swallowed and misreported as "returned null".
-        val details = StringBuilder()
+    private fun resolveDalWithFallback(neptuneClass: Class<*>, neptune: Any): Any {
+        val attempts = StringBuilder()
         try {
-            val inst = neptuneClass.getMethod("getInstance").invoke(null)
-            if (inst != null) return inst
-            details.append("getInstance() returned null. ")
-        } catch (e: Throwable) {
-            details.append(
-                "getInstance() failed: ${e.javaClass.simpleName}: ${e.message ?: "no message"}. "
-            )
-        }
-        try {
-            val m = neptuneClass.getMethod("getInstance", android.content.Context::class.java)
-            val inst = m.invoke(null, this)
-            if (inst != null) return inst
-            details.append("getInstance(Activity) returned null. ")
-        } catch (e: Throwable) {
-            details.append(
-                "getInstance(Context) unavailable or failed: ${e.javaClass.simpleName}: ${e.message ?: "no message"}. "
-            )
-        }
-        throw IllegalStateException(
-            "Unable to obtain NeptuneLiteUser. $details " +
-                "Install/run on a PAX PayDroid terminal with Neptune service; emulators and normal phones will not work."
-        )
-    }
-
-    private fun resolveDal(neptuneClass: Class<*>, neptune: Any, context: android.content.Context): Any {
-        // Prefer process-safe DAL load (matches pax_sdk / multi-process Flutter engine behavior).
-        val processSafe = try {
-            neptuneClass
+            return neptuneClass
                 .getMethod("getDalWithProcessSafe", android.content.Context::class.java)
-                .invoke(neptune, context)
-        } catch (_: Throwable) {
-            null
+                .invoke(neptune, this)
+        } catch (e: Throwable) {
+            attempts.append("getDalWithProcessSafe(activity): ${e.message}; ")
         }
-        if (processSafe != null) return processSafe
-
-        val withContext = try {
-            neptuneClass
+        try {
+            return neptuneClass
                 .getMethod("getDal", android.content.Context::class.java)
-                .invoke(neptune, context)
-        } catch (_: Throwable) {
-            null
+                .invoke(neptune, applicationContext)
+        } catch (e: Throwable) {
+            attempts.append("getDal(applicationContext): ${e.message}; ")
         }
-        if (withContext != null) return withContext
-
-        val noArg = try {
-            neptuneClass.getMethod("getDal").invoke(neptune)
-        } catch (_: Throwable) {
-            null
+        try {
+            return neptuneClass
+                .getMethod("getDal", android.content.Context::class.java)
+                .invoke(neptune, this)
+        } catch (e: Throwable) {
+            attempts.append("getDal(activity): ${e.message}; ")
         }
-        if (noArg != null) return noArg
-
-        throw IllegalStateException("Unable to resolve DAL from Neptune instance (try getDalWithProcessSafe/getDal)")
+        // Some ROM variants expose no-arg getDal() only; use reflection fallback.
+        try {
+            val m = neptuneClass.getMethod("getDal")
+            val dal = m.invoke(neptune)
+            if (dal != null) return dal
+            attempts.append("getDal() returned null; ")
+        } catch (e: Throwable) {
+            attempts.append("getDal() reflection failed: ${e.message}; ")
+        }
+        throw IllegalStateException("LOAD DAL ERR. $attempts")
     }
 
-    private fun buildTestBitmap(): Bitmap {
+    private fun buildTestBitmap(customText: String?): Bitmap {
         val width = 384
         val height = 220
         val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -283,7 +261,8 @@ class MainActivity : FlutterFragmentActivity() {
             color = Color.BLACK
             textSize = 24f
         }
-        canvas.drawText("POSEASE TEST PRINT", 20f, 60f, title)
+        val header = customText?.lineSequence()?.firstOrNull()?.take(28) ?: "POSEASE TEST PRINT"
+        canvas.drawText(header, 20f, 60f, title)
         canvas.drawText("PAX terminal printer check", 20f, 110f, body)
         canvas.drawText(java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date()), 20f, 150f, body)
         canvas.drawText("OK", 20f, 190f, body)

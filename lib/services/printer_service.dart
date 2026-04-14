@@ -19,8 +19,8 @@ class PrinterService {
   static const MethodChannel _channel = MethodChannel('com.example.pos_app');
 
   static Future<PrinterResult> testPrint() async {
-    final now = DateTime.now().toString();
     try {
+      final now = DateTime.now().toString();
       final ok = await PaxSdk.initializePrinter();
       if (ok != true) {
         throw Exception('pax_sdk initializePrinter failed');
@@ -39,8 +39,10 @@ class PrinterService {
       throw Exception('pax_sdk printText failed: $res');
     } catch (_) {
       try {
+        final now = DateTime.now().toIso8601String();
         final native = await _channel.invokeMethod<String>(
           'android.epos.tasks.testPrint',
+          {'text': 'POSEASE TEST PRINT\n$now'},
         );
         return PrinterResult(
           success: native == 'printed',

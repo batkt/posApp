@@ -42,6 +42,9 @@ class Product {
   final DateTime? updatedAt;
   final Map<String, dynamic>? ajiltan;
 
+  /// Буцаалт/зарлагын тоо — зөвхөн API-аас ирвэл (жишээ нь tailan/toollogo мөр).
+  final int? butsaaltToo;
+
   const Product({
     required this.id,
     required this.name,
@@ -80,6 +83,7 @@ class Product {
     this.createdAt,
     this.updatedAt,
     this.ajiltan,
+    this.butsaaltToo,
   });
 
   static int _asInt(dynamic v, {int fallback = 0}) {
@@ -151,7 +155,22 @@ class Product {
       createdAt: DateTime.tryParse(json['createdAt'] ?? ''),
       updatedAt: DateTime.tryParse(json['updatedAt'] ?? ''),
       ajiltan: json['ajiltan'],
+      butsaaltToo: _firstInt([
+        json['butsaaltiinTooKhemjee'],
+        json['butsaaltiinToo'],
+        json['bufsaalt'],
+        json['butsaalt'],
+        json['zarlagiinTooKhemjee'],
+      ]),
     );
+  }
+
+  static int? _firstInt(List<dynamic> candidates) {
+    for (final v in candidates) {
+      final n = _asNullableInt(v);
+      if (n != null) return n;
+    }
+    return null;
   }
 
   Product copyWith({
