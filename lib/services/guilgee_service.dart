@@ -28,7 +28,11 @@ class GuilgeeService {
     };
     final aid = ajiltanId?.trim();
     if (aid != null && aid.isNotEmpty) {
-      queryMap['ajiltan.id'] = aid;
+      // Match web (`ajiltan.id`) and any legacy rows that used `_id` on the subdocument.
+      queryMap[r'$or'] = [
+        {'ajiltan.id': aid},
+        {'ajiltan._id': aid},
+      ];
     }
 
     try {
@@ -146,6 +150,14 @@ double _parseDouble(dynamic v) {
   return double.tryParse(v.toString()) ?? 0;
 }
 
+Map<String, dynamic>? _ajiltanFromDoc(dynamic raw) {
+  if (raw == null) return null;
+  if (raw is! Map) return null;
+  return Map<String, dynamic>.from(
+    raw.map((k, v) => MapEntry(k.toString(), v)),
+  );
+}
+
 CompletedSale completedSaleFromGuilgeeDoc(Map<String, dynamic> doc) {
   final id = doc['guilgeeniiDugaar']?.toString() ??
       doc['_id']?.toString() ??
@@ -201,6 +213,7 @@ CompletedSale completedSaleFromGuilgeeDoc(Map<String, dynamic> doc) {
     timestamp: ts,
     discount: hungulsunDun,
     nhhat: nhatiinDun,
+    ajiltan: _ajiltanFromDoc(doc['ajiltan']),
   );
 }
 

@@ -13,10 +13,22 @@ class PosSession {
   Map<String, dynamic> get ajiltanPayload {
     final id = ajiltan['_id'] ?? ajiltan['id'];
     final ner = ajiltan['ner'] ?? ajiltan['name'] ?? '';
-    return {
-      'id': id,
-      'ner': ner,
+    final out = <String, dynamic>{
+      'id': id?.toString(),
+      'ner': ner?.toString() ?? '',
     };
+    // Extra fields for sales history / audit (ignored by older clients; persisted if schema allows).
+    for (final k in [
+      'burtgeliinDugaar',
+      'mail',
+      'utas',
+      'AdminEsekh',
+      'zurgiinId',
+    ]) {
+      final v = ajiltan[k];
+      if (v != null) out[k] = v;
+    }
+    return out;
   }
 
   static PosSession? tryParse(Map<String, dynamic>? result) {

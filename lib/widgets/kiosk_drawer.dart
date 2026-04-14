@@ -11,7 +11,10 @@ import '../theme/app_theme.dart';
 
 /// Side menu for kiosk / mobile POS — same visual design as [MainScreen] drawer.
 class KioskDrawer extends StatelessWidget {
-  const KioskDrawer({super.key});
+  const KioskDrawer({super.key, this.mobileStaffShell = false});
+
+  /// True when used from [MobilePosMainScreen] (QPay); false for kiosk register.
+  final bool mobileStaffShell;
 
   @override
   Widget build(BuildContext context) {
@@ -171,16 +174,35 @@ class KioskDrawer extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      user?.name != null && user!.name.isNotEmpty
-                          ? user.name
-                          : l10n.tr('menu_kiosk_title'),
-                      style: textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          user?.name != null && user!.name.isNotEmpty
+                              ? user.name
+                              : l10n.tr('menu_kiosk_title'),
+                          style: textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          l10n.tr(
+                            mobileStaffShell
+                                ? 'menu_mobile_staff_shell'
+                                : 'menu_kiosk_staff_shell',
+                          ),
+                          style: textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
                   ),
                   Icon(
@@ -198,7 +220,11 @@ class KioskDrawer extends StatelessWidget {
                       child: Padding(
                         padding: const EdgeInsets.all(24),
                         child: Text(
-                          l10n.tr('menu_kiosk_title'),
+                          l10n.tr(
+                            mobileStaffShell
+                                ? 'menu_mobile_staff_shell'
+                                : 'menu_kiosk_staff_shell',
+                          ),
                           style: textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),

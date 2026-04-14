@@ -14,6 +14,24 @@ import '../../widgets/authenticated_image.dart';
 
 String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 
+/// Best-effort label from `guilgeeniiTuukh.ajiltan` (id/ner only on older rows).
+String? _saleStaffCaption(Map<String, dynamic>? a) {
+  if (a == null || a.isEmpty) return null;
+  final ner = a['ner'] ?? a['name'];
+  if (ner != null && ner.toString().trim().isNotEmpty) {
+    return ner.toString().trim();
+  }
+  final login = a['burtgeliinDugaar'];
+  if (login != null && login.toString().trim().isNotEmpty) {
+    return login.toString().trim();
+  }
+  final id = a['id'] ?? a['_id'];
+  if (id != null && id.toString().trim().isNotEmpty) {
+    return id.toString().trim();
+  }
+  return null;
+}
+
 class SalesHistoryScreen extends StatefulWidget {
   const SalesHistoryScreen({super.key});
 
@@ -499,6 +517,7 @@ class _SaleCard extends StatelessWidget {
     final linesLabel = l10n
         .tr('sales_history_lines_count')
         .replaceAll('{n}', '${sale.items.length}');
+    final staffCaption = _saleStaffCaption(sale.ajiltan);
 
     return Material(
       color: colorScheme.surface,
@@ -554,6 +573,18 @@ class _SaleCard extends StatelessWidget {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
+                        if (staffCaption != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            '${l10n.tr('sales_history_staff')}: $staffCaption',
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -647,6 +678,7 @@ class _SaleCard extends StatelessWidget {
         minChildSize: 0.38,
         expand: false,
         builder: (context, scrollController) {
+          final staffCap = _saleStaffCaption(sale.ajiltan);
           return DecoratedBox(
             decoration: BoxDecoration(
               color: colorScheme.surface,
@@ -709,6 +741,23 @@ class _SaleCard extends StatelessWidget {
                           color: colorScheme.onSurfaceVariant,
                         ),
                       ),
+                      if (staffCap != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          l10n.tr('sales_history_staff'),
+                          style: textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        SelectableText(
+                          staffCap,
+                          style: textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
