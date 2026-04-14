@@ -21,10 +21,19 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _biometricAvailable = false;
 
   @override
   void initState() {
     super.initState();
+    _loadBiometricAvailability();
+  }
+
+  Future<void> _loadBiometricAvailability() async {
+    final auth = context.read<AuthModel>();
+    final available = await auth.isBiometricAvailable();
+    if (!mounted) return;
+    setState(() => _biometricAvailable = available);
   }
 
   @override
@@ -51,15 +60,28 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    if (!mounted) return;
 
     final username = _usernameController.text;
     final password = _passwordController.text;
 
+    setState(() => _isLoading = true);
+    var success = false;
     final auth = context.read<AuthModel>();
-    final success = await auth.login(username, password);
-
-    setState(() => _isLoading = false);
+    try {
+      success = await auth.login(username, password);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Нэвтрэхэд алдаа: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
 
     if (!mounted) return;
 
@@ -88,27 +110,37 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _loginWithBiometric() async {
     setState(() => _isLoading = true);
+    var success = false;
+    try {
+      final auth = context.read<AuthModel>();
+      final isAvailable = await auth.isBiometricAvailable();
 
-    final auth = context.read<AuthModel>();
-    final isAvailable = await auth.isBiometricAvailable();
+      if (!isAvailable) {
+        if (mounted) {
+          final l10n = AppLocalizations.of(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(l10n.tr('biometric_unavailable')),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return;
+      }
 
-    if (!isAvailable) {
-      setState(() => _isLoading = false);
+      success = await auth.loginWithBiometric();
+    } catch (e) {
       if (mounted) {
-        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.tr('biometric_unavailable')),
+            content: Text('Биометр нэвтрэхэд алдаа: $e'),
             backgroundColor: AppColors.error,
           ),
         );
       }
-      return;
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-
-    final success = await auth.loginWithBiometric();
-
-    setState(() => _isLoading = false);
 
     if (!mounted) return;
 
@@ -298,25 +330,27 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        // Biometric Button
-                        Tooltip(
-                          message: l10n.tr('biometric_login'),
-                          child: OutlinedButton(
-                            onPressed: _isLoading ? null : _loginWithBiometric,
-                            style: OutlinedButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: const Size(64, 64),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                        if (_biometricAvailable) ...[
+                          const SizedBox(width: 12),
+                          // Biometric Button
+                          Tooltip(
+                            message: l10n.tr('biometric_login'),
+                            child: OutlinedButton(
+                              onPressed: _isLoading ? null : _loginWithBiometric,
+                              style: OutlinedButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(64, 64),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.fingerprint,
+                                size: 32,
                               ),
                             ),
-                            child: const Icon(
-                              Icons.fingerprint,
-                              size: 32,
-                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   );

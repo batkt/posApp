@@ -82,19 +82,46 @@ class Product {
     this.ajiltan,
   });
 
+  static int _asInt(dynamic v, {int fallback = 0}) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) {
+      final n = num.tryParse(v);
+      if (n != null) return n.toInt();
+    }
+    return fallback;
+  }
+
+  static int? _asNullableInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) {
+      final n = num.tryParse(v);
+      if (n != null) return n.toInt();
+    }
+    return null;
+  }
+
+  static double _asDouble(dynamic v, {double fallback = 0}) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? fallback;
+    return fallback;
+  }
+
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
       id: json['_id'] ?? '',
       name: json['ner'] ?? '',
       description: json['ner'] ?? '',
-      price: (json['niitUne'] ?? 0).toDouble(),
-      costPrice: (json['urtugUne'] ?? 0).toDouble(),
+      price: _asDouble(json['niitUne']),
+      costPrice: _asDouble(json['urtugUne']),
       category: json['angilal'] ?? '',
       imageUrl: json['zurgiinId'] != null
           ? 'https://pos.zevtabs.mn/api/file?path=baraa/${json['zurgiinId']}'
           : 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=400&fit=crop',
       barcode: json['barCode'],
-      stock: json['uldegdel'] ?? 0,
+      stock: _asInt(json['uldegdel']),
       minStock: 5,
       isAvailable: json['idevkhteiEsekh'] ?? true,
       unit: ProductUnit.piece,
@@ -106,17 +133,18 @@ class Product {
       salbariinId: json['salbariinId'],
       angilal: json['angilal'],
       khemjikhNegj: json['khemjikhNegj'],
-      urtugUne: (json['urtugUne'] ?? 0).toDouble(),
+      urtugUne: _asDouble(json['urtugUne']),
       shirkheglekhEsekh: json['shirkheglekhEsekh'],
       noatBodohEsekh: json['noatBodohEsekh'],
       nhatBodohEsekh: json['nhatBodohEsekh'],
       ognooniiMedeelelBurtgekhEsekh: json['ognooniiMedeelelBurtgekhEsekh'],
-      uldegdel: json['uldegdel'],
-      negKhairtsaganDahiShirhegiinToo: json['negKhairtsaganDahiShirhegiinToo'],
-      niitUne: (json['niitUne'] ?? 0).toDouble(),
-      noatiinDun: (json['noatiinDun'] ?? 0).toDouble(),
-      nhatiinDun: (json['nhatiinDun'] ?? 0).toDouble(),
-      noatguiDun: (json['noatguiDun'] ?? 0).toDouble(),
+      uldegdel: _asNullableInt(json['uldegdel']),
+      negKhairtsaganDahiShirhegiinToo:
+          _asNullableInt(json['negKhairtsaganDahiShirhegiinToo']),
+      niitUne: _asDouble(json['niitUne']),
+      noatiinDun: _asDouble(json['noatiinDun']),
+      nhatiinDun: _asDouble(json['nhatiinDun']),
+      noatguiDun: _asDouble(json['noatguiDun']),
       zurgiinId: json['zurgiinId'],
       orlogdsonEsekh: json['orlogdsonEsekh'],
       zarlagdsanEsekh: json['zarlagdsanEsekh'],

@@ -602,13 +602,16 @@ class _SummaryPanel extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.2),
+                  color: AppColors.successContainer,
                   borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: AppColors.success.withValues(alpha: 0.35),
+                  ),
                 ),
                 child: Text(
                   'Захиалгын: $orderId',
                   style: const TextStyle(
-                    color: AppColors.successDark,
+                    color: AppColors.onSuccessContainer,
                     fontWeight: FontWeight.w700,
                     fontSize: 12,
                   ),
@@ -674,7 +677,7 @@ class _SummaryPanel extends StatelessWidget {
             value,
             style: TextStyle(
               color: positive
-                  ? AppColors.successDark
+                  ? AppColors.onSuccessContainer
                   : (emphasize ? cs.primary : cs.onSurface),
               fontSize: emphasize ? 18 : (sub ? 13 : 14),
               fontWeight: emphasize ? FontWeight.w800 : FontWeight.w600,

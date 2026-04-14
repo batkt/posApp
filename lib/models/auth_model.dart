@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:local_auth/local_auth.dart';
 import '../auth/staff_screen_access.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
@@ -61,12 +65,17 @@ class User {
 }
 
 class AuthModel extends ChangeNotifier {
+  static const _bioUserKey = 'biometric_username';
+  static const _bioPassKey = 'biometric_password';
+
   User? _currentUser;
   bool _isAuthenticated = false;
   bool _requiresTwoFactor = false;
   String _pending2FAUsername = '';
   PosSession? _posSession;
   StaffScreenAccess _staffAccess = StaffScreenAccess.denied;
+  final LocalAuthentication _localAuth = LocalAuthentication();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   User? get currentUser => _currentUser;
   bool get isAuthenticated => _isAuthenticated;
@@ -75,6 +84,22 @@ class AuthModel extends ChangeNotifier {
   bool get isLoggedIn => _currentUser != null;
 
   StaffScreenAccess get staffAccess => _staffAccess;
+
+  /// Persists credentials for biometric login. Must not block login indefinitely
+  /// (secure storage can hang on some devices / keystore states).
+  Future<void> _saveBiometricLoginCredentials(
+    String username,
+    String password,
+  ) async {
+    try {
+      await Future.wait([
+        _secureStorage.write(key: _bioUserKey, value: username),
+        _secureStorage.write(key: _bioPassKey, value: password),
+      ]).timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // Ignore — user can still use password login; biometric may be unavailable.
+    }
+  }
 
   /// Branch + org for `posBack` sale APIs (set on real API login).
   PosSession? get posSession => _posSession;
@@ -92,6 +117,9 @@ class AuthModel extends ChangeNotifier {
     );
 
     if (result.success) {
+      // Save credentials for future biometric login.
+      // (Stored encrypted by OS via flutter_secure_storage).
+      await _saveBiometricLoginCredentials(username.trim(), password);
       _staffAccess = result.staffAccess ?? StaffScreenAccess.denied;
       if (result.requiresTwoFactor) {
         _requiresTwoFactor = true;
@@ -135,11 +163,44 @@ class AuthModel extends ChangeNotifier {
   }
 
   Future<bool> loginWithBiometric() async {
-    return false;
+    try {
+      final available = await isBiometricAvailable();
+      if (!available) return false;
+
+      final username = await _secureStorage.read(key: _bioUserKey);
+      final password = await _secureStorage.read(key: _bioPassKey);
+      if (username == null ||
+          username.isEmpty ||
+          password == null ||
+          password.isEmpty) {
+        return false;
+      }
+
+      final ok = await _localAuth.authenticate(
+        localizedReason: 'Нэвтрэхийн тулд биометр баталгаажуулалт хийнэ үү',
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+          useErrorDialogs: true,
+        ),
+      );
+      if (!ok) return false;
+      return login(username, password);
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<bool> isBiometricAvailable() async {
-    return false;
+    try {
+      final supported = await _localAuth.isDeviceSupported();
+      final canCheck = await _localAuth.canCheckBiometrics;
+      if (!supported || !canCheck) return false;
+      final types = await _localAuth.getAvailableBiometrics();
+      return types.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> logout() async {

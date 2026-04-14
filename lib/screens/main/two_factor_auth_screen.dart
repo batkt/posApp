@@ -63,11 +63,17 @@ class _TwoFactorAuthScreenState extends State<TwoFactorAuthScreen> {
     }
 
     setState(() => _isLoading = true);
-
-    final auth = context.read<AuthModel>();
-    final success = await auth.verifyTwoFactorCode(code);
-
-    setState(() => _isLoading = false);
+    var success = false;
+    try {
+      final auth = context.read<AuthModel>();
+      success = await auth.verifyTwoFactorCode(code);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _errorMessage = 'Алдаа: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
 
     if (!mounted) return;
 

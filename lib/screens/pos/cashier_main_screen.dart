@@ -28,7 +28,7 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
 
     return Scaffold(
       key: _scaffoldKey,
-      drawer: const KioskDrawer(),
+      drawer: const KioskDrawer(mobileStaffShell: false),
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         elevation: 0,
@@ -48,7 +48,7 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Касс',
+                    l10n.tr('menu_kiosk_staff_shell'),
                     style: textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),

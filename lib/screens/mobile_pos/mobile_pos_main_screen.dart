@@ -3,14 +3,22 @@ import 'package:provider/provider.dart';
 
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
+import '../../widgets/kiosk_drawer.dart';
 import '../main/login_screen.dart';
 import '../pos/pos_screen.dart';
 
 /// Staff with only `/khyanalt/mobile` in `tsonkhniiTokhirgoo`: same sale flow as kiosk
 /// but no side drawer, two-step layout, and Бэлэн / **QPay** (merchant QR, `/qpayGargaya`) / Данс.
 /// Kiosk uses Бэлэн / **Карт** (UniPOS) / Данс.
-class MobilePosMainScreen extends StatelessWidget {
+class MobilePosMainScreen extends StatefulWidget {
   const MobilePosMainScreen({super.key});
+
+  @override
+  State<MobilePosMainScreen> createState() => _MobilePosMainScreenState();
+}
+
+class _MobilePosMainScreenState extends State<MobilePosMainScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   Widget build(BuildContext context) {
@@ -21,10 +29,17 @@ class MobilePosMainScreen extends StatelessWidget {
     final user = auth.currentUser;
 
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: const KioskDrawer(mobileStaffShell: true),
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         elevation: 0,
         automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+        ),
         title: Row(
           children: [
             Icon(Icons.smartphone_rounded, color: colorScheme.primary, size: 26),
@@ -35,7 +50,7 @@ class MobilePosMainScreen extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Борлуулалт',
+                    l10n.tr('pos'),
                     style: textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),

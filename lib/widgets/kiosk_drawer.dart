@@ -7,8 +7,9 @@ import '../screens/main/ebarimt_menu_screen.dart';
 import '../screens/main/login_screen.dart';
 import '../screens/main/out_of_stock_baraa_screen.dart';
 import '../screens/main/sales_history_screen.dart';
+import '../theme/app_theme.dart';
 
-/// Side menu for kiosk mode: items mirror web `tsonkhniiTokhirgoo` flags.
+/// Side menu for kiosk / mobile POS — same visual design as [MainScreen] drawer.
 class KioskDrawer extends StatelessWidget {
   const KioskDrawer({super.key});
 
@@ -21,140 +22,359 @@ class KioskDrawer extends StatelessWidget {
     final access = auth.staffAccess;
     final user = auth.currentUser;
 
+    final menuActions = <_KioskMenuAction>[
+      if (access.allowsAguulakh)
+        _KioskMenuAction(
+          icon: Icons.remove_shopping_cart_outlined,
+          labelKey: 'menu_out_of_stock_baraa',
+          onTap: (ctx) {
+            Navigator.pop(ctx);
+            Navigator.push<void>(
+              ctx,
+              MaterialPageRoute<void>(
+                builder: (_) => const OutOfStockBaraaScreen(),
+              ),
+            );
+          },
+        ),
+      if (access.allowsEbarimt)
+        _KioskMenuAction(
+          icon: Icons.receipt_long_outlined,
+          labelKey: 'ebarimt',
+          onTap: (ctx) {
+            Navigator.pop(ctx);
+            Navigator.push<void>(
+              ctx,
+              MaterialPageRoute<void>(
+                builder: (_) => const EbarimtMenuScreen(),
+              ),
+            );
+          },
+        ),
+      if (access.allowsSalesHistory)
+        _KioskMenuAction(
+          icon: Icons.history_rounded,
+          labelKey: 'sales_history',
+          onTap: (ctx) {
+            Navigator.pop(ctx);
+            Navigator.push<void>(
+              ctx,
+              MaterialPageRoute<void>(
+                builder: (_) => const SalesHistoryScreen(),
+              ),
+            );
+          },
+        ),
+    ];
+
     return Drawer(
       backgroundColor: colorScheme.surface,
+      elevation: 16,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topRight: Radius.circular(20),
+          bottomRight: Radius.circular(20),
+        ),
+      ),
       child: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              padding: const EdgeInsets.all(16),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.asset(
+                  'assets/images/poslogo.png',
+                  width: 72,
+                  height: 72,
+                  fit: BoxFit.contain,
+                  cacheWidth: 144,
+                  cacheHeight: 144,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(
+                        Icons.store,
+                        color: colorScheme.onPrimary,
+                        size: 36,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    colorScheme.primaryContainer.withOpacity(0.4),
+                    colorScheme.primaryContainer.withOpacity(0.1),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: colorScheme.primaryContainer.withOpacity(0.3),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: colorScheme.primaryContainer.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
               child: Row(
                 children: [
-                  Icon(Icons.payments_rounded, color: colorScheme.primary),
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppColors.primary,
+                          AppColors.primary.withOpacity(0.8),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        user?.name != null && user!.name.isNotEmpty
+                            ? user.name[0].toUpperCase()
+                            : 'A',
+                        style: textTheme.titleMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
+                    child: Text(
+                      user?.name != null && user!.name.isNotEmpty
+                          ? user.name
+                          : l10n.tr('menu_kiosk_title'),
+                      style: textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Icon(
+                    Icons.verified,
+                    color: AppColors.primary,
+                    size: 16,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: menuActions.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
                           l10n.tr('menu_kiosk_title'),
-                          style: textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: menuActions.length,
+                      itemBuilder: (context, index) {
+                        final action = menuActions[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () => action.onTap(context),
+                              borderRadius: BorderRadius.circular(14),
+                              splashColor: colorScheme.primaryContainer
+                                  .withOpacity(0.2),
+                              highlightColor: colorScheme.primaryContainer
+                                  .withOpacity(0.1),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.transparent,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.surfaceContainerHighest,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        action.icon,
+                                        color: colorScheme.onSurfaceVariant,
+                                        size: 22,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Text(
+                                        l10n.tr(action.labelKey),
+                                        style: textTheme.bodyLarge?.copyWith(
+                                          color: colorScheme.onSurface,
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            Container(
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    colorScheme.errorContainer.withOpacity(0.3),
+                    colorScheme.errorContainer.withOpacity(0.1),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: colorScheme.errorContainer.withOpacity(0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: Text(l10n.tr('logout')),
+                        content: Text(l10n.tr('logout_confirm_message')),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: Text(l10n.tr('cancel')),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: colorScheme.error,
+                            ),
+                            child: Text(l10n.tr('logout')),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true && context.mounted) {
+                      await auth.logout();
+                      if (context.mounted) {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => const LoginScreen(),
+                          ),
+                          (_) => false,
+                        );
+                      }
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(14),
+                  splashColor: colorScheme.errorContainer.withOpacity(0.2),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: colorScheme.error.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.logout_rounded,
+                            color: colorScheme.error,
+                            size: 22,
                           ),
                         ),
-                        if (user?.name != null && user!.name.isNotEmpty)
-                          Text(
-                            user.name,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                        const SizedBox(width: 14),
+                        Text(
+                          l10n.tr('logout'),
+                          style: textTheme.bodyLarge?.copyWith(
+                            color: colorScheme.error,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
                           ),
+                        ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                children: [
-                  if (access.allowsAguulakh)
-                    ListTile(
-                      leading: const Icon(Icons.remove_shopping_cart_outlined),
-                      title: Text(l10n.tr('menu_out_of_stock_baraa')),
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push<void>(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const OutOfStockBaraaScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  if (access.allowsEbarimt)
-                    ListTile(
-                      leading: const Icon(Icons.receipt_long_outlined),
-                      title: Text(l10n.tr('ebarimt')),
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push<void>(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const EbarimtMenuScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  if (access.allowsSalesHistory)
-                    ListTile(
-                      leading: const Icon(Icons.history_rounded),
-                      title: Text(l10n.tr('sales_history')),
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.push<void>(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const SalesHistoryScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: Icon(Icons.logout_rounded, color: colorScheme.error),
-              title: Text(
-                l10n.tr('logout'),
-                style: TextStyle(
-                  color: colorScheme.error,
-                  fontWeight: FontWeight.w600,
                 ),
               ),
-              onTap: () async {
-                Navigator.pop(context);
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: Text(l10n.tr('logout')),
-                    content: Text(l10n.tr('logout_confirm_message')),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: Text(l10n.tr('cancel')),
-                      ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: colorScheme.error,
-                        ),
-                        child: Text(l10n.tr('logout')),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirm == true && context.mounted) {
-                  await auth.logout();
-                  if (context.mounted) {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
-                      (_) => false,
-                    );
-                  }
-                }
-              },
             ),
+            const SizedBox(height: 16),
           ],
         ),
       ),
     );
   }
+}
+
+class _KioskMenuAction {
+  _KioskMenuAction({
+    required this.icon,
+    required this.labelKey,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String labelKey;
+  final void Function(BuildContext context) onTap;
 }

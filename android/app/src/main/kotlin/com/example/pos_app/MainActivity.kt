@@ -11,12 +11,12 @@ import android.util.Base64
 import org.json.JSONObject
 import java.lang.ClassNotFoundException
 import java.lang.IllegalStateException
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val channelName = "com.example.pos_app"
     private val uniPosPackage = "mn.genesis.unipos.terminal"
     private val uniPosRequestCode = 9301

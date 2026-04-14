@@ -52,5 +52,7 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSFaceIDUsageDescription</key>
+	<string>PosEase-д нэвтрэхэд Face ID ашиглана.</string>
 </dict>
 </plist>

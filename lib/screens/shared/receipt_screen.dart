@@ -148,8 +148,6 @@ class ReceiptScreen extends StatelessWidget {
         ? _num(e?['cityTax'])
         : _num(e?['totalCityTax']);
     final totalNoatgui = totalAmount - totalVat - totalCityTax;
-    final ddtd =
-        _str(e?['billId']).isNotEmpty ? _str(e?['billId']) : _str(e?['id']);
     final ebarimtType =
         _str(e?['customerTin']).isNotEmpty || _str(e?['register']).length == 7
             ? 'ААН'
@@ -164,56 +162,88 @@ class ReceiptScreen extends StatelessWidget {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Column(
                   children: [
-                    // Success Icon
                     Container(
-                      width: 80,
-                      height: 80,
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
                       decoration: BoxDecoration(
-                        color: AppColors.success.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [
+                            AppColors.success.withValues(alpha: 0.16),
+                            colorScheme.primary.withValues(alpha: 0.07),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: AppColors.success.withValues(alpha: 0.25),
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.check_circle,
-                        size: 48,
-                        color: AppColors.success,
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              color: AppColors.success.withValues(alpha: 0.14),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.check_circle_rounded,
+                              size: 44,
+                              color: AppColors.success,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            'Төлбөр амжилттай',
+                            style: textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Худалдан авалтад баярлалаа',
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _buildSummaryChip(
+                                context,
+                                icon: Icons.receipt_long_outlined,
+                                text: qtySummary,
+                              ),
+                              _buildSummaryChip(
+                                context,
+                                icon: _paymentMethodIcon,
+                                text: _paymentMethodName,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _fmtMnt(total),
+                            style: textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: colorScheme.primary,
+                              fontFeatures: const [ui.FontFeature.tabularFigures()],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 24),
-
-                    Text(
-                      'Төлбөр амжилттай!',
-                      style: textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Худалдан авалтад баярлалаа',
-                      style: textTheme.bodyLarge?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      qtySummary,
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _fmtMnt(total),
-                      style: textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: colorScheme.primary,
-                        fontFeatures: const [ui.FontFeature.tabularFigures()],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 14),
 
                     // Receipt Card
                     RepaintBoundary(
@@ -226,60 +256,21 @@ class ReceiptScreen extends StatelessWidget {
                         ),
                         child: Column(
                           children: [
-                            // Receipt Header
-                            Container(
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainerHighest,
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(16),
-                                ),
-                              ),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.point_of_sale,
-                                        color: colorScheme.primary,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'posEase',
-                                        style: textTheme.titleLarge?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                          color: colorScheme.primary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Албан ёсны баримт',
-                                    style: textTheme.titleSmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
                             Padding(
-                              padding: const EdgeInsets.all(20),
+                              padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
                               child: Column(
                                 children: [
                                   // Order Info
                                   _buildInfoRow(
                                       context, 'Захиалгын дугаар', orderNumber),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 6),
                                   _buildInfoRow(
                                     context,
                                     'Огноо',
                                     MongolianDateFormatter.formatDateTime(
                                         DateTime.now()),
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 6),
                                   Row(
                                     children: [
                                       Icon(
@@ -298,13 +289,23 @@ class ReceiptScreen extends StatelessWidget {
                                       ),
                                     ],
                                   ),
-                                  const Divider(height: 32),
+                                  const Divider(height: 20),
 
-                                  // Items
-                                  ...items.map((item) =>
-                                      _buildReceiptItem(context, item)),
+                                  // Items (scroll when many lines so the page stays compact)
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(maxHeight: 220),
+                                    child: ListView.separated(
+                                      shrinkWrap: true,
+                                      physics: const ClampingScrollPhysics(),
+                                      itemCount: items.length,
+                                      separatorBuilder: (_, __) =>
+                                          const SizedBox(height: 4),
+                                      itemBuilder: (context, i) =>
+                                          _buildReceiptItem(context, items[i]),
+                                    ),
+                                  ),
 
-                                  const Divider(height: 32),
+                                  const Divider(height: 20),
 
                                   // Totals
                                   _buildReceiptTotalRow(
@@ -312,17 +313,17 @@ class ReceiptScreen extends StatelessWidget {
                                     'Дэд дүн',
                                     subtotal,
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 6),
                                   _buildReceiptTotalRow(
                                     context,
                                     'НӨАТ (${(PaymentDisplayConfig.vatRate * 100).round()}%)',
                                     vatAmount,
                                   ),
-                                  const SizedBox(height: 16),
+                                  const SizedBox(height: 10),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
-                                      horizontal: 16,
+                                      vertical: 10,
+                                      horizontal: 12,
                                     ),
                                     decoration: BoxDecoration(
                                       color: colorScheme.primaryContainer,
@@ -352,9 +353,9 @@ class ReceiptScreen extends StatelessWidget {
                                     ),
                                   ),
                                   if (e != null) ...[
-                                    const Divider(height: 32),
+                                    const Divider(height: 20),
                                     _buildInfoRow(context, '№', '1'),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 6),
                                     _buildInfoRow(
                                       context,
                                       'Огноо',
@@ -365,40 +366,38 @@ class ReceiptScreen extends StatelessWidget {
                                               DateTime.now(),
                                             ),
                                     ),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 6),
                                     _buildInfoRow(context, 'Баримтын дугаар',
                                         orderNumber),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 6),
                                     _buildInfoRow(
                                         context, 'Төрөл', ebarimtType),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 6),
                                     _buildReceiptTotalRow(
                                         context, 'Дүн', totalAmount),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 6),
                                     _buildInfoRow(
                                         context, 'Төлөв', ebarimtStatus),
-                                    const SizedBox(height: 8),
-                                    _buildInfoRow(context, 'ДДТД', ddtd),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 6),
                                     _buildInfoRow(
                                         context, 'ТТД', _str(e['merchantTin'])),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 6),
                                     _buildInfoRow(
                                         context, 'Касс', _str(e['posNo'])),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 6),
                                     _buildReceiptTotalRow(
                                         context, 'НӨАТ-гүй дүн', totalNoatgui),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 6),
                                     _buildReceiptTotalRow(
                                         context, 'НӨАТ', totalVat),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 6),
                                     _buildReceiptTotalRow(
                                         context, 'НХАТ', totalCityTax),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 6),
                                     _buildReceiptTotalRow(
                                         context, 'Е-Баримт дүн', totalAmount),
                                     if (_str(e['lottery']).isNotEmpty) ...[
-                                      const SizedBox(height: 8),
+                                      const SizedBox(height: 6),
                                       _buildInfoRow(context, 'Сугалааны дугаар',
                                           _str(e['lottery'])),
                                     ],
@@ -475,17 +474,48 @@ class ReceiptScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildSummaryChip(
+    BuildContext context, {
+    required IconData icon,
+    required String text,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: textTheme.labelLarge?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildReceiptItem(BuildContext context, CartItem item) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
           Container(
-            width: 32,
-            height: 32,
+            width: 28,
+            height: 28,
             decoration: BoxDecoration(
               color: colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(6),

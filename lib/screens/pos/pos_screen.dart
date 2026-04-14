@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
+import '../../models/locale_model.dart';
 import '../../models/sales_model.dart';
 import '../../models/inventory_model.dart';
 import '../../theme/app_theme.dart';
@@ -73,6 +74,30 @@ class _POSScreenState extends State<POSScreen> {
     final c = _cashierPageController;
     if (c == null || !c.hasClients) return;
     c.animateToPage(1, duration: _cashierPageAnim, curve: _cashierPageCurve);
+  }
+
+  String _staffCartPaymentBanner(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return l10n.tr(
+      widget.mobileStaffMode
+          ? 'staff_mobile_cart_payment_banner'
+          : 'staff_kiosk_cart_payment_banner',
+    );
+  }
+
+  String _staffSalePanelTitle(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    if (!widget.cashierMode) return l10n.tr('current_sale');
+    return widget.mobileStaffMode
+        ? l10n.tr('current_sale')
+        : l10n.tr('staff_kiosk_sale_panel_title');
+  }
+
+  String _staffCartChipLabel(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return widget.mobileStaffMode
+        ? l10n.tr('pos')
+        : l10n.tr('staff_kiosk_cart_chip');
   }
 
   void _clearSaleAndRestock(BuildContext context, SalesModel sales) {
@@ -283,7 +308,7 @@ class _POSScreenState extends State<POSScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Сагс ба төлбөр',
+                            _staffCartPaymentBanner(context),
                             style: tt.titleLarge?.copyWith(
                               fontWeight: FontWeight.w800,
                               letterSpacing: -0.3,
@@ -404,7 +429,7 @@ class _POSScreenState extends State<POSScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Сагс',
+                              _staffCartChipLabel(context),
                               style: tt.labelLarge?.copyWith(
                                 color: cs.onSurfaceVariant,
                                 fontWeight: FontWeight.w600,
@@ -844,7 +869,7 @@ class _POSScreenState extends State<POSScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'Одоогийн борлуулалт',
+                    _staffSalePanelTitle(context),
                     style: textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                       fontSize: context.responsiveFontSize(18),
