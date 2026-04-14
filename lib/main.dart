@@ -10,8 +10,8 @@ import 'models/auth_model.dart';
 import 'models/locale_model.dart';
 import 'models/customer_model.dart';
 import 'models/transaction_model.dart';
-import 'screens/post_login_home.dart';
-import 'screens/login_screen.dart';
+import 'screens/main/post_login_home.dart';
+import 'screens/main/login_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() {

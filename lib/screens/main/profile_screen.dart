@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../models/auth_model.dart';
-import '../models/locale_model.dart';
-import '../theme/app_theme.dart';
+import '../../models/auth_model.dart';
+import '../../models/locale_model.dart';
+import '../../theme/app_theme.dart';
 import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {

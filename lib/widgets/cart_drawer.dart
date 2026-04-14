@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/cart_model.dart';
-import '../screens/checkout_screen.dart';
+import '../screens/main/checkout_screen.dart';
 
 class CartDrawer extends StatelessWidget {
   const CartDrawer({super.key});

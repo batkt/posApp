@@ -3,19 +3,36 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../data/payment_display_config.dart';
-import '../models/auth_model.dart';
-import '../models/cart_model.dart';
-import '../models/sales_model.dart';
-import '../payment/pos_payment_core.dart';
-import '../services/pos_transaction_service.dart';
-import '../theme/app_theme.dart';
-import 'receipt_screen.dart';
+import '../../data/payment_display_config.dart';
+import '../../models/auth_model.dart';
+import '../../models/cart_model.dart';
+import '../../models/sales_model.dart';
+import '../../payment/pos_payment_core.dart';
+import '../../services/pos_transaction_service.dart';
+import '../../services/qpay_service.dart';
+import '../../services/unipos_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/qpay_invoice_dialog.dart';
+import '../shared/receipt_screen.dart';
 
-/// Cashier: **Бэлэн** / **Карт** / **Данс** (`khariltsakh`), then confirm sheet
-/// (бэлэн: олгосон дүн, хариулт; карт/данс: нийт баталгаажуулах).
+/// Kiosk uses UniPOS card; mobile staff uses merchant QPay API (same as web).
+enum CashierTerminalPaymentMode {
+  /// Kiosk POS: UniPOS `CARD` only (no terminal QPay).
+  cardOnly,
+  /// Mobile: `/qpayGargaya` + QR + `/qpayShalgakh` — no UniPOS.
+  qpayOnly,
+}
+
+/// Cashier: **Бэлэн** / **Карт** or **QPay** / **Данс** (`khariltsakh`), then confirm sheet
+/// (бэлэн: олгосон дүн, хариулт; карт/QPay/данс: нийт баталгаажуулах).
 class CashierPaymentScreen extends StatefulWidget {
-  const CashierPaymentScreen({super.key});
+  const CashierPaymentScreen({
+    super.key,
+    this.terminalMode = CashierTerminalPaymentMode.cardOnly,
+  });
+
+  /// [CashierTerminalPaymentMode.cardOnly] for kiosk; [qpayOnly] for `/khyanalt/mobile`.
+  final CashierTerminalPaymentMode terminalMode;
 
   @override
   State<CashierPaymentScreen> createState() => _CashierPaymentScreenState();
@@ -33,6 +50,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   double _discountMnt = 0;
   double _nhhatMnt = 0;
   bool _busy = false;
+  /// Blocks double-submit before the next frame applies [_busy].
+  bool _submitInFlight = false;
   Map<String, dynamic>? _lastEbarimt;
 
   late final String _orderPreview;
@@ -66,7 +85,9 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       case _PayKind.cash:
         return PosPaymentCore.methodCash;
       case _PayKind.card:
-        return PosPaymentCore.methodCard;
+        return widget.terminalMode == CashierTerminalPaymentMode.qpayOnly
+            ? PosPaymentCore.methodQpay
+            : PosPaymentCore.methodCard;
       case _PayKind.dans:
         return PosPaymentCore.methodAccount;
     }
@@ -77,7 +98,9 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       case _PayKind.cash:
         return 'Бэлэн мөнгө';
       case _PayKind.card:
-        return 'Карт';
+        return widget.terminalMode == CashierTerminalPaymentMode.qpayOnly
+            ? 'QPay'
+            : 'Карт';
       case _PayKind.dans:
         return 'Данс';
     }
@@ -151,13 +174,159 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     controller.dispose();
   }
 
+  /// After kiosk UniPOS or mobile QPay confirms — `guilgeeniiTuukhKhadgalya` + e-barimt + receipt.
+  Future<void> _finalizeApiSale(
+    SalesModel sales,
+    double tender,
+    CashierTotals totals,
+  ) async {
+    final due = totals.total;
+    final isCash = _kind == _PayKind.cash;
+    final tulsunDun = isCash ? tender : due;
+    final hariult = isCash ? (tender - due).clamp(0.0, double.infinity) : 0.0;
+
+    final auth = context.read<AuthModel>();
+    final session = auth.posSession!;
+    final svc = PosTransactionService();
+    var orderNo = sales.guilgeeniiDugaar;
+    String? guilgeeMongoId;
+    if (orderNo == null || orderNo.isEmpty) {
+      final d = await svc.fetchZakhialgiinDugaar();
+      if (d == null || d.isEmpty) {
+        throw PosTransactionException('Захиалгын дугаар авах боломжгүй');
+      }
+      orderNo = d;
+      sales.setGuilgeeniiDugaar(d);
+    }
+
+    final saveResp = await svc.submitGuilgeeniiTuukh(
+      session: session,
+      sales: sales,
+      paymentTurul: PosTransactionService.paymentMethodToTurul(_methodId(_kind)),
+      niitUne: due,
+      tulsunDun: tulsunDun,
+      hariult: hariult,
+      hungulsunDun: totals.cappedDiscount,
+      noatiinDun: totals.vat,
+      noatguiDun: totals.net,
+      nhatiinDun: totals.nhhat,
+      guilgeeniiDugaar: orderNo,
+    );
+
+    guilgeeMongoId =
+        PosTransactionService.parseGuilgeeniiMongoIdFromSaveResponse(saveResp);
+    if (guilgeeMongoId != null && guilgeeMongoId.isNotEmpty) {
+      _lastEbarimt = await svc.requestCitizenEbarimtAfterSale(
+        guilgeeniiMongoId: guilgeeMongoId,
+        baiguullagiinId: session.baiguullagiinId,
+        salbariinId: session.salbariinId,
+      );
+    }
+
+    if (!mounted) return;
+    final completed = sales.completeCashierSale(
+      paymentMethod: _methodId(_kind),
+      discountMnt: _discountMnt,
+      nhhatMnt: _nhhatMnt,
+      orderId: orderNo,
+    );
+    _goReceipt(
+      completed,
+      ebarimt: _lastEbarimt,
+    );
+  }
+
+  /// Web parity: `POST /qpayGargaya` → QR → `POST /qpayShalgakh` (no UniPOS).
+  Future<void> _runMobileQpayFlow(
+    SalesModel sales,
+    CashierTotals totals,
+    double tender,
+  ) async {
+    if (sales.isSaleEmpty || _busy || _submitInFlight) return;
+
+    final auth = context.read<AuthModel>();
+    if (!auth.canSubmitPosSales) {
+      await _submit(sales, tender, totals: totals);
+      return;
+    }
+
+    final due = totals.total;
+    final session = auth.posSession!;
+    final svc = PosTransactionService();
+
+    _submitInFlight = true;
+    setState(() => _busy = true);
+    _lastEbarimt = null;
+
+    try {
+      var orderNo = sales.guilgeeniiDugaar;
+      if (orderNo == null || orderNo.isEmpty) {
+        final d = await svc.fetchZakhialgiinDugaar();
+        if (d == null || d.isEmpty) {
+          throw PosTransactionException('Захиалгын дугаар авах боломжгүй');
+        }
+        orderNo = d;
+        if (mounted) sales.setGuilgeeniiDugaar(d);
+      }
+
+      final zakhKey = '$orderNo${due.round()}';
+      final khariu = await QpayService().gargaya(
+        dun: due,
+        baiguullagiinId: session.baiguullagiinId,
+        salbariinId: session.salbariinId,
+        zakhialgiinDugaar: zakhKey,
+      );
+
+      if (!mounted) return;
+
+      final paid = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => QpayInvoiceDialog(
+          khariu: khariu,
+          amountMnt: due,
+          baiguullagiinId: session.baiguullagiinId,
+          salbariinId: session.salbariinId,
+          zakhialgiinDugaar: zakhKey,
+        ),
+      );
+
+      if (paid != true || !mounted) return;
+
+      await _finalizeApiSale(sales, tender, totals);
+    } on PosTransactionException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      _submitInFlight = false;
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   /// [tender] = бэлэн олгосон дүн (вэб `tulburTuluhModal`: `tulsunDun`); картын үед = нийт дүн.
   Future<void> _submit(
     SalesModel sales,
     double tender, {
     required CashierTotals totals,
   }) async {
-    if (sales.isSaleEmpty || _busy) return;
+    if (sales.isSaleEmpty || _busy || _submitInFlight) return;
 
     final due = totals.total;
     final isCash = _kind == _PayKind.cash; // карт + данс: бүтэн дүн, хариултгүй
@@ -176,69 +345,29 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     }
 
     final tulsunDun = isCash ? tender : due;
-    final hariult = isCash ? (tender - due).clamp(0.0, double.infinity) : 0.0;
 
     final auth = context.read<AuthModel>();
     final useApi = auth.canSubmitPosSales;
 
+    _submitInFlight = true;
     setState(() => _busy = true);
     _lastEbarimt = null;
     try {
       if (useApi) {
-        final session = auth.posSession!;
-        final svc = PosTransactionService();
-        var orderNo = sales.guilgeeniiDugaar;
-        String? guilgeeMongoId;
-        if (orderNo == null || orderNo.isEmpty) {
-          final d = await svc.fetchZakhialgiinDugaar();
-          if (d == null || d.isEmpty) {
-            throw PosTransactionException('Захиалгын дугаар авах боломжгүй');
+        if (_kind == _PayKind.card &&
+            widget.terminalMode == CashierTerminalPaymentMode.cardOnly) {
+          final terminal = await UniPosService.purchase(amount: tulsunDun);
+          final paymentType = terminal?['paymentType']?.toString().toUpperCase();
+          if (paymentType != null && paymentType.isNotEmpty) {
+            final isCard = paymentType == 'CARD';
+            if (!isCard) {
+              throw PosTransactionException(
+                'Касс: зөвхөн карт. QPay хориотой. Төлбөр: $paymentType',
+              );
+            }
           }
-          orderNo = d;
-          sales.setGuilgeeniiDugaar(d);
         }
-
-        final saveResp =         await svc.submitGuilgeeniiTuukh(
-          session: session,
-          sales: sales,
-          paymentTurul: PosTransactionService.paymentMethodToTurul(
-            _methodId(_kind), // belen | cart | khariltsakh
-          ),
-          niitUne: due,
-          tulsunDun: tulsunDun,
-          hariult: hariult,
-          hungulsunDun: totals.cappedDiscount,
-          noatiinDun: totals.vat,
-          noatguiDun: totals.net,
-          nhatiinDun: totals.nhhat,
-          guilgeeniiDugaar: orderNo,
-        );
-
-        guilgeeMongoId =
-            PosTransactionService.parseGuilgeeniiMongoIdFromSaveResponse(
-                saveResp);
-        if (guilgeeMongoId != null && guilgeeMongoId.isNotEmpty) {
-          _lastEbarimt = await svc.requestCitizenEbarimtAfterSale(
-            guilgeeniiMongoId: guilgeeMongoId,
-            baiguullagiinId: session.baiguullagiinId,
-            salbariinId: session.salbariinId,
-          );
-        }
-
-        if (!mounted) return;
-        final completed = sales.completeCashierSale(
-          paymentMethod: _methodId(_kind),
-          discountMnt: _discountMnt,
-          nhhatMnt: _nhhatMnt,
-          orderId: orderNo,
-        );
-        _goReceipt(
-          completed,
-          ebarimt: _lastEbarimt,
-          guilgeeMongoId: guilgeeMongoId,
-          baiguullagiinId: session.baiguullagiinId,
-          salbariinId: session.salbariinId,
-        );
+        await _finalizeApiSale(sales, tender, totals);
       } else {
         if (!mounted) return;
         final completed = sales.completeCashierSale(
@@ -270,6 +399,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         );
       }
     } finally {
+      _submitInFlight = false;
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -277,9 +407,6 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   void _goReceipt(
     CompletedSale completed, {
     Map<String, dynamic>? ebarimt,
-    String? guilgeeMongoId,
-    String? baiguullagiinId,
-    String? salbariinId,
   }) {
     Navigator.pushReplacement(
       context,
@@ -292,9 +419,6 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           paymentMethod: completed.paymentMethod,
           orderNumber: completed.id,
           ebarimt: ebarimt,
-          guilgeeMongoId: guilgeeMongoId,
-          baiguullagiinId: baiguullagiinId,
-          salbariinId: salbariinId,
         ),
       ),
     );
@@ -309,11 +433,20 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       barrierColor: Colors.black54,
       builder: (ctx) => Theme(
         data: Theme.of(context),
-        child: _TulburConfirmSheet(kind: _kind, due: due),
+        child: _TulburConfirmSheet(
+          kind: _kind,
+          due: due,
+          terminalMode: widget.terminalMode,
+        ),
       ),
     );
     if (tender != null && mounted) {
-      await _submit(sales, tender, totals: totals);
+      if (widget.terminalMode == CashierTerminalPaymentMode.qpayOnly &&
+          _kind == _PayKind.card) {
+        await _runMobileQpayFlow(sales, totals, tender);
+      } else {
+        await _submit(sales, tender, totals: totals);
+      }
     }
   }
 
@@ -382,6 +515,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
 
                 final payment = _PaymentPanel(
                   kind: _kind,
+                  terminalMode: widget.terminalMode,
                   dueFormatted: _fmtMnt(due),
                   onKind: (k) => setState(() => _kind = k),
                   onCancel: () => Navigator.pop(context),
@@ -569,6 +703,7 @@ class _SummaryPanel extends StatelessWidget {
 class _PaymentPanel extends StatelessWidget {
   const _PaymentPanel({
     required this.kind,
+    required this.terminalMode,
     required this.dueFormatted,
     required this.onKind,
     required this.onCancel,
@@ -577,6 +712,7 @@ class _PaymentPanel extends StatelessWidget {
   });
 
   final _PayKind kind;
+  final CashierTerminalPaymentMode terminalMode;
   final String dueFormatted;
   final ValueChanged<_PayKind> onKind;
   final VoidCallback onCancel;
@@ -586,9 +722,20 @@ class _PaymentPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    const methods = [
+    final mid = terminalMode == CashierTerminalPaymentMode.qpayOnly
+        ? (
+            _PayKind.card,
+            'QPay',
+            Icons.qr_code_2_rounded,
+          )
+        : (
+            _PayKind.card,
+            'Карт',
+            Icons.credit_card_rounded,
+          );
+    final methods = [
       (_PayKind.cash, 'Бэлэн', Icons.payments_rounded),
-      (_PayKind.card, 'Карт', Icons.credit_card_rounded),
+      mid,
       (_PayKind.dans, 'Данс', Icons.account_balance_rounded),
     ];
 
@@ -762,10 +909,12 @@ class _TulburConfirmSheet extends StatefulWidget {
   const _TulburConfirmSheet({
     required this.kind,
     required this.due,
+    required this.terminalMode,
   });
 
   final _PayKind kind;
   final double due;
+  final CashierTerminalPaymentMode terminalMode;
 
   @override
   State<_TulburConfirmSheet> createState() => _TulburConfirmSheetState();
@@ -871,10 +1020,14 @@ class _TulburConfirmSheetState extends State<_TulburConfirmSheet> {
         widget.kind == _PayKind.card || widget.kind == _PayKind.dans;
     final confirmTitle = widget.kind == _PayKind.dans
         ? 'Дансаар төлөх'
-        : 'Картаар төлөх';
+        : widget.terminalMode == CashierTerminalPaymentMode.qpayOnly
+            ? 'QPay төлөх'
+            : 'Картаар төлөх';
     final confirmIcon = widget.kind == _PayKind.dans
         ? Icons.account_balance_rounded
-        : Icons.credit_card_rounded;
+        : widget.terminalMode == CashierTerminalPaymentMode.qpayOnly
+            ? Icons.qr_code_2_rounded
+            : Icons.credit_card_rounded;
 
     if (isSimpleConfirm) {
       return Padding(

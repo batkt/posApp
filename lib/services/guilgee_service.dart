@@ -15,6 +15,8 @@ class GuilgeeService {
   Future<GuilgeeListResult> listGuilgeeniiTuukh({
     required String baiguullagiinId,
     required String salbariinId,
+    /// When set, only sales recorded with this employee (`ajiltan.id` on guilgee).
+    String? ajiltanId,
     int page = 1,
     int pageSize = 100,
   }) async {
@@ -24,6 +26,10 @@ class GuilgeeService {
       'tuluv': {r'$ne': 0},
       'tsutsalsanOgnoo': {r'$exists': false},
     };
+    final aid = ajiltanId?.trim();
+    if (aid != null && aid.isNotEmpty) {
+      queryMap['ajiltan.id'] = aid;
+    }
 
     try {
       final response = await _api.get<Map<String, dynamic>>(
@@ -100,6 +106,9 @@ String _paymentMethodFromTulbur(List<dynamic>? tulbur) {
   }
   if (turul.contains('mobile') || turul.contains('утас')) {
     return PosPaymentCore.methodMobile;
+  }
+  if (turul == 'qpay' || turul.contains('qpay')) {
+    return PosPaymentCore.methodQpay;
   }
   return PosPaymentCore.methodCash;
 }

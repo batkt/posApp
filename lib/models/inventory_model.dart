@@ -142,9 +142,11 @@ class InventoryModel extends ChangeNotifier {
     final showAll =
         _selectedCategory == 'Бүгд' || _selectedCategory == 'All';
     return _inventory.where((item) {
+      final p = item.product;
       final matchesCategory = showAll ||
-          item.product.angilal?.contains(_selectedCategory) == true ||
-          item.product.category == _selectedCategory;
+          p.category == _selectedCategory ||
+          p.angilal == _selectedCategory ||
+          (p.angilal?.contains(_selectedCategory) == true);
       final matchesSearch = _searchQuery.isEmpty ||
           item.product.name
               .toLowerCase()
@@ -171,13 +173,58 @@ class InventoryModel extends ChangeNotifier {
   }
 
   List<String> get categories {
-    final categories = _inventory
-        .map((i) => i.product.category)
-        .where((c) => c.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-    return ['Бүгд', ...categories];
+    final names = <String>{};
+    for (final i in _inventory) {
+      final c = i.product.category.trim();
+      if (c.isNotEmpty) names.add(c);
+      final a = i.product.angilal?.trim();
+      if (a != null && a.isNotEmpty) names.add(a);
+    }
+    final sorted = names.toList()..sort();
+    return ['Бүгд', ...sorted];
+  }
+
+  /// Out-of-stock rows for the current branch, newest first; optional category + name/code search.
+  List<InventoryItem> outOfStockItemsFiltered({
+    required String category,
+    required String searchQuery,
+  }) {
+    final showAll = category == 'Бүгд' || category == 'All';
+    final q = searchQuery.trim().toLowerCase();
+
+    bool matchesCategory(InventoryItem item) {
+      if (showAll) return true;
+      final p = item.product;
+      return p.category == category ||
+          p.angilal == category ||
+          (p.angilal?.contains(category) == true);
+    }
+
+    bool matchesSearch(InventoryItem item) {
+      if (q.isEmpty) return true;
+      final p = item.product;
+      return p.name.toLowerCase().contains(q) ||
+          p.id.toLowerCase().contains(q) ||
+          (p.code?.toLowerCase().contains(q) == true) ||
+          (p.barCode?.toLowerCase().contains(q) == true);
+    }
+
+    final list = _inventory
+        .where((i) => i.isOutOfStock)
+        .where(matchesCategory)
+        .where(matchesSearch)
+        .toList();
+
+    int sortKey(InventoryItem i) {
+      final t = i.product.createdAt ??
+          i.product.updatedAt ??
+          i.lastRestocked ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      return t.millisecondsSinceEpoch;
+    }
+
+    list.sort((a, b) => sortKey(b).compareTo(sortKey(a)));
+    return list;
   }
 
   String get selectedCategory => _selectedCategory;

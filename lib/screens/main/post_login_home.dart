@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/auth_model.dart';
-import 'cashier_main_screen.dart';
+import '../../models/auth_model.dart';
+import '../pos/cashier_main_screen.dart';
+import '../mobile_pos/mobile_pos_main_screen.dart';
 import 'main_screen.dart';
 
 /// Kiosk-first when `tsonkhniiTokhirgoo` allows kiosk; full app for admin / unrestricted.
@@ -17,6 +18,9 @@ class PostLoginHome extends StatelessWidget {
     }
     if (access.allowsKiosk) {
       return const CashierMainScreen();
+    }
+    if (access.allowsMobile) {
+      return const MobilePosMainScreen();
     }
     return const MainScreen();
   }

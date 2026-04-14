@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/auth_model.dart';
-import '../models/locale_model.dart';
-import 'login_screen.dart';
-import 'main_screen.dart';
+import '../../models/auth_model.dart';
+import '../../models/locale_model.dart';
+import '../../widgets/kiosk_drawer.dart';
+import '../main/login_screen.dart';
 import 'pos_screen.dart';
 
-/// Cashier role: POS only, no inventory or admin destinations.
-class CashierMainScreen extends StatelessWidget {
+/// Kiosk POS (`/khyanalt/kiosk`): same [POSScreen] as full app, plus drawer; electronic pay is **карт** (UniPOS CARD, not QPay).
+class CashierMainScreen extends StatefulWidget {
   const CashierMainScreen({super.key});
+
+  @override
+  State<CashierMainScreen> createState() => _CashierMainScreenState();
+}
+
+class _CashierMainScreenState extends State<CashierMainScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   Widget build(BuildContext context) {
@@ -20,54 +27,46 @@ class CashierMainScreen extends StatelessWidget {
     final user = auth.currentUser;
 
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: const KioskDrawer(),
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         elevation: 0,
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+        ),
         title: Row(
           children: [
             Icon(Icons.payments_rounded, color: colorScheme.primary, size: 26),
             const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Касс',
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Касс',
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                Text(
-                  user?.name ?? '',
-                  style: textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                  Text(
+                    user?.name ?? '',
+                    style: textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
         actions: [
-          if (auth.staffAccess.canOpenFullPosFromKiosk)
-            PopupMenuButton<String>(
-              tooltip: l10n.tr('pos'),
-              child: const Icon(Icons.more_vert_rounded),
-              onSelected: (value) {
-                if (value == 'full_pos') {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const MainScreen(initialSection: 'pos'),
-                    ),
-                  );
-                }
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: 'full_pos',
-                  child: Text(l10n.tr('pos')),
-                ),
-              ],
-            ),
           IconButton(
             tooltip: l10n.tr('logout'),
             icon: const Icon(Icons.logout_rounded),
@@ -95,16 +94,20 @@ class CashierMainScreen extends StatelessWidget {
               if (confirm == true && context.mounted) {
                 await auth.logout();
                 if (context.mounted) {
+                  // Logout navigation is handled in [KioskDrawer] the same way;
+                  // keep app bar flow identical.
                   Navigator.pushAndRemoveUntil(
                     context,
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    MaterialPageRoute<void>(
+                      builder: (_) => const LoginScreen(),
+                    ),
                     (_) => false,
                   );
                 }
               }
             },
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
         ],
       ),
       body: const SafeArea(child: POSScreen(cashierMode: true)),

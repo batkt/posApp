@@ -41,6 +41,8 @@ abstract final class PaymentDisplayConfig {
         return Icons.payments_outlined;
       case PosPaymentCore.methodCard:
         return Icons.credit_card_outlined;
+      case PosPaymentCore.methodQpay:
+        return Icons.qr_code_2_outlined;
       case PosPaymentCore.methodAccount:
         return Icons.account_balance_outlined;
       case PosPaymentCore.methodCredit:
@@ -58,6 +60,8 @@ abstract final class PaymentDisplayConfig {
         return 'Cash';
       case PosPaymentCore.methodCard:
         return 'Card';
+      case PosPaymentCore.methodQpay:
+        return 'QPay';
       case PosPaymentCore.methodAccount:
         return 'Account transfer';
       case PosPaymentCore.methodCredit:
@@ -75,6 +79,8 @@ abstract final class PaymentDisplayConfig {
         return 'Бэлэн мөнгө';
       case PosPaymentCore.methodCard:
         return 'Карт';
+      case PosPaymentCore.methodQpay:
+        return 'QPay';
       case PosPaymentCore.methodAccount:
         return 'Дансаар';
       case PosPaymentCore.methodCredit:

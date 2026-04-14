@@ -365,6 +365,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.0"
+  pax_sdk:
+    dependency: "direct main"
+    description:
+      name: pax_sdk
+      sha256: "5bf02778b8fb316671cea258f865053d3de214d7288a281e409e0383a5800654"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.4"
   pdf:
     dependency: "direct main"
     description:

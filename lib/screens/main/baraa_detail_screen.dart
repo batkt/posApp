@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/inventory_model.dart';
-import '../theme/app_theme.dart';
-import '../widgets/authenticated_image.dart';
+import '../../models/inventory_model.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/authenticated_image.dart';
 
 class BaraaDetailScreen extends StatelessWidget {
   final InventoryItem item;

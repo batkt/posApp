@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/customer_model.dart';
-import '../models/locale_model.dart';
-import '../theme/app_theme.dart';
+import '../../models/customer_model.dart';
+import '../../models/locale_model.dart';
+import '../../theme/app_theme.dart';
 
 class CustomersScreen extends StatefulWidget {
   const CustomersScreen({super.key});

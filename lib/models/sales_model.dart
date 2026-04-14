@@ -108,6 +108,12 @@ class SalesModel extends ChangeNotifier {
         .length;
   }
 
+  /// Sum of all completed sales kept in local history (this session / device).
+  double get totalRecordedRevenue =>
+      _salesHistory.fold(0.0, (sum, sale) => sum + sale.total);
+
+  int get totalRecordedSaleCount => _salesHistory.length;
+
   // Current Sale methods
   void addToSale(Product product, {double? customPrice}) {
     final existingIndex = _currentSale.indexWhere((item) => item.product.id == product.id);

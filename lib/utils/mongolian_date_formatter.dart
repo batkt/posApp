@@ -1,5 +1,3 @@
-import 'package:intl/intl.dart';
-
 class MongolianDateFormatter {
   static const List<String> mongolianMonths = [
     '1-р сар',
@@ -41,6 +39,12 @@ class MongolianDateFormatter {
     final year = date.year;
     
     return '$day $month $year';
+  }
+
+  /// Section title for sales history (weekday + calendar date in Mongolian).
+  static String formatSalesHistorySectionDate(DateTime date) {
+    final weekday = mongolianWeekdays[date.weekday - 1];
+    return '$weekday · ${formatShortDate(date)}';
   }
 
   static String formatTime(DateTime date) {

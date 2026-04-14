@@ -5,6 +5,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+repositories {
+    flatDir {
+        dirs("libs")
+    }
+}
+
 android {
     namespace = "com.example.pos_app"
     compileSdk = flutter.compileSdkVersion
@@ -41,4 +47,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Load vendor SDKs dropped into android/app/libs (e.g. PAX NeptuneLite .aar/.jar)
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
 }

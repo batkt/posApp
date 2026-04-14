@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../data/payment_display_config.dart';
-import '../models/auth_model.dart';
-import '../models/cart_model.dart';
-import '../models/sales_model.dart';
-import '../payment/pos_payment_core.dart';
-import '../services/pos_transaction_service.dart';
-import 'receipt_screen.dart';
+import '../../data/payment_display_config.dart';
+import '../../models/auth_model.dart';
+import '../../models/cart_model.dart';
+import '../../models/sales_model.dart';
+import '../../payment/pos_payment_core.dart';
+import '../../services/pos_transaction_service.dart';
+import '../../services/unipos_service.dart';
+import '../shared/receipt_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -19,6 +20,8 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String _selectedPaymentMethod = PaymentDisplayConfig.defaultCheckoutMethodId;
   bool _isProcessing = false;
+  /// Blocks double-submit before the next frame applies [_isProcessing].
+  bool _paymentInFlight = false;
   Map<String, dynamic>? _lastEbarimt;
 
   @override
@@ -44,6 +47,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _processPayment() async {
+    if (_paymentInFlight) return;
+    _paymentInFlight = true;
     setState(() => _isProcessing = true);
     _lastEbarimt = null;
     final sales = context.read<SalesModel>();
@@ -51,6 +56,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     try {
       if (auth.canSubmitPosSales) {
+        if (_selectedPaymentMethod == PosPaymentCore.methodCard) {
+          final terminal = await UniPosService.purchase(amount: sales.total);
+          final paymentType = terminal?['paymentType']?.toString().toUpperCase();
+          if (paymentType != null &&
+              paymentType.isNotEmpty &&
+              paymentType != 'CARD' &&
+              paymentType != 'QPAY') {
+            throw PosTransactionException(
+              'UniPOS төлбөр амжилтгүй: $paymentType',
+            );
+          }
+        }
         final session = auth.posSession!;
         final svc = PosTransactionService();
         var orderNo = sales.guilgeeniiDugaar;
@@ -100,9 +117,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _goReceipt(
           completedSale,
           ebarimt: _lastEbarimt,
-          guilgeeMongoId: guilgeeMongoId,
-          baiguullagiinId: session.baiguullagiinId,
-          salbariinId: session.salbariinId,
         );
       } else {
         if (!mounted) return;
@@ -122,6 +136,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         );
       }
     } finally {
+      _paymentInFlight = false;
       if (mounted) setState(() => _isProcessing = false);
     }
   }
@@ -129,9 +144,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void _goReceipt(
     CompletedSale completedSale, {
     Map<String, dynamic>? ebarimt,
-    String? guilgeeMongoId,
-    String? baiguullagiinId,
-    String? salbariinId,
   }) {
     Navigator.pushReplacement(
       context,
@@ -144,9 +156,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           paymentMethod: _selectedPaymentMethod,
           orderNumber: completedSale.id,
           ebarimt: ebarimt,
-          guilgeeMongoId: guilgeeMongoId,
-          baiguullagiinId: baiguullagiinId,
-          salbariinId: salbariinId,
         ),
       ),
     );

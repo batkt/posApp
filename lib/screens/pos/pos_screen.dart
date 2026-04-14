@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../models/auth_model.dart';
-import '../models/sales_model.dart';
-import '../models/inventory_model.dart';
-import '../theme/app_theme.dart';
-import '../utils/responsive_helper.dart';
-import '../utils/mongolian_date_formatter.dart';
+import '../../models/auth_model.dart';
+import '../../models/sales_model.dart';
+import '../../models/inventory_model.dart';
+import '../../theme/app_theme.dart';
+import '../../utils/responsive_helper.dart';
+import '../../utils/mongolian_date_formatter.dart';
 import 'cashier_payment_screen.dart';
-import 'checkout_screen.dart';
-import '../widgets/test_image_widget.dart';
-import '../widgets/authenticated_image.dart';
+import '../main/checkout_screen.dart';
+import '../../widgets/test_image_widget.dart';
+import '../../widgets/authenticated_image.dart';
 
 String _formatMntAmount(double v) {
   return NumberFormat('#,###.##', 'en_US').format(v.round());
@@ -25,10 +25,17 @@ int _saleQtyForProduct(SalesModel sales, String productId) {
 }
 
 class POSScreen extends StatefulWidget {
-  const POSScreen({super.key, this.cashierMode = false});
+  const POSScreen({
+    super.key,
+    this.cashierMode = false,
+    this.mobileStaffMode = false,
+  });
 
-  /// When true, embedded under [CashierMainScreen] (no scaffold) and cashier payment UI.
+  /// When true, embedded under kiosk [CashierMainScreen] or mobile [MobilePosMainScreen] (no scaffold).
   final bool cashierMode;
+
+  /// `/khyanalt/mobile` staff only: two-step layout; QPay = web QuickQpay flow (no UniPOS).
+  final bool mobileStaffMode;
 
   @override
   State<POSScreen> createState() => _POSScreenState();
@@ -72,14 +79,28 @@ class _POSScreenState extends State<POSScreen> {
     c.animateToPage(1, duration: _cashierPageAnim, curve: _cashierPageCurve);
   }
 
+  void _clearSaleAndRestock(BuildContext context, SalesModel sales) {
+    final inventory = context.read<InventoryModel>();
+    for (final line in sales.currentSaleItems) {
+      inventory.restock(line.product.id, line.quantity);
+    }
+    sales.clearSale();
+  }
+
   void _openPaymentScreen(BuildContext context) {
-    final cashier =
-        context.read<AuthModel>().currentUser?.isCashier == true;
+    final auth = context.read<AuthModel>();
+    final cashier = auth.currentUser?.isCashier == true;
+    final useCashierPayment =
+        cashier || widget.cashierMode || auth.staffAccess.allowsMobile;
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => cashier
-            ? const CashierPaymentScreen()
+        builder: (context) => useCashierPayment
+            ? CashierPaymentScreen(
+                terminalMode: widget.mobileStaffMode
+                    ? CashierTerminalPaymentMode.qpayOnly
+                    : CashierTerminalPaymentMode.cardOnly,
+              )
             : const CheckoutScreen(),
       ),
     );
@@ -87,6 +108,10 @@ class _POSScreenState extends State<POSScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.cashierMode && widget.mobileStaffMode) {
+      return _buildCashierMobileTwoStepFlow(context);
+    }
+
     final content = ResponsiveHelper.buildResponsive(
       context: context,
       mobile: _buildMobileLayout(context),
@@ -283,7 +308,7 @@ class _POSScreenState extends State<POSScreen> {
                     if (!sales.isSaleEmpty)
                       IconButton.filledTonal(
                         tooltip: 'Сагс цэвэрлэх',
-                        onPressed: () => sales.clearSale(),
+                        onPressed: () => _clearSaleAndRestock(context, sales),
                         icon: Icon(
                           Icons.delete_sweep_rounded,
                           color: cs.error,
@@ -581,6 +606,9 @@ class _POSScreenState extends State<POSScreen> {
             height: context.isMobile ? 36 : 40,
             child: Consumer<InventoryModel>(
               builder: (context, inventory, child) {
+                final categoryChips = inventory.categories
+                    .where((c) => c != 'Бүгд' && c != 'All')
+                    .toList();
                 return Row(
                   children: [
                     // "View All" button
@@ -603,11 +631,9 @@ class _POSScreenState extends State<POSScreen> {
                     Expanded(
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
-                        itemCount: inventory.categories.length > 1
-                            ? inventory.categories.length - 1
-                            : 0,
+                        itemCount: categoryChips.length,
                         itemBuilder: (context, index) {
-                          final category = inventory.categories[index + 1];
+                          final category = categoryChips[index];
                           final isSelected = _selectedCategory == category;
                           return Padding(
                             padding:
@@ -652,9 +678,11 @@ class _POSScreenState extends State<POSScreen> {
         final products = inventory.filteredInventory.where((item) {
           final showAll =
               _selectedCategory == 'Бүгд' || _selectedCategory == 'All';
+          final p = item.product;
           final matchesCategory = showAll ||
-              item.product.angilal?.contains(_selectedCategory) == true ||
-              item.product.category == _selectedCategory;
+              p.category == _selectedCategory ||
+              p.angilal == _selectedCategory ||
+              (p.angilal?.contains(_selectedCategory) == true);
           final matchesSearch = _searchQuery.isEmpty ||
               item.product.name
                   .toLowerCase()
@@ -669,6 +697,21 @@ class _POSScreenState extends State<POSScreen> {
                   true;
           return matchesCategory && matchesSearch;
         }).toList();
+
+        bool shelfActive(InventoryItem i) =>
+            i.product.isAvailable && i.currentStock > 0;
+        DateTime stamp(InventoryItem i) =>
+            i.product.updatedAt ??
+            i.product.createdAt ??
+            i.lastRestocked ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        products.sort((a, b) {
+          final aa = shelfActive(a);
+          final ab = shelfActive(b);
+          if (aa != ab) return aa ? -1 : 1;
+          if (!aa) return stamp(b).compareTo(stamp(a));
+          return a.product.name.compareTo(b.product.name);
+        });
 
         if (products.isEmpty) {
           return Center(
@@ -726,6 +769,12 @@ class _POSScreenState extends State<POSScreen> {
                   );
                 }
               },
+              onRemoveOneFromSale: inSale > 0
+                  ? () {
+                      inventory.restock(item.product.id, 1);
+                      sales.decrementSaleQuantity(item.product.id);
+                    }
+                  : null,
             );
           },
         );
@@ -761,11 +810,9 @@ class _POSScreenState extends State<POSScreen> {
         sales.incrementSaleQuantity(item.product.id);
       },
       onDecrement: () {
-        if (item.quantity > 1) {
-          final inventory = context.read<InventoryModel>();
-          inventory.restock(item.product.id, 1);
-          sales.decrementSaleQuantity(item.product.id);
-        }
+        final inventory = context.read<InventoryModel>();
+        inventory.restock(item.product.id, 1);
+        sales.decrementSaleQuantity(item.product.id);
       },
       onRemove: () {
         final inventory = context.read<InventoryModel>();
@@ -810,7 +857,7 @@ class _POSScreenState extends State<POSScreen> {
                 ),
                 if (!sales.isSaleEmpty)
                   TextButton.icon(
-                    onPressed: () => sales.clearSale(),
+                    onPressed: () => _clearSaleAndRestock(context, sales),
                     icon:
                         Icon(Icons.clear, size: context.responsiveIconSize(18)),
                     label: Text(
@@ -1097,16 +1144,34 @@ class _ProductCard extends StatelessWidget {
   final VoidCallback onTap;
   /// Units of this SKU in the active sale (drives border + badge).
   final int inSaleQuantity;
+  /// Remove one unit from sale + restock (shown as − on card when in sale).
+  final VoidCallback? onRemoveOneFromSale;
 
   const _ProductCard({
     super.key,
     required this.item,
     required this.onTap,
     this.inSaleQuantity = 0,
+    this.onRemoveOneFromSale,
   });
 
   static const Color _stockPlentyGreen = Color(0xFF16A34A);
   static const Color _stockLowRed = Color(0xFFDC2626);
+
+  /// Fixed footer so every grid tile has the same total height (image + info).
+  static double _footerHeight(BuildContext context) {
+    final fs = context.responsiveFontSize(11);
+    final fs9 = context.responsiveFontSize(9);
+    final fs10 = context.responsiveFontSize(10);
+    final padV = 8.0 + (context.spacing * 0.5 + 4);
+    final titleH = fs * 1.2 * 2;
+    final codeH = fs9 * 1.25;
+    final gapSmall = context.spacing * 0.2;
+    final stockH = fs10 * 1.35;
+    // spaceBetween gap + small buffer for price alignment
+    return (padV + titleH + gapSmall + codeH + 6 + stockH + 2)
+        .clamp(90.0, 132.0);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1134,6 +1199,9 @@ class _ProductCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: item.isOutOfStock ? null : onTap,
+        onLongPress: (inCart && onRemoveOneFromSale != null)
+            ? onRemoveOneFromSale
+            : null,
         splashFactory: NoSplash.splashFactory,
         splashColor: Colors.transparent,
         highlightColor: colorScheme.primary.withValues(alpha: 0.06),
@@ -1235,77 +1303,147 @@ class _ProductCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                  if (inCart && onRemoveOneFromSale != null)
+                    Positioned(
+                      left: 6,
+                      bottom: 6,
+                      child: Material(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: onRemoveOneFromSale,
+                          customBorder: const CircleBorder(),
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: Icon(
+                              Icons.remove_rounded,
+                              size: 20,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                10,
-                8,
-                10,
-                context.spacing * 0.5 + 4,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.product.name,
-                    style: textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontSize: context.responsiveFontSize(11),
-                      height: 1.2,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (item.product.code != null ||
-                      item.product.barCode != null) ...[
-                    SizedBox(height: context.spacing * 0.2),
-                    Text(
-                      item.product.code ?? item.product.barCode ?? '',
-                      style: textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontSize: context.responsiveFontSize(9),
+            SizedBox(
+              height: _footerHeight(context),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  10,
+                  8,
+                  10,
+                  context.spacing * 0.5 + 4,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                height: context.responsiveFontSize(11) * 1.2 * 2,
+                                width: double.infinity,
+                                child: Text(
+                                  item.product.name,
+                                  style: textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: context.responsiveFontSize(11),
+                                    height: 1.2,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              SizedBox(height: context.spacing * 0.2),
+                              SizedBox(
+                                height: context.responsiveFontSize(9) * 1.25,
+                                width: double.infinity,
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    item.product.code ??
+                                        item.product.barCode ??
+                                        '',
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                      fontSize: context.responsiveFontSize(9),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                'Үлдэгдэл: ',
+                                style: textTheme.labelSmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: context.responsiveFontSize(9),
+                                ),
+                              ),
+                              Text(
+                                '$stock',
+                                style: textTheme.labelMedium?.copyWith(
+                                  color: stockColor,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: context.responsiveFontSize(10),
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(width: context.spacing * 0.5),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 5,
+                            ),
+                            child: Text(
+                              '${_formatMntAmount(item.product.price)} ₮',
+                              style: textTheme.labelLarge?.copyWith(
+                                color: colorScheme.onPrimaryContainer,
+                                fontWeight: FontWeight.w800,
+                                fontSize: context.responsiveFontSize(11),
+                                height: 1.1,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
-                  SizedBox(height: context.spacing * 0.35),
-                  Row(
-                    children: [
-                      Text(
-                        'Үлдэгдэл: ',
-                        style: textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                          fontSize: context.responsiveFontSize(9),
-                        ),
-                      ),
-                      Text(
-                        '$stock',
-                        style: textTheme.labelMedium?.copyWith(
-                          color: stockColor,
-                          fontWeight: FontWeight.w800,
-                          fontSize: context.responsiveFontSize(10),
-                          fontFeatures: const [
-                            FontFeature.tabularFigures(),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: context.spacing * 0.25),
-                  Text(
-                    '${_formatMntAmount(item.product.price)} ₮',
-                    style: textTheme.labelLarge?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w800,
-                      fontSize: context.responsiveFontSize(11),
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ],
@@ -1344,65 +1482,76 @@ class _SaleItemTile extends StatelessWidget {
           color: colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: AuthenticatedImage(
-                imageUrl: item.product.imageUrl,
-                width: 48,
-                height: 48,
-                fit: BoxFit.cover,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.product.name,
-                    style: textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'MNT ${item.product.price.toStringAsFixed(0)}',
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: AuthenticatedImage(
+                    imageUrl: item.product.imageUrl,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.product.name,
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'MNT ${item.product.price.toStringAsFixed(0)}',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 IconButton(
+                  tooltip: 'Хасах',
                   onPressed: onDecrement,
                   icon: const Icon(Icons.remove_circle_outline),
-                  iconSize: 20,
+                  iconSize: 22,
                 ),
-                Container(
-                  width: 40,
-                  alignment: Alignment.center,
+                SizedBox(
+                  width: 36,
                   child: Text(
                     '${item.quantity}',
+                    textAlign: TextAlign.center,
                     style: textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
                 IconButton(
+                  tooltip: 'Нэмэх',
                   onPressed: onIncrement,
                   icon: const Icon(Icons.add_circle_outline),
-                  iconSize: 20,
+                  iconSize: 22,
                 ),
                 IconButton(
+                  tooltip: 'Устгах',
                   onPressed: onRemove,
-                  icon: const Icon(Icons.delete_outline),
-                  iconSize: 20,
+                  icon: const Icon(Icons.close_rounded),
+                  iconSize: 22,
                   color: colorScheme.error,
                 ),
               ],
@@ -1533,10 +1682,10 @@ class _SaleItemTile extends StatelessWidget {
                   const SizedBox(height: 4),
                   IconButton(
                     visualDensity: VisualDensity.compact,
-                    tooltip: 'Хасах',
+                    tooltip: 'Мөрийг устгах',
                     onPressed: onRemove,
                     icon: Icon(
-                      Icons.delete_outline_rounded,
+                      Icons.close_rounded,
                       size: 22,
                       color: colorScheme.error,
                     ),

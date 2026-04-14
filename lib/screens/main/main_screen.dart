@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../auth/staff_screen_access.dart';
-import '../models/auth_model.dart';
-import '../models/locale_model.dart';
-import '../theme/app_theme.dart';
+import '../../auth/staff_screen_access.dart';
+import '../../models/auth_model.dart';
+import '../../models/locale_model.dart';
+import '../../theme/app_theme.dart';
 import 'dashboard_screen.dart';
-import 'pos_screen.dart';
+import '../pos/pos_screen.dart';
 import 'inventory_screen.dart';
 import 'customers_screen.dart';
 import 'sales_history_screen.dart';
 import 'profile_screen.dart';
 import 'login_screen.dart';
+import 'out_of_stock_baraa_screen.dart';
+import 'ebarimt_menu_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key, this.initialSection});
 
-  /// Optional drawer section id: `dashboard`, `pos`, `inventory`, `customers`, `history`, `profile`.
+  /// Optional drawer section id: `dashboard`, `pos`, `inventory`, `out_of_stock`,
+  /// `ebarimt`, `customers`, `history`, `profile`.
   final String? initialSection;
 
   @override
@@ -81,6 +84,28 @@ class _MainScreenState extends State<MainScreen> {
           selectedIcon: Icons.inventory_2,
           label: 'inventory',
           section: 'inventory',
+          index: 0,
+        ),
+      );
+      push(
+        const OutOfStockBaraaScreen(),
+        _MenuItem(
+          icon: Icons.remove_shopping_cart_outlined,
+          selectedIcon: Icons.remove_shopping_cart,
+          label: 'menu_out_of_stock_baraa',
+          section: 'out_of_stock',
+          index: 0,
+        ),
+      );
+    }
+    if (access.allowsEbarimt) {
+      push(
+        const EbarimtMenuScreen(),
+        _MenuItem(
+          icon: Icons.receipt_long_outlined,
+          selectedIcon: Icons.receipt_long,
+          label: 'ebarimt',
+          section: 'ebarimt',
           index: 0,
         ),
       );

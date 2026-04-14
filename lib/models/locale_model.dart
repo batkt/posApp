@@ -87,6 +87,13 @@ class AppLocalizations {
       'pos': 'POS',
       'inventory': 'Inventory',
       'history': 'History',
+      'menu_out_of_stock_baraa': 'Out-of-stock items',
+      'menu_kiosk_title': 'Menu',
+      'menu_open_sales_history': 'Open sales history',
+      'out_of_stock_baraa_title': 'Out-of-stock items',
+      'no_out_of_stock_items': 'No out-of-stock items in this branch',
+      'ebarimt_menu_hint':
+          'E-receipts are created when a sale is completed. Open sales history to review recent receipts and e-barimt details.',
 
       // Dashboard
       'welcome': 'Welcome',
@@ -216,6 +223,21 @@ class AppLocalizations {
       'view_details': 'View Details',
       'sale_completed': 'Sale Completed',
       'items_count': 'items',
+      'sales_history_subtitle': 'Your recent sales',
+      'sales_history_offline_hint':
+          'No branch session. Showing this device only.',
+      'sales_history_load_error': 'Could not load sales',
+      'sales_history_refresh': 'Refresh',
+      'sales_history_loading': 'Loading…',
+      'sales_history_close_detail': 'Close',
+      'sales_history_order_no': 'Order no.',
+      'sales_history_time': 'Time',
+      'sales_history_lines_count': '{n} line(s)',
+      'nhhat_label': 'NHAT',
+      'receipt_qty_summary': '{pieces} pcs · {lines} line(s)',
+      'dashboard_total_recorded': 'Total recorded sales',
+      'dashboard_total_recorded_hint': 'On this device / session',
+      'dashboard_sale_count': '{n} sales',
     },
     'mn': {
       // Login
@@ -292,6 +314,13 @@ class AppLocalizations {
       'pos': 'Борлуулалт',
       'inventory': 'Бараа материал',
       'history': 'Түүх',
+      'menu_out_of_stock_baraa': 'Дууссан бараа',
+      'menu_kiosk_title': 'Цэс',
+      'menu_open_sales_history': 'Борлуулалтын түүх нээх',
+      'out_of_stock_baraa_title': 'Дууссан бараа',
+      'no_out_of_stock_items': 'Энэ салбарт дууссан бараа байхгүй',
+      'ebarimt_menu_hint':
+          'E-Баримт нь борлуулалт амжилттай дууссаны дараа үүснэ. Сүүлийн баримт, E-Баримтын мэдээллийг борлуулалтын түүхээс харна уу.',
 
       // Dashboard
       'welcome': 'Тавтай морил',
@@ -421,6 +450,21 @@ class AppLocalizations {
       'view_details': 'Дэлгэрэнгүй',
       'sale_completed': 'Борлуулалт амжилттай',
       'items_count': 'ширхэг',
+      'sales_history_subtitle': 'Таны сүүлийн борлуулалт',
+      'sales_history_offline_hint':
+          'Салбарын холболтгүй. Зөвхөн энэ төхөөрөмжийн түүх харагдана.',
+      'sales_history_load_error': 'Жагсаалт ачаалахад алдаа гарлаа',
+      'sales_history_refresh': 'Сэргээх',
+      'sales_history_loading': 'Ачаалж байна…',
+      'sales_history_close_detail': 'Хаах',
+      'sales_history_order_no': 'Захиалгын дугаар',
+      'sales_history_time': 'Цаг',
+      'sales_history_lines_count': '{n} төрөл',
+      'nhhat_label': 'НХАТ',
+      'receipt_qty_summary': '{pieces} ширхэг · {lines} төрөл',
+      'dashboard_total_recorded': 'Бүртгэгдсэн нийт дүн',
+      'dashboard_total_recorded_hint': 'Энэ төхөөрөмж дээрх түүх',
+      'dashboard_sale_count': '{n} борлуулалт',
     },
   };
 

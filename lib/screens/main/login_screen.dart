@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/auth_model.dart';
-import '../models/locale_model.dart';
-import '../theme/app_theme.dart';
-import '../utils/connectivity.dart';
+import '../../models/auth_model.dart';
+import '../../models/locale_model.dart';
+import '../../theme/app_theme.dart';
+import '../../utils/connectivity.dart';
 import 'forgot_password_screen.dart';
 import 'two_factor_auth_screen.dart';
 import 'post_login_home.dart';

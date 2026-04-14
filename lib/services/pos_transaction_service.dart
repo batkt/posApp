@@ -53,11 +53,60 @@ class PosTransactionService {
   }
 
   static double _fixed2Num(num? value, {double fallback = 0}) {
-    return double.parse(_finiteDouble(value, fallback: fallback).toStringAsFixed(2));
+    return double.parse(
+        _finiteDouble(value, fallback: fallback).toStringAsFixed(2));
   }
 
   static String _fixed2String(num? value, {double fallback = 0}) {
     return _finiteDouble(value, fallback: fallback).toStringAsFixed(2);
+  }
+
+  Map<String, dynamic> _buildSaleBaraa({
+    required dynamic product,
+    required String fallbackSalbariinId,
+    required double unitPrice,
+    required double lineTotal,
+  }) {
+    final noatBodohEsekh = product.noatBodohEsekh == true;
+    final nhatBodohEsekh = product.nhatBodohEsekh == true;
+    final lineNet = noatBodohEsekh ? (lineTotal / 1.1) : lineTotal;
+    final lineVat = noatBodohEsekh ? (lineTotal - lineNet) : 0.0;
+
+    return {
+      if ((product.id ?? '').toString().isNotEmpty) '_id': product.id,
+      'ner': product.name,
+      'code': product.code,
+      'barCode': product.barCode,
+      'baiguullagiinId': product.baiguullagiinId,
+      'salbariinId': product.salbariinId ?? fallbackSalbariinId,
+      'angilal': product.angilal ?? product.category,
+      'khemjikhNegj': product.khemjikhNegj,
+      'niitUne': _fixed2Num(unitPrice),
+      'zarakhUne': _fixed2Num(unitPrice),
+      // posBack ebarimtShine builder uses this directly for totalAmount.
+      'zarsanNiitUne': _fixed2Num(lineTotal),
+      'hungulsunDun': 0,
+      'urtugUne': _fixed2Num(product.urtugUne ?? product.costPrice),
+      'uldegdel': _fixed2Num(product.uldegdel ?? product.stock),
+      'idevkhteiEsekh': product.isAvailable,
+      'zurgiinId': product.zurgiinId,
+      'noatBodohEsekh': noatBodohEsekh,
+      'nhatBodohEsekh': nhatBodohEsekh,
+      'ognooniiMedeelelBurtgekhEsekh': product.ognooniiMedeelelBurtgekhEsekh,
+      'noatiinDun': _fixed2Num(lineVat),
+      'nhatiinDun': 0,
+      'noatguiDun': _fixed2Num(lineNet),
+      'shirkheglekhEsekh': product.shirkheglekhEsekh,
+      'negKhairtsaganDahiShirhegiinToo':
+          _fixed2Num(product.negKhairtsaganDahiShirhegiinToo),
+      // Keep frontend-compatible keys; Product model doesn't expose these lists.
+      'buuniiUneJagsaalt': const [],
+      'uramshuulal': const [],
+      'nemeltMedeelel': const [],
+      'orlogdsonEsekh': product.orlogdsonEsekh,
+      'zarlagdsanEsekh': product.zarlagdsanEsekh,
+      'ajiltan': product.ajiltan,
+    }..removeWhere((_, v) => v == null);
   }
 
   /// Recursively removes invalid numeric values before sending JSON to backend.
@@ -69,6 +118,7 @@ class PosTransactionService {
     if (value is String) {
       final t = value.trim().toLowerCase();
       if (t == 'nan' || t == 'infinity' || t == '-infinity') return '0';
+      if (t.contains('nan') || t.contains('infinity')) return '0';
       final parsed = double.tryParse(t);
       if (parsed != null && (!parsed.isFinite || parsed.isNaN)) return '0';
       return value;
@@ -127,8 +177,11 @@ class PosTransactionService {
       final unitPrice = _finiteDouble(line.unitPrice);
       final lineTotal = unitPrice * qty;
       return {
-        'baraa': p.toBaraaDocument(
+        'baraa': _buildSaleBaraa(
+          product: p,
           fallbackSalbariinId: session.salbariinId,
+          unitPrice: unitPrice,
+          lineTotal: lineTotal,
         ),
         'niitUne': _fixed2String(lineTotal),
         'too': qty,
@@ -136,12 +189,11 @@ class PosTransactionService {
       };
     }).toList();
 
-    // Web `tulbur`: `[{ turul: "belen"|"cart"|"khariltsakh", une: number }]`
+    // Web `tulbur`: `[{ turul: "belen"|"cart"|"qpay"|"khariltsakh", une: number }]`
     // Cash: `une` = төлсөн дүн minus хариулт; card/dans: full `tulsunDun`.
-    final lineUne =
-        paymentTurul == 'belen'
-            ? _finiteDouble(tulsunDun) - _finiteDouble(hariult)
-            : _finiteDouble(tulsunDun);
+    final lineUne = paymentTurul == 'belen'
+        ? _finiteDouble(tulsunDun) - _finiteDouble(hariult)
+        : _finiteDouble(tulsunDun);
     final tulbur = [
       {
         'turul': paymentTurul,
@@ -171,9 +223,20 @@ class PosTransactionService {
     body.removeWhere((k, v) => v == null);
 
     final safeBody = _sanitizeJson(body);
+    var encodedBody = jsonEncode(safeBody);
+    encodedBody = encodedBody
+        .replaceAll('"NaN"', '"0"')
+        .replaceAll('"nan"', '"0"')
+        .replaceAll('"Infinity"', '"0"')
+        .replaceAll('"-Infinity"', '"0"')
+        .replaceAll('"infinity"', '"0"')
+        .replaceAll('"-infinity"', '"0"');
+    if (kDebugMode && encodedBody.toLowerCase().contains('nan')) {
+      debugPrint('[guilgeeniiTuukhKhadgalya] encoded body still had NaN token');
+    }
     final uri = Uri.parse('${ApiConfig.posBaseUrl}/guilgeeniiTuukhKhadgalya');
     final res = await _http
-        .post(uri, headers: _headers(), body: jsonEncode(safeBody))
+        .post(uri, headers: _headers(), body: encodedBody)
         .timeout(ApiConfig.timeout);
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -222,7 +285,8 @@ class PosTransactionService {
       'salbariinId': salbariinId,
       'register': register,
       if (turul != null && turul.isNotEmpty) 'turul': turul,
-      if (customerTin != null && customerTin.isNotEmpty) 'customerTin': customerTin,
+      if (customerTin != null && customerTin.isNotEmpty)
+        'customerTin': customerTin,
     });
     try {
       final res = await _http
@@ -290,6 +354,8 @@ class PosTransactionService {
         return 'belen';
       case 'card':
         return 'cart';
+      case 'qpay':
+        return 'qpay';
       case 'account':
         return 'khariltsakh';
       case 'credit':

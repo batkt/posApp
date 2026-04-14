@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../models/sales_model.dart';
-import '../models/inventory_model.dart';
-import '../theme/app_theme.dart';
+
+import '../../models/inventory_model.dart';
+import '../../models/locale_model.dart';
+import '../../models/sales_model.dart';
+import '../../theme/app_theme.dart';
+import '../../utils/mongolian_date_formatter.dart';
+
+String _fmtMnt(double v) {
+  final s = NumberFormat('#,###', 'en_US').format(v.round());
+  return '$s₮';
+}
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -12,8 +20,7 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final currencyFormat =
-        NumberFormat.currency(symbol: '\$', decimalDigits: 2);
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       body: SafeArea(
@@ -56,8 +63,8 @@ class DashboardScreen extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                               ),
                               Text(
-                                DateFormat('MMM d, yyyy')
-                                    .format(DateTime.now()),
+                                MongolianDateFormatter.formatShortDate(
+                                    DateTime.now()),
                                 style: textTheme.bodySmall?.copyWith(
                                   color: colorScheme.onSurfaceVariant,
                                 ),
@@ -94,8 +101,8 @@ class DashboardScreen extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   Text(
-                                    DateFormat('EEEE, MMM d, yyyy')
-                                        .format(DateTime.now()),
+                                    MongolianDateFormatter.formatDate(
+                                        DateTime.now()),
                                     style: textTheme.bodyMedium?.copyWith(
                                       color: colorScheme.onSurfaceVariant,
                                     ),
@@ -108,6 +115,96 @@ class DashboardScreen extends StatelessWidget {
                       },
                     ),
                   ],
+                ),
+              ),
+            ),
+
+            // Total recorded revenue (local history)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                child: Consumer<SalesModel>(
+                  builder: (context, sales, _) {
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            colorScheme.primary,
+                            colorScheme.primary.withValues(alpha: 0.85),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colorScheme.primary.withValues(alpha: 0.35),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.savings_rounded,
+                                color: colorScheme.onPrimary,
+                                size: 22,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  l10n.tr('dashboard_total_recorded'),
+                                  style: textTheme.titleSmall?.copyWith(
+                                    color: colorScheme.onPrimary
+                                        .withValues(alpha: 0.95),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _fmtMnt(sales.totalRecordedRevenue),
+                            style: textTheme.headlineMedium?.copyWith(
+                              color: colorScheme.onPrimary,
+                              fontWeight: FontWeight.w900,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            l10n
+                                .tr('dashboard_sale_count')
+                                .replaceAll(
+                                  '{n}',
+                                  '${sales.totalRecordedSaleCount}',
+                                ),
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onPrimary
+                                  .withValues(alpha: 0.9),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            l10n.tr('dashboard_total_recorded_hint'),
+                            style: textTheme.labelSmall?.copyWith(
+                              color: colorScheme.onPrimary
+                                  .withValues(alpha: 0.75),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -184,8 +281,7 @@ class DashboardScreen extends StatelessWidget {
                             Expanded(
                               child: _StatCard(
                                 label: 'Орлого',
-                                value:
-                                    currencyFormat.format(sales.todayRevenue),
+                                value: _fmtMnt(sales.todayRevenue),
                                 icon: Icons.attach_money,
                                 color: AppColors.success,
                               ),
@@ -316,12 +412,15 @@ class DashboardScreen extends StatelessWidget {
 
                         return Column(
                           children: recentSales.map((sale) {
+                            final pieces = sale.items
+                                .fold<int>(0, (sum, i) => sum + i.quantity);
                             return _SaleListTile(
                               saleId: sale.id,
                               amount: sale.total,
                               time: sale.timestamp,
-                              itemCount: sale.items
-                                  .fold(0, (sum, i) => sum + i.quantity),
+                              pieceCount: pieces,
+                              lineCount: sale.items.length,
+                              l10n: l10n,
                             );
                           }).toList(),
                         );
@@ -543,21 +642,27 @@ class _SaleListTile extends StatelessWidget {
   final String saleId;
   final double amount;
   final DateTime time;
-  final int itemCount;
+  final int pieceCount;
+  final int lineCount;
+  final AppLocalizations l10n;
 
   const _SaleListTile({
     required this.saleId,
     required this.amount,
     required this.time,
-    required this.itemCount,
+    required this.pieceCount,
+    required this.lineCount,
+    required this.l10n,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final currencyFormat =
-        NumberFormat.currency(symbol: '\$', decimalDigits: 2);
+    final qtyLine = l10n
+        .tr('receipt_qty_summary')
+        .replaceAll('{pieces}', '$pieceCount')
+        .replaceAll('{lines}', '$lineCount');
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -594,7 +699,7 @@ class _SaleListTile extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '$itemCount items • ${DateFormat('h:mm a').format(time)}',
+                  '$qtyLine · ${MongolianDateFormatter.formatTime(time)}',
                   style: textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
@@ -603,10 +708,11 @@ class _SaleListTile extends StatelessWidget {
             ),
           ),
           Text(
-            currencyFormat.format(amount),
+            _fmtMnt(amount),
             style: textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w700,
               color: colorScheme.primary,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ],

@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
+    <!-- PAX internal printer permission (device/ROM dependent). -->
+    <uses-permission android:name="com.pax.permission.PRINTER" />
     
     <application
         android:label="pos_app"
@@ -45,6 +47,10 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <!-- PAX service visibility -->
+        <package android:name="com.paxservice" />
+        <!-- UniPOS terminal app visibility -->
+        <package android:name="mn.genesis.unipos.terminal" />
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

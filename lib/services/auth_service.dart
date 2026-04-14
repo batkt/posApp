@@ -5,10 +5,15 @@ import '../models/pos_session.dart';
 
 UserRole _roleHintFromAccess(StaffScreenAccess access) {
   if (access.hasFullAccess) return UserRole.admin;
-  if (access.allowsKiosk &&
-      !access.allowsPosSystem &&
+  final narrowStaff = !access.allowsPosSystem &&
       !access.allowsAguulakh &&
-      !access.allowsKhariltsagch) {
+      !access.allowsKhariltsagch;
+  if (access.allowsKiosk && narrowStaff) {
+    return UserRole.cashier;
+  }
+  if (access.allowsMobile &&
+      !access.allowsKiosk &&
+      narrowStaff) {
     return UserRole.cashier;
   }
   return UserRole.manager;

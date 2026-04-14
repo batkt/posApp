@@ -1,0 +1,116 @@
+import 'dart:convert';
+
+import 'package:flutter/services.dart';
+import 'package:pax_sdk/pax_sdk.dart';
+
+class PrinterResult {
+  const PrinterResult({
+    required this.success,
+    required this.backend,
+    required this.message,
+  });
+
+  final bool success;
+  final String backend;
+  final String message;
+}
+
+class PrinterService {
+  static const MethodChannel _channel = MethodChannel('com.example.pos_app');
+
+  static Future<PrinterResult> testPrint() async {
+    final now = DateTime.now().toString();
+    try {
+      final ok = await PaxSdk.initializePrinter();
+      if (ok != true) {
+        throw Exception('pax_sdk initializePrinter failed');
+      }
+      final dynamic res = await PaxSdk.printText(
+        'POSEASE TEST PRINT\n$now',
+        options: {'fontSize': 'large', 'alignment': 1},
+      );
+      if (_isSuccess(res)) {
+        return const PrinterResult(
+          success: true,
+          backend: 'pax_sdk',
+          message: 'Тест амжилттай хэвлэгдлээ (pax_sdk)',
+        );
+      }
+      throw Exception('pax_sdk printText failed: $res');
+    } catch (_) {
+      try {
+        final native = await _channel.invokeMethod<String>(
+          'android.epos.tasks.testPrint',
+        );
+        return PrinterResult(
+          success: native == 'printed',
+          backend: 'native',
+          message: native == 'printed'
+              ? 'Тест амжилттай хэвлэгдлээ (native)'
+              : 'Тест хэвлэх хүсэлт илгээгдлээ (native)',
+        );
+      } catch (e) {
+        return PrinterResult(
+          success: false,
+          backend: 'none',
+          message: 'Тест хэвлэх алдаа: $e',
+        );
+      }
+    }
+  }
+
+  static Future<PrinterResult> printReceiptImage(Uint8List pngBytes) async {
+    try {
+      final ok = await PaxSdk.initializePrinter();
+      if (ok != true) {
+        throw Exception('pax_sdk initializePrinter failed');
+      }
+      final dynamic res = await PaxSdk.printImage(
+        pngBytes,
+        options: {'alignment': 1},
+      );
+      if (_isSuccess(res)) {
+        return const PrinterResult(
+          success: true,
+          backend: 'pax_sdk',
+          message: 'Терминал дээр амжилттай хэвлэлээ (pax_sdk)',
+        );
+      }
+      throw Exception('pax_sdk printImage failed: $res');
+    } catch (_) {
+      try {
+        final base64Image = base64Encode(pngBytes);
+        final native = await _channel.invokeMethod<String>(
+          'android.epos.tasks.printBitmap',
+          {'base64': base64Image},
+        );
+        return PrinterResult(
+          success: native == 'printed',
+          backend: 'native',
+          message: native == 'printed'
+              ? 'Терминал дээр амжилттай хэвлэлээ (native)'
+              : 'Хэвлэх хүсэлт илгээгдлээ (native)',
+        );
+      } catch (e) {
+        return PrinterResult(
+          success: false,
+          backend: 'none',
+          message: '$e',
+        );
+      }
+    }
+  }
+
+  static bool _isSuccess(dynamic res) {
+    if (res == true) return true;
+    if (res is Map) {
+      final s = res['success'];
+      if (s == true) return true;
+      final status = (res['status'] ?? '').toString().toLowerCase();
+      if (status == 'success' || status == 'ok' || status == 'printed') {
+        return true;
+      }
+    }
+    return false;
+  }
+}

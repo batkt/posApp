@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/cart_model.dart';
-import '../models/product_model.dart';
-import '../theme/app_theme.dart';
-import '../widgets/cart_drawer.dart';
-import '../widgets/product_card.dart';
-import '../widgets/category_chip.dart';
+import '../../models/cart_model.dart';
+import '../../models/product_model.dart';
+import '../../widgets/cart_drawer.dart';
+import '../../widgets/product_card.dart';
+import '../../widgets/category_chip.dart';
 import 'checkout_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -256,4 +255,5 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
   }
+
 }

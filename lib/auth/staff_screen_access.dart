@@ -4,31 +4,30 @@ class StaffScreenAccess {
   const StaffScreenAccess({
     required this.hasFullAccess,
     required this.allowsKiosk,
+    required this.allowsMobile,
     required this.allowsPosSystem,
     required this.allowsAguulakh,
     required this.allowsKhariltsagch,
     required this.allowsDashboard,
     required this.allowsSalesHistory,
+    required this.allowsEbarimt,
   });
 
   /// Admin or no explicit permission map → treat as unrestricted (legacy / safe default).
   final bool hasFullAccess;
 
   final bool allowsKiosk;
+
+  /// Web route `/khyanalt/mobile` — phone/tablet POS without kiosk drawer or split cart.
+  final bool allowsMobile;
   final bool allowsPosSystem;
   final bool allowsAguulakh;
   final bool allowsKhariltsagch;
   final bool allowsDashboard;
   final bool allowsSalesHistory;
 
-  /// Kiosk shell first, but user may open full POS from the overflow menu.
-  bool get canOpenFullPosFromKiosk =>
-      !hasFullAccess &&
-      (allowsPosSystem ||
-          allowsAguulakh ||
-          allowsKhariltsagch ||
-          allowsSalesHistory ||
-          allowsDashboard);
+  /// Web route `/khyanalt/eBarimt` and similar (per-employee `tsonkhniiTokhirgoo`).
+  final bool allowsEbarimt;
 
   static StaffScreenAccess fromAjiltan(Map<String, dynamic>? data) {
     if (data == null) {
@@ -61,6 +60,9 @@ class StaffScreenAccess {
         match('kiosk') ||
         match('/khyanalt/kiosk') ||
         match('khyanalt/kiosk');
+    final mobile = full ||
+        match('/khyanalt/mobile') ||
+        match('khyanalt/mobile');
     final pos = full ||
         match('possystem') ||
         match('pos-system') ||
@@ -75,26 +77,31 @@ class StaffScreenAccess {
         match('jurnal') ||
         match('guilgee') ||
         match('borluulalt');
+    final ebarimt = full || match('ebarimt');
 
     return StaffScreenAccess(
       hasFullAccess: full,
       allowsKiosk: kiosk,
+      allowsMobile: mobile,
       allowsPosSystem: pos,
       allowsAguulakh: aguulakh,
       allowsKhariltsagch: khariltsagch,
       allowsDashboard: dashboard,
       allowsSalesHistory: history,
+      allowsEbarimt: ebarimt,
     );
   }
 
   static const StaffScreenAccess denied = StaffScreenAccess(
     hasFullAccess: false,
     allowsKiosk: false,
+    allowsMobile: false,
     allowsPosSystem: false,
     allowsAguulakh: false,
     allowsKhariltsagch: false,
     allowsDashboard: false,
     allowsSalesHistory: false,
+    allowsEbarimt: false,
   );
 
   static bool _truthy(dynamic v) {
