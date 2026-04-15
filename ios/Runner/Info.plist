@@ -54,5 +54,7 @@
 	</dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>PosEase-д нэвтрэхэд Face ID ашиглана.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Баркод уншихын тулд камер ашиглана.</string>
 </dict>
 </plist>

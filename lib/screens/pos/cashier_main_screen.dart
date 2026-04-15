@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../widgets/kiosk_drawer.dart';
-import '../main/login_screen.dart';
 import 'pos_screen.dart';
 
 /// Kiosk POS (`/khyanalt/kiosk`): same [POSScreen] as full app, plus drawer; electronic pay is **карт** (UniPOS CARD, not QPay).
@@ -66,49 +65,6 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            tooltip: l10n.tr('logout'),
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: () async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: Text(l10n.tr('logout')),
-                  content: Text(l10n.tr('logout_confirm_message')),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: Text(l10n.tr('cancel')),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colorScheme.error,
-                      ),
-                      child: Text(l10n.tr('logout')),
-                    ),
-                  ],
-                ),
-              );
-              if (confirm == true && context.mounted) {
-                await auth.logout();
-                if (context.mounted) {
-                  // Logout navigation is handled in [KioskDrawer] the same way;
-                  // keep app bar flow identical.
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => const LoginScreen(),
-                    ),
-                    (_) => false,
-                  );
-                }
-              }
-            },
-          ),
-          const SizedBox(width: 4),
-        ],
       ),
       body: const SafeArea(child: POSScreen(cashierMode: true)),
     );

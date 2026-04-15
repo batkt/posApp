@@ -7,20 +7,6 @@ import '../models/pos_session.dart';
 import '../models/sales_model.dart';
 import 'api_service.dart';
 
-/// POS backend (posBack) — same routes as Next.js `pos` (`posUilchilgee`).
-///
-/// **Гүйлгээ (guilgee)** — `POST /guilgeeniiTuukhKhadgalya` saves the sale, updates
-/// `aguulakh` stock, writes `orlogoZarlagiinTuukh`. Response body is the Mongo
-/// `_id` of the new `guilgeeniiTuukh` row when `tuluv === 1` (payment complete), or
-/// `{ guilgeeniiId }` when not fully paid.
-///
-/// **E-Баримт (ebarimt)** — **not** created inside `guilgeeniiTuukhKhadgalya`. The web
-/// POS calls `POST /ebarimtShivye` **after** a successful save (see
-/// `tulburTuluhModal.js`) with that Mongo id, `baiguullagiinId`, `salbariinId`, and
-/// `register` (empty string = иргэн / B2C). The route builds e-barimt payload from
-/// the saved sale and calls the tax PosAPI (unless the branch disables it). Branches
-/// that use **QPay + eBarimtShine** open a separate modal on web; this app mirrors
-/// the simple **иргэн** `ebarimtShivye` call after each completed API sale.
 class PosTransactionService {
   PosTransactionService({http.Client? httpClient})
       : _http = httpClient ?? http.Client();

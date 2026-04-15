@@ -14,6 +14,329 @@ import '../../widgets/authenticated_image.dart';
 
 String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 
+Widget _saleDetailPriceRow(
+  String label,
+  double amount,
+  TextTheme textTheme,
+  ColorScheme colorScheme, {
+  bool isTotal = false,
+  bool emphasize = true,
+}) {
+  return Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Text(
+        label,
+        style: isTotal
+            ? textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)
+            : textTheme.bodyMedium?.copyWith(
+                color: emphasize
+                    ? colorScheme.onSurfaceVariant
+                    : colorScheme.onSurface,
+              ),
+      ),
+      Text(
+        _fmtMnt(amount),
+        style: isTotal
+            ? textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: colorScheme.primary,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              )
+            : textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+      ),
+    ],
+  );
+}
+
+/// Sale line-item sheet: single scroll so header + lines + totals never overflow.
+void showPOSCompletedSaleSheet(
+  BuildContext context,
+  CompletedSale sale,
+  AppLocalizations l10n,
+) {
+  final colorScheme = Theme.of(context).colorScheme;
+  final textTheme = Theme.of(context).textTheme;
+  final staffCap = _saleStaffCaption(sale.ajiltan);
+
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) => DraggableScrollableSheet(
+      initialChildSize: 0.65,
+      maxChildSize: 0.92,
+      minChildSize: 0.38,
+      expand: false,
+      builder: (context, scrollController) {
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: CustomScrollView(
+            controller: scrollController,
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.check_circle_rounded,
+                        color: AppColors.success,
+                        size: 28,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          l10n.tr('sale_completed'),
+                          style: textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.tr('sales_history_order_no'),
+                        style: textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      SelectableText(
+                        sale.id,
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        () {
+                          final lang =
+                              Localizations.localeOf(context).languageCode;
+                          if (lang == 'mn') {
+                            return '${MongolianDateFormatter.formatShortDate(sale.timestamp)} · ${MongolianDateFormatter.formatTime(sale.timestamp)}';
+                          }
+                          return '${DateFormat.yMMMd().format(sale.timestamp)} · ${DateFormat.Hm().format(sale.timestamp)}';
+                        }(),
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      if (staffCap != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          l10n.tr('sales_history_staff'),
+                          style: textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        SelectableText(
+                          staffCap,
+                          style: textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  child: Material(
+                    color: colorScheme.primaryContainer.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(14),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l10n.tr('total'),
+                            style: textTheme.labelMedium?.copyWith(
+                              color: colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _fmtMnt(sale.total),
+                            style: textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: colorScheme.onPrimaryContainer,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            l10n
+                                .tr('receipt_qty_summary')
+                                .replaceAll(
+                                  '{pieces}',
+                                  '${sale.items.fold<int>(0, (s, i) => s + i.quantity)}',
+                                )
+                                .replaceAll(
+                                  '{lines}',
+                                  '${sale.items.length}',
+                                ),
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onPrimaryContainer,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 12)),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final item = sale.items[index];
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: AuthenticatedImage(
+                            imageUrl: item.product.imageUrl,
+                            width: 52,
+                            height: 52,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        title: Text(
+                          item.product.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '${item.quantity} × ${_fmtMnt(item.unitPrice)}',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        trailing: Text(
+                          _fmtMnt(item.total),
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures(),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                    childCount: sale.items.length,
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHighest,
+                    border: Border(
+                      top: BorderSide(color: colorScheme.outlineVariant),
+                    ),
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _saleDetailPriceRow(
+                          l10n.tr('subtotal'),
+                          sale.subtotal,
+                          textTheme,
+                          colorScheme,
+                        ),
+                        if (sale.discount > 0.009) ...[
+                          const SizedBox(height: 6),
+                          _saleDetailPriceRow(
+                            l10n.tr('discount'),
+                            sale.discount,
+                            textTheme,
+                            colorScheme,
+                            emphasize: false,
+                          ),
+                        ],
+                        if (sale.tax > 0.009) ...[
+                          const SizedBox(height: 6),
+                          _saleDetailPriceRow(
+                            l10n.tr('vat'),
+                            sale.tax,
+                            textTheme,
+                            colorScheme,
+                          ),
+                        ],
+                        if (sale.nhhat > 0.009) ...[
+                          const SizedBox(height: 6),
+                          _saleDetailPriceRow(
+                            l10n.tr('nhhat_label'),
+                            sale.nhhat,
+                            textTheme,
+                            colorScheme,
+                          ),
+                        ],
+                        const Divider(height: 20),
+                        _saleDetailPriceRow(
+                          l10n.tr('total'),
+                          sale.total,
+                          textTheme,
+                          colorScheme,
+                          isTotal: true,
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.tonal(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text(l10n.tr('sales_history_close_detail')),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
+
 /// Best-effort label from `guilgeeniiTuukh.ajiltan` (id/ner only on older rows).
 String? _saleStaffCaption(Map<String, dynamic>? a) {
   if (a == null || a.isEmpty) return null;
@@ -529,7 +852,7 @@ class _SaleCard extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => _showSaleDetails(context, sale, l10n),
+        onTap: () => showPOSCompletedSaleSheet(context, sale, l10n),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
           child: Column(
@@ -643,7 +966,7 @@ class _SaleCard extends StatelessWidget {
                     ),
                   ),
                   TextButton(
-                    onPressed: () => _showSaleDetails(context, sale, l10n),
+                    onPressed: () => showPOSCompletedSaleSheet(context, sale, l10n),
                     style: TextButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       minimumSize: Size.zero,
@@ -660,313 +983,4 @@ class _SaleCard extends StatelessWidget {
     );
   }
 
-  static void _showSaleDetails(
-    BuildContext context,
-    CompletedSale sale,
-    AppLocalizations l10n,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.65,
-        maxChildSize: 0.92,
-        minChildSize: 0.38,
-        expand: false,
-        builder: (context, scrollController) {
-          final staffCap = _saleStaffCaption(sale.ajiltan);
-          return DecoratedBox(
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.check_circle_rounded,
-                        color: AppColors.success,
-                        size: 28,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          l10n.tr('sale_completed'),
-                          style: textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.tr('sales_history_order_no'),
-                        style: textTheme.labelSmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      SelectableText(
-                        sale.id,
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        () {
-                          final lang =
-                              Localizations.localeOf(context).languageCode;
-                          if (lang == 'mn') {
-                            return '${MongolianDateFormatter.formatShortDate(sale.timestamp)} · ${MongolianDateFormatter.formatTime(sale.timestamp)}';
-                          }
-                          return '${DateFormat.yMMMd().format(sale.timestamp)} · ${DateFormat.Hm().format(sale.timestamp)}';
-                        }(),
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      if (staffCap != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          l10n.tr('sales_history_staff'),
-                          style: textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        SelectableText(
-                          staffCap,
-                          style: textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                  child: Material(
-                    color: colorScheme.primaryContainer.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(14),
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            l10n.tr('total'),
-                            style: textTheme.labelMedium?.copyWith(
-                              color: colorScheme.onPrimaryContainer,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _fmtMnt(sale.total),
-                            style: textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              color: colorScheme.onPrimaryContainer,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            l10n
-                                .tr('receipt_qty_summary')
-                                .replaceAll(
-                                  '{pieces}',
-                                  '${sale.items.fold<int>(0, (s, i) => s + i.quantity)}',
-                                )
-                                .replaceAll(
-                                  '{lines}',
-                                  '${sale.items.length}',
-                                ),
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onPrimaryContainer,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: ListView.builder(
-                    controller: scrollController,
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                    itemCount: sale.items.length,
-                    itemBuilder: (context, index) {
-                      final item = sale.items[index];
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: AuthenticatedImage(
-                            imageUrl: item.product.imageUrl,
-                            width: 52,
-                            height: 52,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        title: Text(
-                          item.product.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        subtitle: Text(
-                          '${item.quantity} × ${_fmtMnt(item.unitPrice)}',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        trailing: Text(
-                          _fmtMnt(item.total),
-                          style: textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            fontFeatures: const [
-                              FontFeature.tabularFigures(),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHighest,
-                    border: Border(
-                      top: BorderSide(color: colorScheme.outlineVariant),
-                    ),
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildPriceRow(
-                          l10n.tr('subtotal'),
-                          sale.subtotal,
-                          textTheme,
-                          colorScheme,
-                        ),
-                        if (sale.discount > 0.009) ...[
-                          const SizedBox(height: 6),
-                          _buildPriceRow(
-                            l10n.tr('discount'),
-                            sale.discount,
-                            textTheme,
-                            colorScheme,
-                            emphasize: false,
-                          ),
-                        ],
-                        if (sale.tax > 0.009) ...[
-                          const SizedBox(height: 6),
-                          _buildPriceRow(
-                            l10n.tr('vat'),
-                            sale.tax,
-                            textTheme,
-                            colorScheme,
-                          ),
-                        ],
-                        if (sale.nhhat > 0.009) ...[
-                          const SizedBox(height: 6),
-                          _buildPriceRow(
-                            l10n.tr('nhhat_label'),
-                            sale.nhhat,
-                            textTheme,
-                            colorScheme,
-                          ),
-                        ],
-                        const Divider(height: 20),
-                        _buildPriceRow(
-                          l10n.tr('total'),
-                          sale.total,
-                          textTheme,
-                          colorScheme,
-                          isTotal: true,
-                        ),
-                        const SizedBox(height: 12),
-                        FilledButton.tonal(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text(l10n.tr('sales_history_close_detail')),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  static Widget _buildPriceRow(
-    String label,
-    double amount,
-    TextTheme textTheme,
-    ColorScheme colorScheme, {
-    bool isTotal = false,
-    bool emphasize = true,
-  }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: isTotal
-              ? textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)
-              : textTheme.bodyMedium?.copyWith(
-                  color: emphasize
-                      ? colorScheme.onSurfaceVariant
-                      : colorScheme.onSurface,
-                ),
-        ),
-        Text(
-          _fmtMnt(amount),
-          style: isTotal
-              ? textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: colorScheme.primary,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                )
-              : textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-        ),
-      ],
-    );
-  }
 }

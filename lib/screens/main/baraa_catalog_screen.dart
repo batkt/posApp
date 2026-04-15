@@ -9,6 +9,7 @@ import '../../services/product_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/authenticated_image.dart';
+import '../../widgets/barcode_scan_sheet.dart';
 import 'baraa_detail_screen.dart';
 
 /// Read-only branch catalog: үнэ, үлдэгдэл, optional буцаалт/зарлага тоо (API-д байвал).
@@ -114,6 +115,16 @@ class _BaraaCatalogScreenState extends State<BaraaCatalogScreen> {
     return '$v';
   }
 
+  Future<void> _scanBarcodeToSearch(BuildContext context) async {
+    final code = await showBarcodeScanSheet(context);
+    final v = code?.trim();
+    if (v == null || v.isEmpty) return;
+    if (!context.mounted) return;
+    _search.text = v;
+    setState(() {});
+    await _reload();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -139,16 +150,25 @@ class _BaraaCatalogScreenState extends State<BaraaCatalogScreen> {
               decoration: InputDecoration(
                 hintText: l10n.tr('baraa_catalog_search_hint'),
                 prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: _search.text.isNotEmpty
-                    ? IconButton(
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Баркод унших',
+                      icon: const Icon(Icons.qr_code_scanner_rounded),
+                      onPressed: () => _scanBarcodeToSearch(context),
+                    ),
+                    if (_search.text.isNotEmpty)
+                      IconButton(
                         icon: const Icon(Icons.clear_rounded),
                         onPressed: () {
                           _search.clear();
                           setState(() {});
                           _reload();
                         },
-                      )
-                    : null,
+                      ),
+                  ],
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),

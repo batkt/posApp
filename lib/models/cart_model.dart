@@ -113,7 +113,21 @@ class Product {
     return fallback;
   }
 
+  /// Bar codes / codes often arrive as JSON numbers; scanners return strings.
+  static String? _asOptionalString(dynamic v) {
+    if (v == null) return null;
+    if (v is String) {
+      final t = v.trim();
+      return t.isEmpty ? null : t;
+    }
+    if (v is num) return v.toString();
+    final t = v.toString().trim();
+    return t.isEmpty ? null : t;
+  }
+
   factory Product.fromJson(Map<String, dynamic> json) {
+    final codeStr = _asOptionalString(json['code']);
+    final barCodeStr = _asOptionalString(json['barCode']);
     return Product(
       id: json['_id'] ?? '',
       name: json['ner'] ?? '',
@@ -124,15 +138,15 @@ class Product {
       imageUrl: json['zurgiinId'] != null
           ? 'https://pos.zevtabs.mn/api/file?path=baraa/${json['zurgiinId']}'
           : 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=400&fit=crop',
-      barcode: json['barCode'],
+      barcode: barCodeStr,
       stock: _asInt(json['uldegdel']),
       minStock: 5,
       isAvailable: json['idevkhteiEsekh'] ?? true,
       unit: ProductUnit.piece,
-      sku: json['code'],
+      sku: codeStr,
       // API fields
-      code: json['code'],
-      barCode: json['barCode'],
+      code: codeStr,
+      barCode: barCodeStr,
       baiguullagiinId: json['baiguullagiinId'],
       salbariinId: json['salbariinId'],
       angilal: json['angilal'],

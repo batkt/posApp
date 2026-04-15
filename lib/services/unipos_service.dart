@@ -12,15 +12,25 @@ class UniPosService {
     required double amount,
     String code = 'NormalPurchase',
     int originalId = 0,
+    /// Android applicationId of the bank terminal app when it is not `mn.genesis.unipos.terminal`.
+    String? terminalPackage,
   }) async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       return {'skipped': true, 'reason': 'not_android'};
     }
-    final raw = await _channel.invokeMethod<dynamic>('android.unipos.purchase', {
+    final args = <String, dynamic>{
       'amount': amount,
       'code': code,
       'originalId': originalId,
-    });
+    };
+    final pkg = terminalPackage?.trim();
+    if (pkg != null && pkg.isNotEmpty) {
+      args['packageName'] = pkg;
+    }
+    final raw = await _channel.invokeMethod<dynamic>(
+      'android.unipos.purchase',
+      args,
+    );
     return _parseResult(raw);
   }
 

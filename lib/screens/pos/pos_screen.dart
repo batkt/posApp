@@ -10,6 +10,7 @@ import '../../utils/responsive_helper.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import 'cashier_payment_screen.dart';
 import '../main/checkout_screen.dart';
+import '../../widgets/barcode_scan_sheet.dart';
 import '../../widgets/test_image_widget.dart';
 import '../../widgets/authenticated_image.dart';
 
@@ -125,6 +126,15 @@ class _POSScreenState extends State<POSScreen> {
             : const CheckoutScreen(),
       ),
     );
+  }
+
+  Future<void> _scanBarcodeToSearch(BuildContext context) async {
+    final code = await showBarcodeScanSheet(context);
+    final v = code?.trim();
+    if (v == null || v.isEmpty) return;
+    if (!context.mounted) return;
+    _searchController.text = v;
+    setState(() {});
   }
 
   @override
@@ -610,16 +620,30 @@ class _POSScreenState extends State<POSScreen> {
               hintText: 'Бүтээгдэхүүн хайх...',
               prefixIcon:
                   Icon(Icons.search, size: context.responsiveIconSize(24)),
-              suffixIcon: _searchController.text.isNotEmpty
-                  ? IconButton(
-                      icon: Icon(Icons.clear,
-                          size: context.responsiveIconSize(20)),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Баркод унших',
+                    icon: Icon(
+                      Icons.qr_code_scanner_rounded,
+                      size: context.responsiveIconSize(22),
+                    ),
+                    onPressed: () => _scanBarcodeToSearch(context),
+                  ),
+                  if (_searchController.text.isNotEmpty)
+                    IconButton(
+                      icon: Icon(
+                        Icons.clear,
+                        size: context.responsiveIconSize(20),
+                      ),
                       onPressed: () {
                         _searchController.clear();
                         setState(() {});
                       },
-                    )
-                  : null,
+                    ),
+                ],
+              ),
             ),
           ),
           SizedBox(height: context.spacing),
@@ -719,16 +743,22 @@ class _POSScreenState extends State<POSScreen> {
           return matchesCategory && matchesSearch;
         }).toList();
 
-        bool shelfActive(InventoryItem i) =>
-            i.product.isAvailable && i.currentStock > 0;
+        // Keep rows that are still in the *current* sale with in-stock items until the
+        // sale is cleared; only then sort true out-of-stock to the bottom.
+        bool gridShelfSortActive(InventoryItem i) {
+          if (!i.product.isAvailable) return false;
+          final inThisSale = _saleQtyForProduct(sales, i.product.id);
+          return i.currentStock > 0 || inThisSale > 0;
+        }
+
         DateTime stamp(InventoryItem i) =>
             i.product.updatedAt ??
             i.product.createdAt ??
             i.lastRestocked ??
             DateTime.fromMillisecondsSinceEpoch(0);
         products.sort((a, b) {
-          final aa = shelfActive(a);
-          final ab = shelfActive(b);
+          final aa = gridShelfSortActive(a);
+          final ab = gridShelfSortActive(b);
           if (aa != ab) return aa ? -1 : 1;
           if (!aa) return stamp(b).compareTo(stamp(a));
           return a.product.name.compareTo(b.product.name);
@@ -777,19 +807,22 @@ class _POSScreenState extends State<POSScreen> {
               key: ValueKey(item.product.id),
               item: item,
               inSaleQuantity: inSale,
-              onTap: () {
-                if (item.currentStock > 0) {
-                  sales.addToSale(item.product);
-                  inventory.deductStock(item.product.id, 1);
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Бүтээгдэхүүн дууссан'),
-                      backgroundColor: AppColors.error,
-                    ),
-                  );
-                }
-              },
+              onTap: (item.currentStock > 0 || inSale > 0)
+                  ? () {
+                      if (item.currentStock > 0) {
+                        sales.addToSale(item.product);
+                        inventory.deductStock(item.product.id, 1);
+                      }
+                      // Shelf is 0 but line still in cart: no reorder/jump; long-press to remove.
+                    }
+                  : () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Бүтээгдэхүүн дууссан'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    },
               onRemoveOneFromSale: inSale > 0
                   ? () {
                       inventory.restock(item.product.id, 1);
@@ -1219,7 +1252,7 @@ class _ProductCard extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: item.isOutOfStock ? null : onTap,
+        onTap: (item.isOutOfStock && !inCart) ? null : onTap,
         onLongPress: (inCart && onRemoveOneFromSale != null)
             ? onRemoveOneFromSale
             : null,
@@ -1255,7 +1288,7 @@ class _ProductCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (item.isOutOfStock)
+                  if (item.isOutOfStock && !inCart)
                     Container(
                       color: Colors.black54,
                       alignment: Alignment.center,

@@ -214,6 +214,7 @@ CompletedSale completedSaleFromGuilgeeDoc(Map<String, dynamic> doc) {
     discount: hungulsunDun,
     nhhat: nhatiinDun,
     ajiltan: _ajiltanFromDoc(doc['ajiltan']),
+    ebarimtAvsan: doc['ebarimtAvsanEsekh'] == true,
   );
 }
 

@@ -2,6 +2,7 @@ package com.example.pos_app
 
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -11,6 +12,7 @@ import android.util.Base64
 import org.json.JSONObject
 import java.lang.ClassNotFoundException
 import java.lang.IllegalStateException
+import java.util.Locale
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -18,7 +20,13 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
     private val channelName = "com.example.pos_app"
-    private val uniPosPackage = "mn.genesis.unipos.terminal"
+    /**
+     * Known UniPOS package ids; [resolveUniPosTargetPackage] also scans SEND text/plain handlers
+     * so other bank/PAX-shipped terminal apps can be found without hardcoding every id.
+     */
+    private val uniPosPackageCandidates = listOf(
+        "mn.genesis.unipos.terminal",
+    )
     private val uniPosRequestCode = 9301
     private var pendingUniPosResult: MethodChannel.Result? = null
 
@@ -76,7 +84,8 @@ class MainActivity : FlutterFragmentActivity() {
                                 put("command", "PURCHASE")
                                 put("purchase", purchaseJson)
                             }
-                            launchUniPos(requestJson.toString(), result)
+                            val preferred = call.argument<String>("packageName")
+                            launchUniPos(requestJson.toString(), result, preferred)
                         } catch (e: Throwable) {
                             result.error("UNIPOS_ERROR", e.message, null)
                         }
@@ -93,40 +102,110 @@ class MainActivity : FlutterFragmentActivity() {
                                 put("command", "VOID")
                                 put("invoiceNo", invoiceNo)
                             }
-                            launchUniPos(requestJson.toString(), result)
+                            val preferred = call.argument<String>("packageName")
+                            launchUniPos(requestJson.toString(), result, preferred)
                         } catch (e: Throwable) {
                             result.error("UNIPOS_ERROR", e.message, null)
                         }
                     }
                     "android.unipos.settlement" -> {
+                        val preferred = call.argument<String>("packageName")
                         val requestJson = JSONObject().apply {
                             put("command", "SETTLEMENT")
                         }
-                        launchUniPos(requestJson.toString(), result)
+                        launchUniPos(requestJson.toString(), result, preferred)
                     }
                     else -> result.notImplemented()
                 }
             }
     }
 
-    private fun launchUniPos(request: String, result: MethodChannel.Result) {
+    private fun launchUniPos(
+        request: String,
+        result: MethodChannel.Result,
+        preferredPackage: String? = null,
+    ) {
         if (pendingUniPosResult != null) {
             result.error("BUSY", "UniPOS request already in progress", null)
+            return
+        }
+        val targetPackage = resolveUniPosTargetPackage(preferredPackage)
+        if (targetPackage == null) {
+            result.error(
+                "UNIPOS_NOT_FOUND",
+                "No UniPOS / card terminal app found. Install UniPOS or pass packageName from the app.",
+                null,
+            )
             return
         }
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, request)
-            setPackage(uniPosPackage)
+            setPackage(targetPackage)
         }
         val canResolve = intent.resolveActivity(packageManager) != null
         if (!canResolve) {
-            result.error("UNIPOS_NOT_FOUND", "UniPOS app is not installed", null)
+            result.error(
+                "UNIPOS_NOT_FOUND",
+                "Terminal package $targetPackage cannot handle payment intent.",
+                null,
+            )
             return
         }
         pendingUniPosResult = result
         @Suppress("DEPRECATION")
         startActivityForResult(intent, uniPosRequestCode)
+    }
+
+    private fun resolveUniPosTargetPackage(preferred: String?): String? {
+        val mine = applicationContext.packageName
+        val ordered = mutableListOf<String>()
+        preferred?.trim()?.takeIf { it.isNotEmpty() }?.let { ordered.add(it) }
+        ordered.addAll(uniPosPackageCandidates)
+        for (pkg in ordered.distinct()) {
+            if (pkg == mine) continue
+            if (isPackageInstalled(pkg) && canUniPosHandleSend(pkg)) return pkg
+        }
+        return discoverUniPosFromSendHandlers(mine)
+    }
+
+    private fun isPackageInstalled(packageName: String): Boolean {
+        return try {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, 0)
+            true
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
+
+    private fun canUniPosHandleSend(packageName: String): Boolean {
+        val probe = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            setPackage(packageName)
+        }
+        return probe.resolveActivity(packageManager) != null
+    }
+
+    private fun discoverUniPosFromSendHandlers(excludePackage: String): String? {
+        val probe = Intent(Intent.ACTION_SEND).apply { type = "text/plain" }
+        val infos = packageManager.queryIntentActivities(
+            probe,
+            PackageManager.MATCH_DEFAULT_ONLY,
+        )
+        return infos.asSequence()
+            .map { it.activityInfo.packageName }
+            .distinct()
+            .filter { it != excludePackage }
+            .filter { isLikelyUniPosPackage(it) }
+            .firstOrNull { canUniPosHandleSend(it) }
+    }
+
+    private fun isLikelyUniPosPackage(pkg: String): Boolean {
+        val p = pkg.lowercase(Locale.US)
+        if (p.contains("unipos")) return true
+        if (p.contains("genesis") && p.contains("terminal")) return true
+        return false
     }
 
     @Suppress("DEPRECATION")

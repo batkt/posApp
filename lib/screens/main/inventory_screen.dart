@@ -4,6 +4,7 @@ import '../../models/inventory_model.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/authenticated_image.dart';
+import '../../widgets/barcode_scan_sheet.dart';
 import 'baraa_detail_screen.dart';
 
 class InventoryScreen extends StatefulWidget {
@@ -20,6 +21,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _scanBarcodeToSearch(BuildContext context) async {
+    final code = await showBarcodeScanSheet(context);
+    final v = code?.trim();
+    if (v == null || v.isEmpty) return;
+    if (!context.mounted) return;
+    _searchController.text = v;
+    context.read<InventoryModel>().setSearchQuery(v);
+    setState(() {});
   }
 
   @override
@@ -48,22 +59,33 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 TextField(
                   controller: _searchController,
                   onChanged: (value) {
+                    setState(() {});
                     context.read<InventoryModel>().setSearchQuery(value);
                   },
                   decoration: InputDecoration(
                     hintText: 'Нэр эсвэл кодоор хайх...',
                     prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Баркод унших',
+                          icon: const Icon(Icons.qr_code_scanner_rounded),
+                          onPressed: () => _scanBarcodeToSearch(context),
+                        ),
+                        if (_searchController.text.isNotEmpty)
+                          IconButton(
                             icon: const Icon(Icons.clear),
                             onPressed: () {
                               _searchController.clear();
                               context
                                   .read<InventoryModel>()
                                   .setSearchQuery('');
+                              setState(() {});
                             },
-                          )
-                        : null,
+                          ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -362,16 +384,12 @@ class _InventoryItemTile extends StatelessWidget {
     final product = item.product;
 
     Color stockColor;
-    String stockLabel;
     if (item.isOutOfStock) {
       stockColor = AppColors.error;
-      stockLabel = 'Дууссан';
     } else if (item.isLowStock) {
       stockColor = AppColors.warning;
-      stockLabel = 'Цөөн үлдсэн';
     } else {
       stockColor = AppColors.success;
-      stockLabel = 'Бэлэн';
     }
 
     return Card(

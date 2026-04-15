@@ -47,6 +47,9 @@ class CompletedSale {
   /// Staff snapshot from `guilgeeniiTuukh` / local completion (if available).
   final Map<String, dynamic>? ajiltan;
 
+  /// From `guilgee.ebarimtAvsanEsekh` when loaded from POS API.
+  final bool ebarimtAvsan;
+
   CompletedSale({
     required this.id,
     required this.items,
@@ -59,6 +62,7 @@ class CompletedSale {
     this.discount = 0,
     this.nhhat = 0,
     this.ajiltan,
+    this.ebarimtAvsan = false,
   });
 
   double get netSubtotal => (subtotal - discount).clamp(0.0, double.infinity);

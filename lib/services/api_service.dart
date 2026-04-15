@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import '../models/auth_model.dart';
 
 class ApiConfig {
   // Production
@@ -113,6 +112,7 @@ class ApiService {
     String endpoint, {
     required Map<String, dynamic> body,
     T Function(dynamic)? parser,
+    Duration? timeout,
   }) async {
     try {
       final uri = Uri.parse('$baseUrl$endpoint');
@@ -123,7 +123,7 @@ class ApiService {
             headers: _getHeaders(),
             body: jsonEncode(body),
           )
-          .timeout(ApiConfig.timeout);
+          .timeout(timeout ?? ApiConfig.timeout);
 
       return _handleResponse(response, parser);
     } on SocketException catch (e) {
@@ -186,10 +186,25 @@ class ApiService {
     final statusCode = response.statusCode;
 
     if (statusCode >= 200 && statusCode < 300) {
-      final json = jsonDecode(response.body);
-      return ApiResponse(
+      final raw = response.body;
+      if (raw.isEmpty) {
+        return ApiResponse<T>(
+          success: true,
+          data: null,
+          statusCode: statusCode,
+        );
+      }
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(raw);
+      } catch (_) {
+        decoded = raw;
+      }
+      return ApiResponse<T>(
         success: true,
-        data: parser != null && json != null ? parser(json) : json as T?,
+        data: parser != null && decoded != null
+            ? parser(decoded)
+            : decoded as T?,
         statusCode: statusCode,
       );
     } else if (statusCode == 401) {
