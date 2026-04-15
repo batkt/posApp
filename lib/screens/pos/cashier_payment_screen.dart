@@ -15,11 +15,11 @@ import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/qpay_invoice_dialog.dart';
 import '../shared/receipt_screen.dart';
 
-/// Kiosk uses UniPOS card; mobile staff uses merchant QPay API (same as web).
+/// Default cashier terminal: UniPOS card (kiosk and mobile staff).
 enum CashierTerminalPaymentMode {
-  /// Kiosk POS: UniPOS `CARD` only (no terminal QPay).
+  /// UniPOS `CARD` only (no terminal QPay).
   cardOnly,
-  /// Mobile: `/qpayGargaya` + QR + `/qpayShalgakh` — no UniPOS.
+  /// Merchant QPay API (`/qpayGargaya` …) instead of UniPOS — optional / legacy.
   qpayOnly,
 }
 
@@ -31,7 +31,7 @@ class CashierPaymentScreen extends StatefulWidget {
     this.terminalMode = CashierTerminalPaymentMode.cardOnly,
   });
 
-  /// [CashierTerminalPaymentMode.cardOnly] for kiosk; [qpayOnly] for `/khyanalt/mobile`.
+  /// [CashierTerminalPaymentMode.cardOnly] for UniPOS card (kiosk and mobile staff).
   final CashierTerminalPaymentMode terminalMode;
 
   @override

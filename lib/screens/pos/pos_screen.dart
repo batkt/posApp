@@ -32,7 +32,7 @@ class POSScreen extends StatefulWidget {
   /// When true, embedded under kiosk [CashierMainScreen] or mobile [MobilePosMainScreen] (no scaffold).
   final bool cashierMode;
 
-  /// `/khyanalt/mobile` staff only: two-step layout; QPay = web QuickQpay flow (no UniPOS).
+  /// `/khyanalt/mobile` staff only: two-step layout (same UniPOS card flow as kiosk).
   final bool mobileStaffMode;
 
   @override
@@ -118,10 +118,8 @@ class _POSScreenState extends State<POSScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => useCashierPayment
-            ? CashierPaymentScreen(
-                terminalMode: widget.mobileStaffMode
-                    ? CashierTerminalPaymentMode.qpayOnly
-                    : CashierTerminalPaymentMode.cardOnly,
+            ? const CashierPaymentScreen(
+                terminalMode: CashierTerminalPaymentMode.cardOnly,
               )
             : const CheckoutScreen(),
       ),

@@ -13,6 +13,7 @@ import '../../services/toololt_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
+import '../../widgets/barcode_scan_sheet.dart';
 
 /// Holds dialog search string across [StatefulBuilder] rebuilds.
 class _SearchHolder {
@@ -64,6 +65,20 @@ class _ToololtScreenState extends State<ToololtScreen> {
       });
       _refresh();
     });
+  }
+
+  Future<void> _scanBarcodeToSearch(BuildContext context) async {
+    final code = await showBarcodeScanSheet(context);
+    final v = code?.trim();
+    if (v == null || v.isEmpty) return;
+    if (!context.mounted) return;
+    _searchDebounce?.cancel();
+    _searchController.text = v;
+    setState(() {
+      _lineSearch = v;
+      _activePage = 1;
+    });
+    await _refreshAndWait();
   }
 
   Future<_ToololtScreenData> _load() async {
@@ -181,38 +196,146 @@ class _ToololtScreenState extends State<ToololtScreen> {
   }
 
   Future<void> _showLineInfoModal(ToololtBaraaLine line) async {
-    await showDialog<void>(
+    await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
       builder: (ctx) {
+        final colorScheme = Theme.of(ctx).colorScheme;
         final textTheme = Theme.of(ctx).textTheme;
-        return AlertDialog(
-          title: Text(line.ner),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                '${line.code}${line.barCode != null && line.barCode!.isNotEmpty ? ' · ${line.barCode}' : ''}',
-                style: textTheme.bodySmall,
-              ),
-              const SizedBox(height: 12),
-              _PriceRow(
-                label: 'Худалдах Үнэ',
-                value: MntAmountFormatter.formatTugrik(line.negjKhudaldakhUne),
-              ),
-              const SizedBox(height: 8),
-              _PriceRow(
-                label: 'Нэгж өртөг',
-                value: MntAmountFormatter.formatTugrik(line.negjUrtugUne),
-              ),
-            ],
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(MaterialLocalizations.of(ctx).closeButtonLabel),
+        final bottomInset = MediaQuery.viewInsetsOf(ctx).bottom;
+        final z = line.zoruu;
+        final zParts = <String>[];
+        if (z != null) {
+          void addIf(String label, dynamic v) {
+            if (v == null) return;
+            final n = v is num ? v.toDouble() : double.tryParse(v.toString());
+            if (n == null || n == 0) return;
+            zParts.add('$label: ${MntAmountFormatter.format(n)}');
+          }
+
+          addIf('Дутуу', z['dutuuToo']);
+          addIf('Илүү', z['iluuToo']);
+        }
+
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Барааны мэдээлэл',
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  line.ner,
+                  style: textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (line.code.isNotEmpty)
+                      Chip(
+                        avatar: Icon(
+                          Icons.tag_rounded,
+                          size: 18,
+                          color: colorScheme.primary,
+                        ),
+                        label: Text('Код: ${line.code}'),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    if (line.barCode != null && line.barCode!.trim().isNotEmpty)
+                      Chip(
+                        avatar: Icon(
+                          Icons.qr_code_2_rounded,
+                          size: 18,
+                          color: colorScheme.primary,
+                        ),
+                        label: Text('Баркод: ${line.barCode}'),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                GridView.count(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  childAspectRatio: 1.85,
+                  children: [
+                    _ToololtMetricTile(
+                      label: 'Үлдэгдэл',
+                      value: MntAmountFormatter.format(line.etssiinUldegdel),
+                    ),
+                    _ToololtMetricTile(
+                      label: 'Тоолсон',
+                      value: MntAmountFormatter.format(line.toolsonToo),
+                    ),
+                    _ToololtMetricTile(
+                      label: 'Худалдах үнэ',
+                      value: MntAmountFormatter.formatTugrik(line.negjKhudaldakhUne),
+                    ),
+                    _ToololtMetricTile(
+                      label: 'Нэгж өртөг',
+                      value: MntAmountFormatter.formatTugrik(line.negjUrtugUne),
+                    ),
+                  ],
+                ),
+                if (zParts.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  Material(
+                    color: colorScheme.errorContainer.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: colorScheme.error,
+                            size: 22,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              zParts.join(' · '),
+                              style: textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurface,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(MaterialLocalizations.of(ctx).closeButtonLabel),
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
@@ -314,17 +437,22 @@ class _ToololtScreenState extends State<ToololtScreen> {
       appBar: AppBar(
         title: Text(l10n.tr('menu_toololt')),
       ),
-      floatingActionButton: FutureBuilder<_ToololtScreenData>(
+      bottomNavigationBar: FutureBuilder<_ToololtScreenData>(
         future: _future,
         builder: (context, snap) {
           final d = snap.data;
           final hasActive =
               d != null && d.active.success && d.active.hasActive;
           if (hasActive) return const SizedBox.shrink();
-          return FloatingActionButton.extended(
-            onPressed: _openStartSheet,
-            icon: const Icon(Icons.add_rounded),
-            label: Text(l10n.tr('toololt_start_count')),
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: FilledButton.icon(
+                onPressed: _openStartSheet,
+                icon: const Icon(Icons.add_rounded),
+                label: Text(l10n.tr('toololt_start_count')),
+              ),
+            ),
           );
         },
       ),
@@ -359,7 +487,10 @@ class _ToololtScreenState extends State<ToololtScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     child: TextField(
                       controller: _searchController,
-                      onChanged: _scheduleSearch,
+                      onChanged: (v) {
+                        setState(() {});
+                        _scheduleSearch(v);
+                      },
                       onSubmitted: (v) {
                         _searchDebounce?.cancel();
                         if (!mounted) return;
@@ -372,6 +503,29 @@ class _ToololtScreenState extends State<ToololtScreen> {
                       decoration: InputDecoration(
                         hintText: l10n.tr('toololt_search_lines'),
                         prefixIcon: const Icon(Icons.search_rounded),
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Баркод унших',
+                              icon: const Icon(Icons.qr_code_scanner_rounded),
+                              onPressed: () => _scanBarcodeToSearch(context),
+                            ),
+                            if (_searchController.text.isNotEmpty)
+                              IconButton(
+                                icon: const Icon(Icons.clear_rounded),
+                                onPressed: () {
+                                  _searchDebounce?.cancel();
+                                  _searchController.clear();
+                                  setState(() {
+                                    _lineSearch = '';
+                                    _activePage = 1;
+                                  });
+                                  _refresh();
+                                },
+                              ),
+                          ],
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -425,7 +579,7 @@ class _ToololtScreenState extends State<ToololtScreen> {
                       onComplete: () => _confirmComplete(session),
                       onCancel: () => _confirmCancel(session),
                       activePage: _activePage,
-                      totalPages: session.niitKhuudas < 1 ? 1 : session.niitKhuudas,
+                      totalPages: session.totalPageCount,
                       onPrevPage: session.khuudasniiDugaar > 1
                           ? () {
                               setState(() {
@@ -434,7 +588,7 @@ class _ToololtScreenState extends State<ToololtScreen> {
                               _refresh();
                             }
                           : null,
-                      onNextPage: session.khuudasniiDugaar < session.niitKhuudas
+                      onNextPage: session.khuudasniiDugaar < session.totalPageCount
                           ? () {
                               setState(() {
                                 _activePage = session.khuudasniiDugaar + 1;
@@ -589,7 +743,7 @@ class _ToololtScreenState extends State<ToololtScreen> {
                       );
                     },
                   ),
-                const SliverToBoxAdapter(child: SizedBox(height: 88)),
+                const SliverToBoxAdapter(child: SizedBox(height: 120)),
               ],
             ),
           );
@@ -679,16 +833,20 @@ class _ActiveCountCard extends StatelessWidget {
   }
 
   double _lineCostTotal(ToololtBaraaLine line) {
-    final z = line.zoruu;
-    if (z == null) return 0;
     final qty = line.toolsonToo;
-    final unitCost =
-        _asNum(z['negjUrtug']) > 0
-            ? _asNum(z['negjUrtug'])
-            : _asNum(z['urtugUne']) > 0
-            ? _asNum(z['urtugUne'])
-            : _asNum(z['costPrice']);
-    if (unitCost <= 0 || qty <= 0) return 0;
+    if (qty <= 0) return 0;
+    // Primary: `urtugUne` parsed into [ToololtBaraaLine.negjUrtugUne] in fromJson.
+    var unitCost = line.negjUrtugUne;
+    if (unitCost <= 0) {
+      final z = line.zoruu;
+      if (z == null) return 0;
+      unitCost = _asNum(z['urtugUne']) > 0
+          ? _asNum(z['urtugUne'])
+          : _asNum(z['negjUrtug']) > 0
+          ? _asNum(z['negjUrtug'])
+          : _asNum(z['costPrice']);
+    }
+    if (unitCost <= 0) return 0;
     return unitCost * qty;
   }
 
@@ -715,26 +873,17 @@ class _ActiveCountCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      session.ner.isNotEmpty ? session.ner : session.turul,
-                      style: textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  session.ner.isNotEmpty ? session.ner : session.turul,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
                   ),
-                  TextButton(
-                    onPressed: onCancel,
-                    child: Text(l10n.tr('toololt_cancel_count')),
-                  ),
-                  const SizedBox(width: 4),
-                  FilledButton(
-                    onPressed: onComplete,
-                    child: Text(l10n.tr('toololt_complete')),
-                  ),
-                ],
+                ),
               ),
               const SizedBox(height: 12),
               GridView.count(
@@ -769,7 +918,8 @@ class _ActiveCountCard extends StatelessWidget {
                   final h = MediaQuery.sizeOf(context).height;
                   final tableHeight = (h * 0.32).clamp(220.0, 420.0);
                   final tight = constraints.maxWidth < 380;
-                  final fieldPad = tight ? 6.0 : 8.0;
+                  final fieldHPad = tight ? 4.0 : 6.0;
+                  final fieldVPad = tight ? 2.0 : 4.0;
 
                   return Column(
                     children: [
@@ -791,7 +941,7 @@ class _ActiveCountCard extends StatelessWidget {
                               width: m.indexWidth,
                               child: Text(
                                 '№',
-                                textAlign: TextAlign.center,
+                                textAlign: TextAlign.start,
                                 style: textTheme.labelMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -801,6 +951,7 @@ class _ActiveCountCard extends StatelessWidget {
                               flex: m.nameFlex,
                               child: Text(
                                 'Нэр',
+                                textAlign: TextAlign.start,
                                 style: textTheme.labelMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -810,7 +961,7 @@ class _ActiveCountCard extends StatelessWidget {
                               flex: m.stockFlex,
                               child: Text(
                                 'Үлдэгдэл',
-                                textAlign: TextAlign.right,
+                                textAlign: TextAlign.center,
                                 style: textTheme.labelMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -820,7 +971,7 @@ class _ActiveCountCard extends StatelessWidget {
                               flex: m.countFlex,
                               child: Text(
                                 'Тоолсон',
-                                textAlign: TextAlign.right,
+                                textAlign: TextAlign.center,
                                 style: textTheme.labelMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -855,7 +1006,7 @@ class _ActiveCountCard extends StatelessWidget {
                                         width: m.indexWidth,
                                         child: Text(
                                           '${i + 1}',
-                                          textAlign: TextAlign.center,
+                                          textAlign: TextAlign.start,
                                           style: textTheme.labelMedium?.copyWith(
                                             fontWeight: FontWeight.w700,
                                             color: colorScheme.onSurfaceVariant,
@@ -866,6 +1017,7 @@ class _ActiveCountCard extends StatelessWidget {
                                         flex: m.nameFlex,
                                         child: Text(
                                           line.ner,
+                                          textAlign: TextAlign.start,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: textTheme.bodyMedium?.copyWith(
@@ -879,7 +1031,7 @@ class _ActiveCountCard extends StatelessWidget {
                                           MntAmountFormatter.format(
                                             line.etssiinUldegdel,
                                           ),
-                                          textAlign: TextAlign.right,
+                                          textAlign: TextAlign.center,
                                           style: textTheme.bodyMedium,
                                         ),
                                       ),
@@ -892,6 +1044,7 @@ class _ActiveCountCard extends StatelessWidget {
                                           initialValue: MntAmountFormatter.format(
                                             line.toolsonToo,
                                           ),
+                                          style: textTheme.bodySmall,
                                           keyboardType:
                                               const TextInputType.numberWithOptions(
                                             decimal: true,
@@ -901,12 +1054,12 @@ class _ActiveCountCard extends StatelessWidget {
                                               RegExp(r'[0-9.,]'),
                                             ),
                                           ],
-                                          textAlign: TextAlign.right,
+                                          textAlign: TextAlign.center,
                                           decoration: InputDecoration(
                                             isDense: true,
                                             contentPadding: EdgeInsets.symmetric(
-                                              horizontal: fieldPad,
-                                              vertical: fieldPad,
+                                              horizontal: fieldHPad,
+                                              vertical: fieldVPad,
                                             ),
                                             border: const OutlineInputBorder(),
                                           ),
@@ -956,38 +1109,28 @@ class _ActiveCountCard extends StatelessWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: onCancel,
+                      child: Text(l10n.tr('toololt_cancel_count')),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: onComplete,
+                      child: Text(l10n.tr('toololt_complete')),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
       ),
-    );
-  }
-}
-
-class _PriceRow extends StatelessWidget {
-  const _PriceRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        Text(
-          value,
-          style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-        ),
-      ],
     );
   }
 }

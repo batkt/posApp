@@ -7,8 +7,7 @@ import '../../widgets/kiosk_drawer.dart';
 import '../pos/pos_screen.dart';
 
 /// Staff with only `/khyanalt/mobile` in `tsonkhniiTokhirgoo`: same sale flow as kiosk
-/// but no side drawer, two-step layout, and Бэлэн / **QPay** (merchant QR, `/qpayGargaya`) / Данс.
-/// Kiosk uses Бэлэн / **Карт** (UniPOS) / Данс.
+/// but no side drawer, two-step layout, and Бэлэн / **Карт** (UniPOS) / Данс.
 class MobilePosMainScreen extends StatefulWidget {
   const MobilePosMainScreen({super.key});
 

@@ -311,6 +311,8 @@ class ToololtBaraaLine {
     if (zv is Map) {
       z = Map<String, dynamic>.from(zv);
     }
+    final urtugUne = num_(d['urtugUne']);
+    final negjUrtugLegacy = num_(d['negjUrtugUne']);
     return ToololtBaraaLine(
       code: d['code']?.toString() ?? '',
       ner: d['ner']?.toString() ?? '',
@@ -318,7 +320,7 @@ class ToololtBaraaLine {
       etssiinUldegdel: num_(d['etssiinUldegdel']),
       toolsonToo: num_(d['toolsonToo']),
       negjKhudaldakhUne: num_(d['negjKhudaldakhUne']),
-      negjUrtugUne: num_(d['negjUrtugUne']),
+      negjUrtugUne: urtugUne > 0 ? urtugUne : negjUrtugLegacy,
       zoruu: z,
     );
   }
@@ -354,6 +356,13 @@ class ToololtActiveSession {
   final double niitMungunDun;
   final DateTime? ekhlekhOgnoo;
   final DateTime? duusakhOgnoo;
+
+  /// Total pages for [niitMur] lines at [khuudasniiKhemjee] per page.
+  /// posBack sends `niitKhuudas` as `floor(niitMur / pageSize)` which is one short when remainder > 0.
+  int get totalPageCount {
+    if (niitMur <= 0 || khuudasniiKhemjee <= 0) return 1;
+    return (niitMur + khuudasniiKhemjee - 1) ~/ khuudasniiKhemjee;
+  }
 
   static String _readId(Map<String, dynamic> d) {
     final id = d['_id'];
