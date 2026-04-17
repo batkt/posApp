@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -10,9 +9,7 @@ import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../data/payment_display_config.dart';
 import '../../models/cart_model.dart';
-import '../../models/locale_model.dart';
 import '../../services/printer_service.dart';
-import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
 
@@ -36,9 +33,6 @@ class ReceiptScreen extends StatelessWidget {
 
   String get _paymentMethodName => PaymentDisplayConfig.labelMn(paymentMethod);
 
-  IconData get _paymentMethodIcon =>
-      PaymentDisplayConfig.iconForMethod(paymentMethod);
-
   void _startNewOrder(BuildContext context) {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
@@ -52,6 +46,21 @@ class ReceiptScreen extends StatelessWidget {
   }
 
   static String _str(dynamic v) => (v ?? '').toString().trim();
+
+  static List<Map<String, dynamic>> _extractEbarimtItems(
+      Map<String, dynamic>? e) {
+    if (e == null) return const [];
+    for (final key in const ['items', 'products', 'baraanuud', 'details']) {
+      final raw = e[key];
+      if (raw is List) {
+        return raw
+            .whereType<Map>()
+            .map((m) => Map<String, dynamic>.from(m))
+            .toList();
+      }
+    }
+    return const [];
+  }
 
   Future<void> _printOnPaxDevice(
     BuildContext context, {
@@ -70,7 +79,16 @@ class ReceiptScreen extends StatelessWidget {
         throw Exception('Unable to render print image');
       }
       final Uint8List pngBytes = byteData.buffer.asUint8List();
-      final result = await PrinterService.printReceiptImage(pngBytes);
+      final e = ebarimt;
+      final totalAmount =
+          _num(e?['amount']) > 0 ? _num(e?['amount']) : _num(e?['totalAmount']);
+      final dbRefNo =
+          _str(e?['billId']).isNotEmpty ? _str(e?['billId']) : _str(e?['id']);
+      final result = await PrinterService.printReceiptImage(
+        pngBytes,
+        amount: totalAmount > 0 ? totalAmount : total,
+        dbRefNo: dbRefNo.isNotEmpty ? dbRefNo : orderNumber,
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -133,12 +151,6 @@ class ReceiptScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final l10n = AppLocalizations.of(context);
-    final pieceCount = items.fold<int>(0, (sum, item) => sum + item.quantity);
-    final qtySummary = l10n
-        .tr('receipt_qty_summary')
-        .replaceAll('{pieces}', '$pieceCount')
-        .replaceAll('{lines}', '${items.length}');
     final e = ebarimt;
     final totalAmount =
         _num(e?['amount']) > 0 ? _num(e?['amount']) : _num(e?['totalAmount']);
@@ -152,10 +164,13 @@ class ReceiptScreen extends StatelessWidget {
             ? 'ААН'
             : 'Иргэн';
     final ebarimtDate = _str(e?['date']);
+    final ebarimtBillId =
+        _str(e?['billId']).isNotEmpty ? _str(e?['billId']) : _str(e?['id']);
+    final ebarimtRegister = _str(e?['register']);
+    final ebarimtCustomerTin = _str(e?['customerTin']);
+    final ebarimtLottery = _str(e?['lottery']);
+    final ebarimtItems = _extractEbarimtItems(e);
     final qrData = _str(e?['qrData']);
-    final vatShare = totalAmount > 0
-        ? ((totalVat + totalCityTax) / totalAmount).clamp(0.0, 1.0)
-        : 0.0;
 
     return Scaffold(
       body: SafeArea(
@@ -166,75 +181,6 @@ class ReceiptScreen extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Column(
                   children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            AppColors.success.withValues(alpha: 0.14),
-                            colorScheme.primary.withValues(alpha: 0.06),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: AppColors.success.withValues(alpha: 0.22),
-                        ),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          _SuccessRing(vatShare: vatShare),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Төлбөр амжилттай',
-                                  style: textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.15,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: [
-                                    _buildSummaryChip(
-                                      context,
-                                      icon: Icons.inventory_2_outlined,
-                                      text: qtySummary,
-                                    ),
-                                    _buildSummaryChip(
-                                      context,
-                                      icon: _paymentMethodIcon,
-                                      text: _paymentMethodName,
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _fmtMnt(total),
-                                  style: textTheme.headlineMedium?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                    color: colorScheme.primary,
-                                    fontFeatures: const [
-                                      ui.FontFeature.tabularFigures(),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
                     Container(
                       width: double.infinity,
                       decoration: BoxDecoration(
@@ -284,6 +230,67 @@ class ReceiptScreen extends StatelessWidget {
                               color: colorScheme.onSurfaceVariant,
                             ),
                           ),
+                          if (e != null) ...[
+                            const SizedBox(height: 10),
+                            const Divider(height: 1),
+                            const SizedBox(height: 10),
+                            Text(
+                              'И-БАРИМТ · $ebarimtType',
+                              style: textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            if (ebarimtDate.isNotEmpty)
+                              _detailRow(context, 'Огноо', ebarimtDate),
+                            if (ebarimtBillId.isNotEmpty)
+                              _detailRow(context, 'ДДТД', ebarimtBillId),
+                            if (ebarimtRegister.isNotEmpty)
+                              _detailRow(context, 'Регистр', ebarimtRegister),
+                            if (ebarimtCustomerTin.isNotEmpty)
+                              _detailRow(
+                                  context, 'Харилцагч ТТД', ebarimtCustomerTin),
+                            if (ebarimtLottery.isNotEmpty)
+                              _detailRow(context, 'Сугалаа', ebarimtLottery),
+                            if (totalAmount > 0)
+                              _detailRow(context, 'Нийт дүн', _fmtMnt(totalAmount)),
+                            if (totalVat > 0)
+                              _detailRow(context, 'НӨАТ', _fmtMnt(totalVat)),
+                            if (totalCityTax > 0)
+                              _detailRow(context, 'НХАТ', _fmtMnt(totalCityTax)),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Бараа',
+                              style: textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            ...(ebarimtItems.isNotEmpty
+                                    ? ebarimtItems
+                                    : items
+                                        .map((i) => {
+                                              'name': i.product.name,
+                                              'qty': i.quantity,
+                                              'amount': i.total,
+                                            })
+                                        .toList())
+                                .take(12)
+                                .map((item) => _ebarimtItemRow(context, item)),
+                            if ((ebarimtItems.isNotEmpty
+                                        ? ebarimtItems.length
+                                        : items.length) >
+                                    12)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  '+${(ebarimtItems.isNotEmpty ? ebarimtItems.length : items.length) - 12} мөр...',
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                          ],
                           if (qrData.isNotEmpty) ...[
                             const SizedBox(height: 10),
                             Center(
@@ -679,30 +686,71 @@ class ReceiptScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSummaryChip(
-    BuildContext context, {
-    required IconData icon,
-    required String text,
-  }) {
+  Widget _detailRow(BuildContext context, String label, String value) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: colorScheme.surface.withValues(alpha: 0.65),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
-          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label,
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                fontFeatures: const [ui.FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ebarimtItemRow(BuildContext context, Map<String, dynamic> item) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final name = _str(item['name']).isNotEmpty
+        ? _str(item['name'])
+        : (_str(item['ner']).isNotEmpty ? _str(item['ner']) : 'Бараа');
+    final qty = _num(item['qty']) > 0 ? _num(item['qty']) : _num(item['too']);
+    final amount = _num(item['amount']) > 0
+        ? _num(item['amount'])
+        : (_num(item['totalAmount']) > 0
+            ? _num(item['totalAmount'])
+            : _num(item['niitUne']));
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              qty > 0 ? '${qty.toStringAsFixed(qty % 1 == 0 ? 0 : 2)}x $name' : name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           Text(
-            text,
-            style: textTheme.labelLarge?.copyWith(
-              color: colorScheme.onSurface,
-              fontWeight: FontWeight.w600,
+            _fmtMnt(amount),
+            style: textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              fontFeatures: const [ui.FontFeature.tabularFigures()],
             ),
           ),
         ],
@@ -710,90 +758,4 @@ class ReceiptScreen extends StatelessWidget {
     );
   }
 
-}
-
-/// Donut-style ring: colored sweep ≈ (НӨАТ+НХАТ)/дүн when e-barimт totals exist, else full success arc.
-class _SuccessRing extends StatelessWidget {
-  const _SuccessRing({required this.vatShare});
-
-  final double vatShare;
-
-  @override
-  Widget build(BuildContext context) {
-    final track = Theme.of(context)
-        .colorScheme
-        .outlineVariant
-        .withValues(alpha: 0.45);
-    return SizedBox(
-      width: 72,
-      height: 72,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CustomPaint(
-            size: const Size(72, 72),
-            painter: _ReceiptRingPainter(
-              vatShare: vatShare,
-              trackColor: track,
-            ),
-          ),
-          const Icon(
-            Icons.check_rounded,
-            size: 34,
-            color: AppColors.success,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReceiptRingPainter extends CustomPainter {
-  _ReceiptRingPainter({
-    required this.vatShare,
-    required this.trackColor,
-  });
-
-  final double vatShare;
-  final Color trackColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = Offset(size.width / 2, size.height / 2);
-    final r = (size.shortestSide / 2) - 4;
-    final rect = Rect.fromCircle(center: c, radius: r);
-    const stroke = 5.0;
-    const start = -math.pi / 2;
-    final trackPaint = Paint()
-      ..color = trackColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..strokeCap = StrokeCap.round;
-    final vatPaint = Paint()
-      ..color = AppColors.success
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..strokeCap = StrokeCap.round;
-    final netPaint = Paint()
-      ..color = AppColors.success.withValues(alpha: 0.38)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawArc(rect, start, math.pi * 2, false, trackPaint);
-    final vatAngle = math.pi * 2 * vatShare;
-    final rest = math.pi * 2 - vatAngle;
-    if (vatAngle > 0.01) {
-      canvas.drawArc(rect, start, vatAngle, false, vatPaint);
-    }
-    if (rest > 0.01) {
-      canvas.drawArc(rect, start + vatAngle, rest, false, netPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ReceiptRingPainter oldDelegate) {
-    return oldDelegate.vatShare != vatShare ||
-        oldDelegate.trackColor != trackColor;
-  }
 }

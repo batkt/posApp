@@ -28,7 +28,9 @@ class MainActivity : FlutterFragmentActivity() {
         "mn.genesis.unipos.terminal",
     )
     private val uniPosRequestCode = 9301
+    private val eposRequestCode = 9302
     private var pendingUniPosResult: MethodChannel.Result? = null
+    private var pendingEposResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -115,6 +117,29 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         launchUniPos(requestJson.toString(), result, preferred)
                     }
+                    "android.epos.payment.printBitmap" -> {
+                        try {
+                            val base64 = call.argument<String>("base64")
+                            if (base64.isNullOrEmpty()) {
+                                result.error("ARG_ERROR", "base64 is required", null)
+                                return@setMethodCallHandler
+                            }
+                            val amount = call.argument<String>("amount") ?: "0.00"
+                            val dbRefNo = call.argument<String>("dbRefNo")
+                                ?: System.currentTimeMillis().toString()
+                            val payload = JSONObject().apply {
+                                put("category", "android.epos.payment.printBitmap")
+                                put("commandType", "28")
+                                put("amount", amount)
+                                put("dbRefNo", dbRefNo)
+                                put("bitmap", base64)
+                            }
+                            val preferred = call.argument<String>("packageName")
+                            launchEpos(payload.toString(), result, preferred)
+                        } catch (e: Throwable) {
+                            result.error("EPOS_ERROR", e.message, null)
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -169,6 +194,64 @@ class MainActivity : FlutterFragmentActivity() {
         return discoverUniPosFromSendHandlers(mine)
     }
 
+    private fun launchEpos(
+        request: String,
+        result: MethodChannel.Result,
+        preferredPackage: String? = null,
+    ) {
+        if (pendingEposResult != null) {
+            result.error("BUSY", "EPOS request already in progress", null)
+            return
+        }
+        val targetPackage = resolveEposTargetPackage(preferredPackage)
+        if (targetPackage == null) {
+            result.error(
+                "EPOS_NOT_FOUND",
+                "No EPOS terminal app found. Install EPOS Open SDK app or pass packageName.",
+                null,
+            )
+            return
+        }
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, request)
+            setPackage(targetPackage)
+        }
+        val canResolve = intent.resolveActivity(packageManager) != null
+        if (!canResolve) {
+            result.error(
+                "EPOS_NOT_FOUND",
+                "EPOS package $targetPackage cannot handle payment intent.",
+                null,
+            )
+            return
+        }
+        pendingEposResult = result
+        @Suppress("DEPRECATION")
+        startActivityForResult(intent, eposRequestCode)
+    }
+
+    private fun resolveEposTargetPackage(preferred: String?): String? {
+        val mine = applicationContext.packageName
+        val preferredPkg = preferred?.trim()?.takeIf { it.isNotEmpty() }
+        if (preferredPkg != null && preferredPkg != mine && canUniPosHandleSend(preferredPkg)) {
+            return preferredPkg
+        }
+        val probe = Intent(Intent.ACTION_SEND).apply { type = "text/plain" }
+        val infos = packageManager.queryIntentActivities(
+            probe,
+            PackageManager.MATCH_DEFAULT_ONLY,
+        )
+        return infos.asSequence()
+            .map { it.activityInfo.packageName }
+            .distinct()
+            .filter { it != mine }
+            .firstOrNull { pkg ->
+                val p = pkg.lowercase(Locale.US)
+                (p.contains("epos") || p.contains("databank")) && canUniPosHandleSend(pkg)
+            }
+    }
+
     private fun isPackageInstalled(packageName: String): Boolean {
         return try {
             @Suppress("DEPRECATION")
@@ -211,24 +294,46 @@ class MainActivity : FlutterFragmentActivity() {
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != uniPosRequestCode) return
+        if (requestCode == uniPosRequestCode) {
+            val pending = pendingUniPosResult ?: return
+            pendingUniPosResult = null
 
-        val pending = pendingUniPosResult ?: return
-        pendingUniPosResult = null
+            val payload = hashMapOf<String, Any?>(
+                "resultCode" to resultCode,
+                "command" to data?.getStringExtra("command"),
+                "result" to data?.getStringExtra("result"),
+                "paymentType" to data?.getStringExtra("paymentType"),
+                "error" to data?.getStringExtra("error"),
+            )
+            if (resultCode == Activity.RESULT_OK) {
+                pending.success(payload)
+            } else {
+                val errorMessage = data?.getStringExtra("error")
+                    ?: "UniPOS request canceled/failed"
+                pending.error("UNIPOS_FAILED", errorMessage, payload)
+            }
+            return
+        }
 
-        val payload = hashMapOf<String, Any?>(
-            "resultCode" to resultCode,
-            "command" to data?.getStringExtra("command"),
-            "result" to data?.getStringExtra("result"),
-            "paymentType" to data?.getStringExtra("paymentType"),
-            "error" to data?.getStringExtra("error"),
-        )
-        if (resultCode == Activity.RESULT_OK) {
-            pending.success(payload)
-        } else {
-            val errorMessage = data?.getStringExtra("error")
-                ?: "UniPOS request canceled/failed"
-            pending.error("UNIPOS_FAILED", errorMessage, payload)
+        if (requestCode == eposRequestCode) {
+            val pending = pendingEposResult ?: return
+            pendingEposResult = null
+
+            val payload = hashMapOf<String, Any?>(
+                "resultCode" to resultCode,
+                "rspCode" to data?.getStringExtra("rspCode"),
+                "rspMsg" to data?.getStringExtra("rspMsg"),
+                "result" to data?.getStringExtra("result"),
+                "error" to data?.getStringExtra("error"),
+            )
+            if (resultCode == Activity.RESULT_OK) {
+                pending.success(payload)
+            } else {
+                val errorMessage = data?.getStringExtra("rspMsg")
+                    ?: data?.getStringExtra("error")
+                    ?: "EPOS request canceled/failed"
+                pending.error("EPOS_FAILED", errorMessage, payload)
+            }
         }
     }
 

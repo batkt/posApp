@@ -29,6 +29,10 @@ class StaffScreenAccess {
   /// Web route `/khyanalt/eBarimt` and similar (per-employee `tsonkhniiTokhirgoo`).
   final bool allowsEbarimt;
 
+  /// Kiosk / full POS: poll for mobile-initiated UniPOS card requests at this branch.
+  bool get canPollTerminalPaySignals =>
+      hasFullAccess || allowsKiosk || allowsPosSystem;
+
   static StaffScreenAccess fromAjiltan(Map<String, dynamic>? data) {
     if (data == null) {
       return denied;

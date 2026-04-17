@@ -13,6 +13,7 @@ import '../main/checkout_screen.dart';
 import '../../widgets/barcode_scan_sheet.dart';
 import '../../widgets/test_image_widget.dart';
 import '../../widgets/authenticated_image.dart';
+import '../../services/terminal_tulbur_signal_service.dart';
 
 /// How many of this product are in the current sale (0 = not in cart).
 int _saleQtyForProduct(SalesModel sales, String productId) {
@@ -114,12 +115,15 @@ class _POSScreenState extends State<POSScreen> {
     final cashier = auth.currentUser?.isCashier == true;
     final useCashierPayment =
         cashier || widget.cashierMode || auth.staffAccess.allowsMobile;
+    final mobileQpayMode = widget.mobileStaffMode || auth.staffAccess.allowsMobile;
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => useCashierPayment
-            ? const CashierPaymentScreen(
-                terminalMode: CashierTerminalPaymentMode.cardOnly,
+            ? CashierPaymentScreen(
+                terminalMode: mobileQpayMode
+                    ? CashierTerminalPaymentMode.qpayOnly
+                    : CashierTerminalPaymentMode.cardOnly,
               )
             : const CheckoutScreen(),
       ),
@@ -133,6 +137,62 @@ class _POSScreenState extends State<POSScreen> {
     if (!context.mounted) return;
     _searchController.text = v;
     setState(() {});
+  }
+
+  /// Mobile staff → posBack → kiosk polls and can open UniPOS for this amount.
+  Future<void> _sendTerminalCardSignal(
+    BuildContext context,
+    SalesModel sales,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final auth = context.read<AuthModel>();
+    if (!auth.canSubmitPosSales || !auth.staffAccess.allowsMobile) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.tr('terminal_signal_failed')),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+    final session = auth.posSession!;
+    try {
+      await TerminalTulburSignalService().createRequest(
+        salbariinId: session.salbariinId,
+        amountMnt: sales.total,
+        tailbar:
+            '${sales.uniqueSaleItems} төрөл · ${sales.saleItemCount} ширхэг',
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.tr('terminal_signal_sent')),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } on TerminalTulburSignalException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${l10n.tr('terminal_signal_failed')}: $e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -1110,6 +1170,29 @@ class _POSScreenState extends State<POSScreen> {
                   ),
                 ),
               ),
+              if (widget.mobileStaffMode) ...[
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: sales.isSaleEmpty
+                      ? null
+                      : () => _sendTerminalCardSignal(context, sales),
+                  icon: const Icon(Icons.point_of_sale_rounded, size: 20),
+                  label: Text(
+                    AppLocalizations.of(context)
+                        .tr('terminal_signal_send_kiosk'),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

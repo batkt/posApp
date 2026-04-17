@@ -50,6 +50,16 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    // One APK per ABI (smaller than a fat APK; use arm64-only if you only deploy 64-bit devices).
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
+            isUniversalApk = false
+        }
+    }
 }
 
 flutter {

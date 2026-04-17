@@ -19,6 +19,7 @@ import '../shared/receipt_screen.dart';
 enum CashierTerminalPaymentMode {
   /// UniPOS `CARD` only (no terminal QPay).
   cardOnly,
+
   /// Merchant QPay API (`/qpayGargaya` …) instead of UniPOS — optional / legacy.
   qpayOnly,
 }
@@ -47,6 +48,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   double _discountMnt = 0;
   double _nhhatMnt = 0;
   bool _busy = false;
+
   /// Blocks double-submit before the next frame applies [_busy].
   bool _submitInFlight = false;
   Map<String, dynamic>? _lastEbarimt;
@@ -93,7 +95,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   String _paymentKindLabelMn(_PayKind k) {
     switch (k) {
       case _PayKind.cash:
-        return 'Бэлэн мөнгө';
+        return 'Бэлэн төлөлт';
       case _PayKind.card:
         return widget.terminalMode == CashierTerminalPaymentMode.qpayOnly
             ? 'QPay'
@@ -199,7 +201,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     final saveResp = await svc.submitGuilgeeniiTuukh(
       session: session,
       sales: sales,
-      paymentTurul: PosTransactionService.paymentMethodToTurul(_methodId(_kind)),
+      paymentTurul:
+          PosTransactionService.paymentMethodToTurul(_methodId(_kind)),
       niitUne: due,
       tulsunDun: tulsunDun,
       hariult: hariult,
@@ -354,7 +357,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         if (_kind == _PayKind.card &&
             widget.terminalMode == CashierTerminalPaymentMode.cardOnly) {
           final terminal = await UniPosService.purchase(amount: tulsunDun);
-          final paymentType = terminal?['paymentType']?.toString().toUpperCase();
+          final paymentType =
+              terminal?['paymentType']?.toString().toUpperCase();
           if (paymentType != null && paymentType.isNotEmpty) {
             final isCard = paymentType == 'CARD';
             if (!isCard) {
@@ -465,90 +469,90 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       ),
       body: Consumer<SalesModel>(
         builder: (context, sales, _) {
-            if (sales.isSaleEmpty) {
-              final cs = Theme.of(context).colorScheme;
-              return Center(
-                child: Text(
-                  'Сагс хоосон',
-                  style: TextStyle(
-                    color: cs.onSurfaceVariant,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
+          if (sales.isSaleEmpty) {
+            final cs = Theme.of(context).colorScheme;
+            return Center(
+              child: Text(
+                'Сагс хоосон',
+                style: TextStyle(
+                  color: cs.onSurfaceVariant,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                 ),
-              );
-            }
-
-            final totals = PosPaymentCore.calculateCashierTotals(
-              subtotal: sales.subtotal,
-              discountMnt: _discountMnt,
-              nhhatMnt: _nhhatMnt,
+              ),
             );
-            final due = totals.total;
+          }
 
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 720;
-                final pad = EdgeInsets.symmetric(
-                  horizontal: wide ? 28 : 16,
-                  vertical: 12,
-                );
+          final totals = PosPaymentCore.calculateCashierTotals(
+            subtotal: sales.subtotal,
+            discountMnt: _discountMnt,
+            nhhatMnt: _nhhatMnt,
+          );
+          final due = totals.total;
 
-                final orderLabel = usePosBackend
-                    ? (sales.guilgeeniiDugaar ?? _orderPreview)
-                    : _orderPreview;
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 720;
+              final pad = EdgeInsets.symmetric(
+                horizontal: wide ? 28 : 16,
+                vertical: 12,
+              );
 
-                final summary = _SummaryPanel(
-                  orderId: orderLabel,
-                  subtotal: sales.subtotal,
-                  discount: totals.cappedDiscount,
-                  vat: totals.vat,
-                  nhhat: totals.nhhat,
-                  total: totals.total,
-                  paymentKindLabel: _paymentKindLabelMn(_kind),
-                  onDiscount: _showDiscountDialog,
-                  onNhhat: _showNhhatDialog,
-                );
+              final orderLabel = usePosBackend
+                  ? (sales.guilgeeniiDugaar ?? _orderPreview)
+                  : _orderPreview;
 
-                final payment = _PaymentPanel(
-                  kind: _kind,
-                  terminalMode: widget.terminalMode,
-                  dueFormatted: _fmtMnt(due),
-                  onKind: (k) => setState(() => _kind = k),
-                  onCancel: () => Navigator.pop(context),
-                  onPay: _busy ? null : () => _startPayFlow(sales, totals),
-                  busy: _busy,
-                );
+              final summary = _SummaryPanel(
+                orderId: orderLabel,
+                subtotal: sales.subtotal,
+                discount: totals.cappedDiscount,
+                vat: totals.vat,
+                nhhat: totals.nhhat,
+                total: totals.total,
+                paymentKindLabel: _paymentKindLabelMn(_kind),
+                onDiscount: _showDiscountDialog,
+                onNhhat: _showNhhatDialog,
+              );
 
-                if (wide) {
-                  return Padding(
-                    padding: pad,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(flex: 5, child: summary),
-                        const SizedBox(width: 20),
-                        Expanded(flex: 4, child: payment),
-                      ],
-                    ),
-                  );
-                }
+              final payment = _PaymentPanel(
+                kind: _kind,
+                terminalMode: widget.terminalMode,
+                dueFormatted: _fmtMnt(due),
+                onKind: (k) => setState(() => _kind = k),
+                onCancel: () => Navigator.pop(context),
+                onPay: _busy ? null : () => _startPayFlow(sales, totals),
+                busy: _busy,
+              );
 
-                return SingleChildScrollView(
+              if (wide) {
+                return Padding(
                   padding: pad,
-                  child: Column(
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      summary,
-                      const SizedBox(height: 20),
-                      payment,
+                      Expanded(flex: 5, child: summary),
+                      const SizedBox(width: 20),
+                      Expanded(flex: 4, child: payment),
                     ],
                   ),
                 );
-              },
-            );
-          },
-        ),
+              }
+
+              return SingleChildScrollView(
+                padding: pad,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    summary,
+                    const SizedBox(height: 20),
+                    payment,
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
@@ -955,18 +959,10 @@ class _TulburConfirmSheetState extends State<_TulburConfirmSheet> {
         case 'C':
           _digits = '';
           break;
-        case '00':
-          if (_digits.length < 11) _digits += '00';
-          break;
         default:
           if (_digits.length < 12) _digits += key;
       }
     });
-  }
-
-  void _setExactDue() {
-    HapticFeedback.selectionClick();
-    setState(() => _digits = widget.due.ceil().toString());
   }
 
   void _addQuick(int add) {
@@ -1149,8 +1145,9 @@ class _TulburConfirmSheetState extends State<_TulburConfirmSheet> {
     final kb = media.viewInsets.bottom;
     final maxSheetH = (viewH * 0.92) - kb;
     final padH = viewW < 320 ? 10.0 : (viewW < 400 ? 14.0 : 20.0);
-    final tenderFont = viewW < 300 ? 22.0 : (viewW < 360 ? 28.0 : (viewW < 420 ? 32.0 : 36.0));
-    final titleSize = viewW < 340 ? 16.0 : 18.0;
+    final tenderFont =
+        viewW < 300 ? 22.0 : (viewW < 360 ? 28.0 : (viewW < 420 ? 32.0 : 36.0));
+    final titleSize = viewW < 340 ? 14.0 : 16.0;
     final numpadGap = viewW < 340 ? 3.0 : 5.0;
     final keyAspect = viewW < 340 ? 1.85 : (viewW < 400 ? 1.55 : 1.4);
     final keyFontMul = viewW < 340 ? 0.82 : 1.0;
@@ -1172,352 +1169,313 @@ class _TulburConfirmSheetState extends State<_TulburConfirmSheet> {
                 parent: BouncingScrollPhysics(),
               ),
               padding: EdgeInsets.fromLTRB(padH, 0, padH, 12 + kb * 0.02),
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.onDrag,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                _dragHandle(context),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: EdgeInsets.all(viewW < 340 ? 8 : 10),
-                      decoration: BoxDecoration(
-                        color: cs.primaryContainer.withValues(alpha: 0.55),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        Icons.payments_rounded,
-                        color: cs.primary,
-                        size: viewW < 340 ? 22 : 26,
-                      ),
-                    ),
-                    SizedBox(width: viewW < 340 ? 8 : 12),
-                    Flexible(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Бэлэн мөнгө',
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontWeight: FontWeight.w800,
-                              fontSize: titleSize,
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                          Text(
-                            'Олгосон дүнг оруулна уу',
-                            style: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontSize: viewW < 340 ? 11 : 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: viewW < 340 ? 12 : 18),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest.withValues(alpha: 0.65),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: cs.outlineVariant),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  _dragHandle(context),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Flexible(
-                        flex: 2,
-                        child: Text(
-                          'Төлөх дүн',
-                          style: TextStyle(
-                            color: cs.onSurfaceVariant,
-                            fontSize: viewW < 340 ? 12 : 13,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      Container(
+                        padding: EdgeInsets.all(viewW < 340 ? 7 : 8),
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer.withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(
+                          Icons.payments_rounded,
+                          color: cs.primary,
+                          size: viewW < 340 ? 18 : 21,
                         ),
                       ),
+                      SizedBox(width: viewW < 340 ? 8 : 12),
                       Flexible(
-                        flex: 3,
-                        child: Text(
-                          _fmtMnt(due),
-                          textAlign: TextAlign.end,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Бэлэн төлөлт',
+                              style: TextStyle(
+                                color: cs.onSurface,
+                                fontWeight: FontWeight.w800,
+                                fontSize: titleSize,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: viewW < 340 ? 12 : 18),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: cs.outlineVariant),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          flex: 2,
+                          child: Text(
+                            'Төлөх дүн',
+                            style: TextStyle(
+                              color: cs.onSurfaceVariant,
+                              fontSize: viewW < 340 ? 12 : 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Flexible(
+                          flex: 3,
+                          child: Text(
+                            _fmtMnt(due),
+                            textAlign: TextAlign.end,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: cs.onSurface,
+                              fontSize: viewW < 340 ? 14 : 17,
+                              fontWeight: FontWeight.w800,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: _tenderOk ? cs.primary : cs.error,
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: cs.shadow.withValues(alpha: 0.06),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Дүн бичих',
+                          textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: cs.onSurface,
-                            fontSize: viewW < 340 ? 14 : 17,
+                            color: cs.onSurfaceVariant,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 200),
+                          style: TextStyle(
+                            color: _tenderOk ? cs.onSurface : cs.error,
+                            fontSize: tenderFont,
                             fontWeight: FontWeight.w800,
+                            height: 1.05,
                             fontFeatures: const [
                               FontFeature.tabularFigures(),
                             ],
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: _tenderOk ? cs.primary : cs.error,
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: cs.shadow.withValues(alpha: 0.06),
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        'Олгосон',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 200),
-                        style: TextStyle(
-                          color: _tenderOk ? cs.onSurface : cs.error,
-                          fontSize: tenderFont,
-                          fontWeight: FontWeight.w800,
-                          height: 1.05,
-                          fontFeatures: const [
-                            FontFeature.tabularFigures(),
-                          ],
-                        ),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            _fmtMnt(_tender),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              _fmtMnt(_tender),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                            ),
                           ),
                         ),
-                      ),
-                      if (!_tenderOk) ...[
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.info_outline_rounded,
-                              size: 16,
-                              color: cs.error,
-                            ),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                'Олгосон дүн төлөх дүнгээс багагүй байх ёстой',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: cs.error,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                        if (!_tenderOk) ...[
+                          const SizedBox(height: 8),
+                        ],
                       ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: _hariult > 0
+                        ? Container(
+                            key: const ValueKey('change'),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  cs.primaryContainer.withValues(alpha: 0.45),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: cs.primary.withValues(alpha: 0.35),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.savings_outlined,
+                                  size: viewW < 340 ? 18 : 20,
+                                  color: cs.primary,
+                                ),
+                                SizedBox(width: viewW < 340 ? 6 : 8),
+                                Expanded(
+                                  child: Text(
+                                    'Хариулт',
+                                    style: TextStyle(
+                                      color: cs.onSurface,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: viewW < 340 ? 13 : 14,
+                                    ),
+                                  ),
+                                ),
+                                Flexible(
+                                  child: Text(
+                                    _fmtMnt(_hariult),
+                                    textAlign: TextAlign.end,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: cs.primary,
+                                      fontSize: viewW < 340 ? 16 : 20,
+                                      fontWeight: FontWeight.w800,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : const SizedBox(key: ValueKey('nochange'), height: 0),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _QuickAmountChip(
+                          label: '+1,000',
+                          onTap: () => _addQuick(1000),
+                          compact: true,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _QuickAmountChip(
+                          label: '+5,000',
+                          onTap: () => _addQuick(5000),
+                          compact: true,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _QuickAmountChip(
+                          label: '+10,000',
+                          onTap: () => _addQuick(10000),
+                          compact: true,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _QuickAmountChip(
+                          label: '+20,000',
+                          onTap: () => _addQuick(20000),
+                          compact: true,
+                        ),
+                      ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 12),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  child: _hariult > 0
-                      ? Container(
-                          key: const ValueKey('change'),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: cs.primaryContainer.withValues(alpha: 0.45),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: cs.primary.withValues(alpha: 0.35),
+                  SizedBox(height: viewW < 340 ? 12 : 16),
+                  _numpad(
+                    keyGap: numpadGap,
+                    keyAspectRatio: keyAspect,
+                    fontScale: keyFontMul,
+                  ),
+                  SizedBox(height: viewW < 340 ? 12 : 20),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            padding: EdgeInsets.symmetric(
+                              vertical: viewW < 340 ? 14 : 18,
+                              horizontal: 8,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.savings_outlined,
-                                size: viewW < 340 ? 18 : 20,
-                                color: cs.primary,
-                              ),
-                              SizedBox(width: viewW < 340 ? 6 : 8),
-                              Expanded(
-                                child: Text(
-                                  'Хариулт',
-                                  style: TextStyle(
-                                    color: cs.onSurface,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: viewW < 340 ? 13 : 14,
-                                  ),
-                                ),
-                              ),
-                              Flexible(
-                                child: Text(
-                                  _fmtMnt(_hariult),
-                                  textAlign: TextAlign.end,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: cs.primary,
-                                    fontSize: viewW < 340 ? 16 : 20,
-                                    fontWeight: FontWeight.w800,
-                                    fontFeatures: const [
-                                      FontFeature.tabularFigures(),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
+                          onPressed: _tenderOk
+                              ? () {
+                                  HapticFeedback.mediumImpact();
+                                  Navigator.pop(context, _tender);
+                                }
+                              : null,
+                          child: Text(
+                            'Төлбөр баталгаажуулах',
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: viewW < 340 ? 12 : 15,
+                              height: 1.2,
+                            ),
                           ),
-                        )
-                      : const SizedBox(key: ValueKey('nochange'), height: 0),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Хурдан нэмэх',
-                  style: TextStyle(
-                    color: cs.onSurfaceVariant,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6,
+                        ),
+                      ),
+                      SizedBox(width: viewW < 340 ? 8 : 12),
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: cs.onSurface,
+                            side: BorderSide(color: cs.outlineVariant),
+                            padding: EdgeInsets.symmetric(
+                              vertical: viewW < 340 ? 14 : 16,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                          child: Text(
+                            'Болих',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: viewW < 340 ? 13 : 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.start,
-                  children: [
-                    _QuickAmountChip(
-                      label: 'Нийт дүн',
-                      selected: _digits == due.ceil().toString(),
-                      onTap: _setExactDue,
-                      compact: viewW < 360,
-                    ),
-                    _QuickAmountChip(
-                      label: '+1,000',
-                      onTap: () => _addQuick(1000),
-                      compact: viewW < 360,
-                    ),
-                    _QuickAmountChip(
-                      label: '+5,000',
-                      onTap: () => _addQuick(5000),
-                      compact: viewW < 360,
-                    ),
-                    _QuickAmountChip(
-                      label: '+10,000',
-                      onTap: () => _addQuick(10000),
-                      compact: viewW < 360,
-                    ),
-                    _QuickAmountChip(
-                      label: '+20,000',
-                      onTap: () => _addQuick(20000),
-                      compact: viewW < 360,
-                    ),
-                  ],
-                ),
-                SizedBox(height: viewW < 340 ? 12 : 16),
-                _numpad(
-                  keyGap: numpadGap,
-                  keyAspectRatio: keyAspect,
-                  fontScale: keyFontMul,
-                ),
-                SizedBox(height: viewW < 340 ? 12 : 20),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          padding: EdgeInsets.symmetric(
-                            vertical: viewW < 340 ? 14 : 18,
-                            horizontal: 8,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        onPressed: _tenderOk
-                            ? () {
-                                HapticFeedback.mediumImpact();
-                                Navigator.pop(context, _tender);
-                              }
-                            : null,
-                        child: Text(
-                          'Төлбөр баталгаажуулах',
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: viewW < 340 ? 12 : 15,
-                            height: 1.2,
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: viewW < 340 ? 8 : 12),
-                    Expanded(
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: cs.onSurface,
-                          side: BorderSide(color: cs.outlineVariant),
-                          padding: EdgeInsets.symmetric(
-                            vertical: viewW < 340 ? 14 : 16,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        onPressed: () => Navigator.pop(context),
-                        child: Text(
-                          'Болих',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: viewW < 340 ? 13 : 14,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 
@@ -1532,78 +1490,58 @@ class _TulburConfirmSheetState extends State<_TulburConfirmSheet> {
       ['7', '8', '9'],
     ];
     final hPad = EdgeInsets.symmetric(horizontal: keyGap);
-    return Column(
+    final sideAspect = keyAspectRatio;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final row in keys)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
+        Expanded(
+          child: Padding(
+            padding: hPad,
+            child: Column(
               children: [
-                for (final k in row)
-                  Expanded(
-                    child: Padding(
-                      padding: hPad,
-                      child: _NumpadKey(
-                        label: k,
-                        onTap: () => _tapKey(k),
-                        aspectRatio: keyAspectRatio,
-                        fontSize: 22 * fontScale,
-                      ),
+                for (final k in ['C', '0', '⌫'])
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: _NumpadKey(
+                      label: k,
+                      onTap: () => _tapKey(k),
+                      tone: k == 'C'
+                          ? _NumpadKeyTone.danger
+                          : k == '⌫'
+                              ? _NumpadKeyTone.muted
+                              : _NumpadKeyTone.normal,
+                      aspectRatio: sideAspect,
+                      fontSize: 21 * fontScale,
                     ),
                   ),
               ],
             ),
           ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
+        ),
+        Expanded(
+          flex: 3,
+          child: Column(
             children: [
-              Expanded(
-                child: Padding(
-                  padding: hPad,
-                  child: _NumpadKey(
-                    label: 'C',
-                    onTap: () => _tapKey('C'),
-                    tone: _NumpadKeyTone.danger,
-                    aspectRatio: keyAspectRatio,
-                    fontSize: 18 * fontScale,
+              for (final row in keys)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      for (final k in row)
+                        Expanded(
+                          child: Padding(
+                            padding: hPad,
+                            child: _NumpadKey(
+                              label: k,
+                              onTap: () => _tapKey(k),
+                              aspectRatio: keyAspectRatio,
+                              fontSize: 21 * fontScale,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: hPad,
-                  child: _NumpadKey(
-                    label: '0',
-                    onTap: () => _tapKey('0'),
-                    aspectRatio: keyAspectRatio,
-                    fontSize: 22 * fontScale,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: hPad,
-                  child: _NumpadKey(
-                    label: '00',
-                    onTap: () => _tapKey('00'),
-                    aspectRatio: keyAspectRatio,
-                    fontSize: 17 * fontScale,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: hPad,
-                  child: _NumpadKey(
-                    label: '⌫',
-                    onTap: () => _tapKey('⌫'),
-                    tone: _NumpadKeyTone.muted,
-                    aspectRatio: keyAspectRatio,
-                    fontSize: 20 * fontScale,
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -1684,22 +1622,18 @@ class _QuickAmountChip extends StatelessWidget {
   const _QuickAmountChip({
     required this.label,
     required this.onTap,
-    this.selected = false,
     this.compact = false,
   });
 
   final String label;
   final VoidCallback onTap;
-  final bool selected;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Material(
-      color: selected
-          ? cs.primaryContainer.withValues(alpha: 0.65)
-          : cs.surfaceContainerHighest.withValues(alpha: 0.4),
+      color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
@@ -1712,14 +1646,14 @@ class _QuickAmountChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? cs.primary : cs.outlineVariant,
-              width: selected ? 1.5 : 1,
+              color: cs.outlineVariant,
+              width: 1,
             ),
           ),
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? cs.onPrimaryContainer : cs.onSurface,
+              color: cs.onSurface,
               fontWeight: FontWeight.w700,
               fontSize: compact ? 12 : 13,
             ),

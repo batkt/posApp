@@ -1,0 +1,14 @@
+{
+  "folders": [
+	{
+		"path": "."
+	},
+	{
+		"path": "../pos"
+	},
+	{
+		"path": "../posBack"
+	}
+],
+  "settings": {}
+}

@@ -68,7 +68,7 @@ switch ($choice) {
         Write-Host "3. Note the PORT and 6-digit code"
         Write-Host ""
         
-        $defaultIP = "192.168.1.53"
+        $defaultIP = "192.168.1.215"
         $pairPort = Read-Host "Enter pairing PORT (default IP: $defaultIP)"
         $pairCode = Read-Host "Enter 6-digit pairing code"
         
@@ -113,9 +113,9 @@ switch ($choice) {
             Write-Host "Now disconnect the USB cable." -ForegroundColor Yellow
             Write-Host ""
             
-            $defaultIP = "192.168.1.178"
-            $devicePort = Read-Host "Enter PORT (default: 5555, default IP: $defaultIP)"
-            
+            $defaultIP = "192.168.1.215"
+                        $devicePort = Read-Host "Enter PORT (default: 5555, default IP: $defaultIP)"
+
             if ([string]::IsNullOrWhiteSpace($devicePort)) {
                 $devicePort = "5555"
             }

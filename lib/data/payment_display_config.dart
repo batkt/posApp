@@ -12,7 +12,7 @@ abstract final class PaymentDisplayConfig {
     PaymentDisplayMethodOption(
       id: PosPaymentCore.methodCash,
       label: 'Cash',
-      labelMn: 'Бэлэн мөнгө',
+      labelMn: 'Бэлэн төлөлт',
       icon: Icons.payments_outlined,
     ),
     PaymentDisplayMethodOption(
@@ -76,7 +76,7 @@ abstract final class PaymentDisplayConfig {
   static String labelMn(String id) {
     switch (id) {
       case PosPaymentCore.methodCash:
-        return 'Бэлэн мөнгө';
+        return 'Бэлэн төлөлт';
       case PosPaymentCore.methodCard:
         return 'Карт';
       case PosPaymentCore.methodQpay:

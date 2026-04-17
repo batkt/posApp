@@ -74,7 +74,7 @@ class Transaction {
   String get paymentMethodLabel {
     switch (paymentMethod) {
       case PaymentMethod.cash:
-        return 'Бэлэн мөнгө';
+        return 'Бэлэн төлөлт';
       case PaymentMethod.card:
         return 'Карт';
       case PaymentMethod.transfer:
@@ -137,7 +137,8 @@ class TransactionModel extends ChangeNotifier {
   String generateReceiptNumber() {
     final now = DateTime.now();
     final prefix = 'REC';
-    final timestamp = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final timestamp =
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
     final count = (_transactions.length + 1).toString().padLeft(4, '0');
     return '$prefix$timestamp$count';
   }

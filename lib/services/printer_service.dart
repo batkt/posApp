@@ -61,7 +61,12 @@ class PrinterService {
     }
   }
 
-  static Future<PrinterResult> printReceiptImage(Uint8List pngBytes) async {
+  static Future<PrinterResult> printReceiptImage(
+    Uint8List pngBytes, {
+    double? amount,
+    String? dbRefNo,
+    String? terminalPackage,
+  }) async {
     try {
       final ok = await PaxSdk.initializePrinter();
       if (ok != true) {
@@ -80,6 +85,32 @@ class PrinterService {
       }
       throw Exception('pax_sdk printImage failed: $res');
     } catch (_) {
+      try {
+        final base64Image = base64Encode(pngBytes);
+        final args = <String, dynamic>{
+          'base64': base64Image,
+          // EPOS docs require amount > 0 and unique dbRefNo.
+          'amount': (amount ?? 0).toStringAsFixed(2),
+          'dbRefNo': (dbRefNo ?? DateTime.now().millisecondsSinceEpoch.toString())
+              .trim(),
+        };
+        final pkg = terminalPackage?.trim();
+        if (pkg != null && pkg.isNotEmpty) {
+          args['packageName'] = pkg;
+        }
+        final epos = await _channel.invokeMethod<dynamic>(
+          'android.epos.payment.printBitmap',
+          args,
+        );
+        final ok = _isEposSuccess(epos);
+        return PrinterResult(
+          success: ok,
+          backend: 'epos',
+          message: ok
+              ? 'Терминал дээр амжилттай хэвлэлээ (epos)'
+              : 'EPOS хэвлэх хүсэлт илгээгдсэн боловч амжилтгүй: ${_eposMessage(epos)}',
+        );
+      } catch (_) {}
       try {
         final base64Image = base64Encode(pngBytes);
         final native = await _channel.invokeMethod<String>(
@@ -101,6 +132,30 @@ class PrinterService {
         );
       }
     }
+  }
+
+  static bool _isEposSuccess(dynamic raw) {
+    if (raw is Map) {
+      final m = Map<String, dynamic>.from(raw);
+      final rspCode = (m['rspCode'] ?? '').toString().trim();
+      final resultCode = m['resultCode'];
+      if (rspCode == '000') return true;
+      if (resultCode is num && resultCode == 1) return true;
+    }
+    return false;
+  }
+
+  static String _eposMessage(dynamic raw) {
+    if (raw is Map) {
+      final m = Map<String, dynamic>.from(raw);
+      final rspMsg = (m['rspMsg'] ?? '').toString().trim();
+      if (rspMsg.isNotEmpty) return rspMsg;
+      final error = (m['error'] ?? '').toString().trim();
+      if (error.isNotEmpty) return error;
+      final rspCode = (m['rspCode'] ?? '').toString().trim();
+      if (rspCode.isNotEmpty) return 'rspCode=$rspCode';
+    }
+    return raw?.toString() ?? 'unknown';
   }
 
   static bool _isSuccess(dynamic res) {
