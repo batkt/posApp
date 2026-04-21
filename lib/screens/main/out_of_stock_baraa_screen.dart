@@ -10,7 +10,10 @@ import 'baraa_detail_screen.dart';
 
 /// Lists branch products with zero stock (Дууссан), newest first, with category chips.
 class OutOfStockBaraaScreen extends StatefulWidget {
-  const OutOfStockBaraaScreen({super.key});
+  const OutOfStockBaraaScreen({super.key, this.showAppBar = true});
+
+  /// False when shown inside [MainScreen] (shell already shows [menu_out_of_stock_baraa]).
+  final bool showAppBar;
 
   @override
   State<OutOfStockBaraaScreen> createState() => _OutOfStockBaraaScreenState();
@@ -39,10 +42,12 @@ class _OutOfStockBaraaScreenState extends State<OutOfStockBaraaScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.tr('out_of_stock_baraa_title')),
-        centerTitle: true,
-      ),
+      appBar: widget.showAppBar
+          ? AppBar(
+              title: Text(l10n.tr('out_of_stock_baraa_title')),
+              centerTitle: true,
+            )
+          : null,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

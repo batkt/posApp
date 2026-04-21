@@ -8,7 +8,10 @@ import '../../widgets/barcode_scan_sheet.dart';
 import 'baraa_detail_screen.dart';
 
 class InventoryScreen extends StatefulWidget {
-  const InventoryScreen({super.key});
+  const InventoryScreen({super.key, this.showAppBar = true});
+
+  /// False when shown inside [MainScreen] (shell already shows [inventory]).
+  final bool showAppBar;
 
   @override
   State<InventoryScreen> createState() => _InventoryScreenState();
@@ -39,18 +42,29 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Барааны менежмент'),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => _showAddProductDialog(context),
-          ),
-        ],
-      ),
+      appBar: widget.showAppBar
+          ? AppBar(
+              title: const Text('Барааны менежмент'),
+              centerTitle: true,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  onPressed: () => _showAddProductDialog(context),
+                ),
+              ],
+            )
+          : null,
       body: Column(
         children: [
+          if (!widget.showAppBar)
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                tooltip: 'Бараа нэмэх',
+                icon: const Icon(Icons.add),
+                onPressed: () => _showAddProductDialog(context),
+              ),
+            ),
           // Search & Filter
           Padding(
             padding: const EdgeInsets.all(16),

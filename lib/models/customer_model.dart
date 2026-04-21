@@ -1,4 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+
+import '../services/khariltsagch_service.dart';
+import 'pos_session.dart';
 
 enum CustomerType { individual, corporate, vip }
 
@@ -71,62 +76,135 @@ class Customer {
         return 'VIP';
     }
   }
+
+  /// First letter for avatar (handles empty / whitespace).
+  String get initialsLetter {
+    for (final rune in name.runes) {
+      final s = String.fromCharCode(rune);
+      if (s.trim().isNotEmpty) {
+        return s.toUpperCase();
+      }
+    }
+    return '?';
+  }
+
+  static Customer fromKhariltsagch(Map<String, dynamic> m) {
+    final id = m['_id']?.toString() ?? m['id']?.toString() ?? '';
+    final ovog = (m['ovog'] as String?)?.trim() ?? '';
+    final ner = (m['ner'] as String?)?.trim() ?? '';
+    final nameParts = <String>[];
+    if (ovog.isNotEmpty) nameParts.add(ovog);
+    if (ner.isNotEmpty) nameParts.add(ner);
+    final displayName =
+        nameParts.isNotEmpty ? nameParts.join(' ') : (ner.isNotEmpty ? ner : '—');
+
+    final utasRaw = m['utas'];
+    var phone = '';
+    if (utasRaw is List && utasRaw.isNotEmpty) {
+      phone = utasRaw.first?.toString() ?? '';
+    } else if (utasRaw is String) {
+      phone = utasRaw;
+    }
+
+    final mail = m['mail'] as String?;
+    final khayag = m['khayag'] as String?;
+
+    final turul =
+        '${m['khariltsagchiinTurul'] ?? ''} ${m['turul'] ?? ''}'.toLowerCase();
+    CustomerType type = CustomerType.individual;
+    if (turul.contains('аан') ||
+        turul.contains('байгуул') ||
+        turul.contains('корп')) {
+      type = CustomerType.corporate;
+    } else if (turul.contains('vip')) {
+      type = CustomerType.vip;
+    }
+
+    DateTime createdAt = DateTime.now();
+    final ca = m['createdAt'];
+    if (ca is String) {
+      createdAt = DateTime.tryParse(ca) ?? createdAt;
+    }
+
+    return Customer(
+      id: id.isNotEmpty ? id : 'unknown',
+      name: displayName,
+      phone: phone.isNotEmpty ? phone : '—',
+      email: mail?.trim().isNotEmpty == true ? mail!.trim() : null,
+      address: khayag?.trim().isNotEmpty == true ? khayag!.trim() : null,
+      type: type,
+      createdAt: createdAt,
+      totalPurchases: 0,
+      totalSpent: 0,
+    );
+  }
 }
 
 class CustomerModel extends ChangeNotifier {
-  final List<Customer> _customers = [
-    Customer(
-      id: 'cust-001',
-      name: 'Бат Эрдэнэ',
-      phone: '99119933',
-      email: 'bat@email.com',
-      address: 'Улаанбаатар, Сүхбаатар дүүрэг',
-      type: CustomerType.vip,
-      createdAt: DateTime(2024, 1, 15),
-      lastPurchase: DateTime(2024, 4, 8),
-      totalPurchases: 45,
-      totalSpent: 1250000,
-    ),
-    Customer(
-      id: 'cust-002',
-      name: 'Оюун Болд',
-      phone: '99119944',
-      type: CustomerType.individual,
-      createdAt: DateTime(2024, 2, 20),
-      lastPurchase: DateTime(2024, 4, 5),
-      totalPurchases: 12,
-      totalSpent: 280000,
-    ),
-    Customer(
-      id: 'cust-003',
-      name: 'Tech Solutions LLC',
-      phone: '75112233',
-      email: 'info@tech.mn',
-      address: 'Улаанбаатар, Баянзүрх дүүрэг',
-      type: CustomerType.corporate,
-      creditLimit: 5000000,
-      currentCredit: 1200000,
-      createdAt: DateTime(2024, 3, 1),
-      lastPurchase: DateTime(2024, 4, 9),
-      totalPurchases: 8,
-      totalSpent: 3500000,
-    ),
-  ];
+  CustomerModel({KhariltsagchService? service})
+      : _service = service ?? KhariltsagchService();
 
+  final KhariltsagchService _service;
+
+  final List<Customer> _customers = [];
+
+  PosSession? _session;
   String _searchQuery = '';
+  bool _loading = false;
+  String? _error;
+  Timer? _searchDebounce;
+
+  bool get isLoading => _loading;
+  String? get loadError => _error;
 
   List<Customer> get customers => List.unmodifiable(_customers);
 
-  List<Customer> get filteredCustomers {
-    if (_searchQuery.isEmpty) return _customers;
-    return _customers.where((c) {
-      return c.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          c.phone.contains(_searchQuery);
-    }).toList();
+  /// Server-side search (same `/khariltsagch` query as web).
+  List<Customer> get filteredCustomers => List.unmodifiable(_customers);
+
+  void syncSession(PosSession? session) {
+    _session = session;
   }
 
   void setSearchQuery(String query) {
     _searchQuery = query;
+    notifyListeners();
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+      refresh();
+    });
+  }
+
+  Future<void> refresh() async {
+    final session = _session;
+    if (session == null) {
+      _customers.clear();
+      _error = 'Салбарын сесс олдсонгүй';
+      notifyListeners();
+      return;
+    }
+
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    final result = await _service.fetchList(
+      baiguullagiinId: session.baiguullagiinId,
+      salbariinId: session.salbariinId,
+      search: _searchQuery,
+    );
+
+    if (result.success) {
+      _customers
+        ..clear()
+        ..addAll(result.rows.map(Customer.fromKhariltsagch));
+      _error = null;
+    } else {
+      _customers.clear();
+      _error = result.error;
+    }
+
+    _loading = false;
     notifyListeners();
   }
 
@@ -154,5 +232,11 @@ class CustomerModel extends ChangeNotifier {
     } catch (_) {
       return null;
     }
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
   }
 }

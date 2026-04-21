@@ -12,7 +12,10 @@ import 'sales_history_screen.dart';
 String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 
 class EbarimtMenuScreen extends StatefulWidget {
-  const EbarimtMenuScreen({super.key});
+  const EbarimtMenuScreen({super.key, this.showAppBar = true});
+
+  /// False when shown inside [MainScreen] (shell already shows [ebarimt]).
+  final bool showAppBar;
 
   @override
   State<EbarimtMenuScreen> createState() => _EbarimtMenuScreenState();
@@ -69,33 +72,20 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
             );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.tr('ebarimt')),
-        centerTitle: true,
-        actions: [
-          if (_future != null)
-            IconButton(
-              tooltip: l10n.tr('sales_history_refresh'),
-              onPressed: () => _reload(auth),
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-        ],
-      ),
-      body: pos == null || _future == null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  l10n.tr('ebarimt_no_session'),
-                  textAlign: TextAlign.center,
-                  style: textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+    final bodyCore = pos == null || _future == null
+        ? Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                l10n.tr('ebarimt_no_session'),
+                textAlign: TextAlign.center,
+                style: textTheme.bodyLarge?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
-            )
-          : FutureBuilder<GuilgeeListResult>(
+            ),
+          )
+        : FutureBuilder<GuilgeeListResult>(
               future: _future,
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting &&
@@ -302,7 +292,38 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
                   ],
                 );
               },
+            );
+
+    return Scaffold(
+      appBar: widget.showAppBar
+          ? AppBar(
+              title: Text(l10n.tr('ebarimt')),
+              centerTitle: true,
+              actions: [
+                if (_future != null)
+                  IconButton(
+                    tooltip: l10n.tr('sales_history_refresh'),
+                    onPressed: () => _reload(auth),
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+              ],
+            )
+          : null,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!widget.showAppBar && _future != null && pos != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                tooltip: l10n.tr('sales_history_refresh'),
+                onPressed: () => _reload(auth),
+                icon: const Icon(Icons.refresh_rounded),
+              ),
             ),
+          Expanded(child: bodyCore),
+        ],
+      ),
     );
   }
 }

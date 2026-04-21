@@ -33,7 +33,10 @@ class _ToololtScreenData {
 
 /// Тооллогын түүх + идэвхтэй тооллого (вэб `khyanalt/aguulakh/toollogo`).
 class ToololtScreen extends StatefulWidget {
-  const ToololtScreen({super.key});
+  const ToololtScreen({super.key, this.showAppBar = true});
+
+  /// When [MainScreen] already shows [menu_toololt] in its app bar, set false to avoid a duplicate title.
+  final bool showAppBar;
 
   @override
   State<ToololtScreen> createState() => _ToololtScreenState();
@@ -428,15 +431,19 @@ class _ToololtScreenState extends State<ToololtScreen> {
 
     if (pos == null) {
       return Scaffold(
-        appBar: AppBar(title: Text(l10n.tr('menu_toololt'))),
+        appBar: widget.showAppBar
+            ? AppBar(title: Text(l10n.tr('menu_toololt')))
+            : null,
         body: Center(child: Text(l10n.tr('toololt_no_session'))),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.tr('menu_toololt')),
-      ),
+      appBar: widget.showAppBar
+          ? AppBar(
+              title: Text(l10n.tr('menu_toololt')),
+            )
+          : null,
       bottomNavigationBar: FutureBuilder<_ToololtScreenData>(
         future: _future,
         builder: (context, snap) {

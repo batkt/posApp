@@ -356,7 +356,10 @@ String? _saleStaffCaption(Map<String, dynamic>? a) {
 }
 
 class SalesHistoryScreen extends StatefulWidget {
-  const SalesHistoryScreen({super.key});
+  const SalesHistoryScreen({super.key, this.showAppBar = true});
+
+  /// False when shown inside [MainScreen] (shell already shows [sales_history]).
+  final bool showAppBar;
 
   @override
   State<SalesHistoryScreen> createState() => _SalesHistoryScreenState();
@@ -431,42 +434,62 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
 
     return Scaffold(
       backgroundColor: colorScheme.surfaceContainerLowest,
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              l10n.tr('sales_history'),
-              style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            Text(
-              l10n.tr('sales_history_subtitle'),
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w500,
+      appBar: widget.showAppBar
+          ? AppBar(
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    l10n.tr('sales_history'),
+                    style: textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    l10n.tr('sales_history_subtitle'),
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              centerTitle: true,
+              actions: [
+                if (canRemote)
+                  IconButton(
+                    tooltip: l10n.tr('sales_history_refresh'),
+                    onPressed: () => _onRefresh(auth, true),
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+              ],
+            )
+          : null,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!widget.showAppBar && canRemote)
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                tooltip: l10n.tr('sales_history_refresh'),
+                onPressed: () => _onRefresh(auth, true),
+                icon: const Icon(Icons.refresh_rounded),
               ),
             ),
-          ],
-        ),
-        centerTitle: true,
-        actions: [
-          if (canRemote)
-            IconButton(
-              tooltip: l10n.tr('sales_history_refresh'),
-              onPressed: () => _onRefresh(auth, true),
-              icon: const Icon(Icons.refresh_rounded),
+          Expanded(
+            child: _buildBody(
+              context,
+              colorScheme,
+              textTheme,
+              l10n,
+              auth,
+              sales,
+              canRemote,
             ),
+          ),
         ],
-      ),
-      body: _buildBody(
-        context,
-        colorScheme,
-        textTheme,
-        l10n,
-        auth,
-        sales,
-        canRemote,
       ),
     );
   }

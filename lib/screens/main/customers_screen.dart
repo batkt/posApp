@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/customer_model.dart';
 import '../../models/locale_model.dart';
-import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 
 class CustomersScreen extends StatefulWidget {
-  const CustomersScreen({super.key});
+  const CustomersScreen({super.key, this.showAppBar = true});
+
+  /// False when shown inside [MainScreen] (shell already shows [customers_title]).
+  final bool showAppBar;
 
   @override
   State<CustomersScreen> createState() => _CustomersScreenState();
@@ -14,6 +16,15 @@ class CustomersScreen extends StatefulWidget {
 
 class _CustomersScreenState extends State<CustomersScreen> {
   final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<CustomerModel>().refresh();
+    });
+  }
 
   @override
   void dispose() {
@@ -27,21 +38,17 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Consumer<LocaleModel>(
-          builder: (context, localeModel, child) {
-            final l10n = AppLocalizations(localeModel.locale);
-            return Text(l10n.tr('customers_title'));
-          },
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_add),
-            onPressed: () => _showAddCustomerDialog(context),
-          ),
-        ],
-      ),
+      appBar: widget.showAppBar
+          ? AppBar(
+              title: Consumer<LocaleModel>(
+                builder: (context, localeModel, child) {
+                  final l10n = AppLocalizations(localeModel.locale);
+                  return Text(l10n.tr('customers_title'));
+                },
+              ),
+              centerTitle: true,
+            )
+          : null,
       body: Column(
         children: [
           // Search Bar
@@ -77,58 +84,102 @@ class _CustomersScreenState extends State<CustomersScreen> {
           Expanded(
             child: Consumer<CustomerModel>(
               builder: (context, customerModel, child) {
+                if (customerModel.loadError != null && !customerModel.isLoading) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: colorScheme.error,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            customerModel.loadError!,
+                            textAlign: TextAlign.center,
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton(
+                            onPressed: () => customerModel.refresh(),
+                            child: const Text('Дахин ачаалах'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                if (customerModel.isLoading && customerModel.filteredCustomers.isEmpty) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
                 final customers = customerModel.filteredCustomers;
 
                 if (customers.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  return RefreshIndicator(
+                    onRefresh: () => customerModel.refresh(),
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       children: [
-                        Icon(
-                          Icons.people_outline,
-                          size: 64,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(height: 16),
-                        Consumer<LocaleModel>(
-                          builder: (context, localeModel, child) {
-                            final l10n = AppLocalizations(localeModel.locale);
-                            return Text(
-                              l10n.tr('no_customers'),
-                              style: textTheme.bodyLarge?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            );
-                          },
+                        SizedBox(
+                          height: MediaQuery.sizeOf(context).height * 0.35,
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.people_outline,
+                                  size: 64,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(height: 16),
+                                Consumer<LocaleModel>(
+                                  builder: (context, localeModel, child) {
+                                    final l10n =
+                                        AppLocalizations(localeModel.locale);
+                                    return Text(
+                                      l10n.tr('no_customers'),
+                                      style: textTheme.bodyLarge?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   );
                 }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: customers.length,
-                  itemBuilder: (context, index) {
-                    final customer = customers[index];
-                    return _CustomerCard(
-                      customer: customer,
-                      onTap: () => _showCustomerDetails(context, customer),
-                    );
-                  },
+                return RefreshIndicator(
+                  onRefresh: () => customerModel.refresh(),
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: customers.length,
+                    itemBuilder: (context, index) {
+                      final customer = customers[index];
+                      return _CustomerCard(
+                        customer: customer,
+                        onTap: () => _showCustomerDetails(context, customer),
+                      );
+                    },
+                  ),
                 );
               },
             ),
           ),
         ],
       ),
-    );
-  }
-
-  void _showAddCustomerDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => const AddCustomerDialog(),
     );
   }
 
@@ -172,7 +223,7 @@ class _CustomerCard extends StatelessWidget {
                 radius: 28,
                 backgroundColor: colorScheme.primaryContainer,
                 child: Text(
-                  customer.name.substring(0, 1),
+                  customer.initialsLetter,
                   style: textTheme.titleLarge?.copyWith(
                     color: colorScheme.primary,
                     fontWeight: FontWeight.bold,
@@ -355,156 +406,6 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-class AddCustomerDialog extends StatefulWidget {
-  const AddCustomerDialog({super.key});
-
-  @override
-  State<AddCustomerDialog> createState() => _AddCustomerDialogState();
-}
-
-class _AddCustomerDialogState extends State<AddCustomerDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _addressController = TextEditingController();
-  CustomerType _type = CustomerType.individual;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
-    _emailController.dispose();
-    _addressController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return AlertDialog(
-      title: const Text('Шинэ харилцагч'),
-      content: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Нэр',
-                  prefixIcon: Icon(Icons.person),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Нэр оруулна уу';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _phoneController,
-                decoration: const InputDecoration(
-                  labelText: 'Утас',
-                  prefixIcon: Icon(Icons.phone),
-                ),
-                keyboardType: TextInputType.phone,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Утас оруулна уу';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: 'И-мэйл (сонголт)',
-                  prefixIcon: Icon(Icons.email),
-                ),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _addressController,
-                decoration: const InputDecoration(
-                  labelText: 'Хаяг (сонголт)',
-                  prefixIcon: Icon(Icons.location_on),
-                ),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 16),
-              SegmentedButton<CustomerType>(
-                segments: const [
-                  ButtonSegment(
-                    value: CustomerType.individual,
-                    label: Text('Хувь хүн'),
-                    icon: Icon(Icons.person),
-                  ),
-                  ButtonSegment(
-                    value: CustomerType.corporate,
-                    label: Text('Байгууллага'),
-                    icon: Icon(Icons.business),
-                  ),
-                  ButtonSegment(
-                    value: CustomerType.vip,
-                    label: Text('VIP'),
-                    icon: Icon(Icons.star),
-                  ),
-                ],
-                selected: {_type},
-                onSelectionChanged: (selected) {
-                  setState(() {
-                    _type = selected.first;
-                  });
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Болих'),
-        ),
-        FilledButton(
-          onPressed: _saveCustomer,
-          child: const Text('Хадгалах'),
-        ),
-      ],
-    );
-  }
-
-  void _saveCustomer() {
-    if (_formKey.currentState?.validate() ?? false) {
-      final customer = Customer(
-        id: 'cust-${DateTime.now().millisecondsSinceEpoch}',
-        name: _nameController.text,
-        phone: _phoneController.text,
-        email: _emailController.text.isEmpty ? null : _emailController.text,
-        address: _addressController.text.isEmpty ? null : _addressController.text,
-        type: _type,
-        createdAt: DateTime.now(),
-      );
-
-      context.read<CustomerModel>().addCustomer(customer);
-      Navigator.pop(context);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Харилцагч амжилттай нэмэгдлээ'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-    }
-  }
-}
-
 class CustomerDetailsSheet extends StatelessWidget {
   final Customer customer;
 
@@ -548,7 +449,7 @@ class CustomerDetailsSheet extends StatelessWidget {
                       radius: 40,
                       backgroundColor: colorScheme.primaryContainer,
                       child: Text(
-                        customer.name.substring(0, 1),
+                        customer.initialsLetter,
                         style: textTheme.headlineMedium?.copyWith(
                           color: colorScheme.primary,
                           fontWeight: FontWeight.bold,

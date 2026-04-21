@@ -66,7 +66,7 @@ class _MainScreenState extends State<MainScreen> {
     }
     if (access.allowsBaraaMatrial) {
       push(
-        const BaraaCatalogScreen(),
+        const BaraaCatalogScreen(showAppBar: false),
         _MenuItem(
           icon: Icons.list_alt_rounded,
           selectedIcon: Icons.list_alt_rounded,
@@ -76,7 +76,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
       );
       push(
-        const OutOfStockBaraaScreen(),
+        const OutOfStockBaraaScreen(showAppBar: false),
         _MenuItem(
           icon: Icons.remove_shopping_cart_outlined,
           selectedIcon: Icons.remove_shopping_cart,
@@ -88,7 +88,7 @@ class _MainScreenState extends State<MainScreen> {
     }
     if (access.allowsBaraaOrlogokh) {
       push(
-        const InventoryScreen(),
+        const InventoryScreen(showAppBar: false),
         _MenuItem(
           icon: Icons.inventory_2_outlined,
           selectedIcon: Icons.inventory_2,
@@ -100,7 +100,7 @@ class _MainScreenState extends State<MainScreen> {
     }
     if (access.allowsToollogo) {
       push(
-        const ToololtScreen(),
+        const ToololtScreen(showAppBar: false),
         _MenuItem(
           icon: Icons.calculate_outlined,
           selectedIcon: Icons.calculate_rounded,
@@ -112,7 +112,7 @@ class _MainScreenState extends State<MainScreen> {
     }
     if (access.allowsEbarimt) {
       push(
-        const EbarimtMenuScreen(),
+        const EbarimtMenuScreen(showAppBar: false),
         _MenuItem(
           icon: Icons.receipt_long_outlined,
           selectedIcon: Icons.receipt_long,
@@ -124,7 +124,7 @@ class _MainScreenState extends State<MainScreen> {
     }
     if (access.allowsKhariltsagch) {
       push(
-        const CustomersScreen(),
+        const CustomersScreen(showAppBar: false),
         _MenuItem(
           icon: Icons.people_outline,
           selectedIcon: Icons.people,
@@ -136,7 +136,7 @@ class _MainScreenState extends State<MainScreen> {
     }
     if (access.allowsBarimtiinJagsaalt) {
       push(
-        const SalesHistoryScreen(),
+        const SalesHistoryScreen(showAppBar: false),
         _MenuItem(
           icon: Icons.receipt_long_outlined,
           selectedIcon: Icons.receipt_long,

@@ -14,7 +14,10 @@ import 'baraa_detail_screen.dart';
 
 /// Read-only branch catalog: үнэ, үлдэгдэл, optional буцаалт/зарлага тоо (API-д байвал).
 class BaraaCatalogScreen extends StatefulWidget {
-  const BaraaCatalogScreen({super.key});
+  const BaraaCatalogScreen({super.key, this.showAppBar = true});
+
+  /// False when shown inside [MainScreen] (shell already shows [menu_baraa_list]).
+  final bool showAppBar;
 
   @override
   State<BaraaCatalogScreen> createState() => _BaraaCatalogScreenState();
@@ -132,17 +135,27 @@ class _BaraaCatalogScreenState extends State<BaraaCatalogScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.tr('menu_baraa_list')),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: _loading ? null : _reload,
-          ),
-        ],
-      ),
+      appBar: widget.showAppBar
+          ? AppBar(
+              title: Text(l10n.tr('menu_baraa_list')),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded),
+                  onPressed: _loading ? null : _reload,
+                ),
+              ],
+            )
+          : null,
       body: Column(
         children: [
+          if (!widget.showAppBar)
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                icon: const Icon(Icons.refresh_rounded),
+                onPressed: _loading ? null : _reload,
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: TextField(

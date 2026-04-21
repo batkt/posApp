@@ -59,7 +59,14 @@ class POSApp extends StatelessWidget {
             return model;
           },
         ),
-        ChangeNotifierProvider(create: (_) => CustomerModel()),
+        ChangeNotifierProxyProvider<AuthModel, CustomerModel>(
+          create: (_) => CustomerModel(),
+          update: (_, auth, previous) {
+            final model = previous ?? CustomerModel();
+            model.syncSession(auth.posSession);
+            return model;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => TransactionModel()),
       ],
       child: Consumer<LocaleModel>(

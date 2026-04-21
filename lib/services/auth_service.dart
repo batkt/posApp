@@ -174,7 +174,7 @@ class AuthService {
                   role: _roleHintFromAccess(staffAccess),
                 )
               : null;
-          final posSession = PosSession.tryParse(userData);
+          final posSession = await _resolvePosSession(userData);
 
           return AuthResult.success(
             user: user,

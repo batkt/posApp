@@ -48,6 +48,8 @@ class PosSession {
         salbariinId = bid;
       }
     } else {
+      // Wrong for `/aguulakh` (branch id must match inventory). [AuthService]
+      // replaces this when `salbaruud` is empty by loading the org's first салбар.
       salbariinId = bid;
     }
 
