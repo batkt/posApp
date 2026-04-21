@@ -81,6 +81,16 @@ class SalesModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Incremented when the user leaves the receipt screen to start a new sale so
+  /// mobile cashier [POSScreen] can jump the PageView back to the product grid.
+  int _cashierReturnToProductsEpoch = 0;
+  int get cashierReturnToProductsEpoch => _cashierReturnToProductsEpoch;
+
+  void signalCashierReturnToProductsAfterReceipt() {
+    _cashierReturnToProductsEpoch++;
+    notifyListeners();
+  }
+
   // Current Sale getters
   List<SaleItem> get currentSaleItems => List.unmodifiable(_currentSale);
   bool get isSaleEmpty => _currentSale.isEmpty;

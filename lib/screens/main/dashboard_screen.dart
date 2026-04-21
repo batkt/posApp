@@ -270,7 +270,7 @@ class DashboardScreen extends StatelessWidget {
                         ),
                         TextButton(
                           onPressed: () {},
-                          child: const Text('View All'),
+                          child: Text(l10n.tr('view_all')),
                         ),
                       ],
                     ),
@@ -339,7 +339,7 @@ class DashboardScreen extends StatelessWidget {
                         ),
                         TextButton(
                           onPressed: () {},
-                          child: const Text('View All'),
+                          child: Text(l10n.tr('view_all')),
                         ),
                       ],
                     ),

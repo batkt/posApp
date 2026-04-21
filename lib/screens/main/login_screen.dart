@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
-import '../../theme/app_theme.dart';
+import '../../utils/app_snackbar.dart';
 import '../../utils/connectivity.dart';
 import 'forgot_password_screen.dart';
 import 'two_factor_auth_screen.dart';
@@ -51,11 +51,10 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!isOnline) {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.tr('no_internet')),
-          backgroundColor: AppColors.error,
-        ),
+      showAppSnackBar(
+        context,
+        l10n.tr('no_internet'),
+        variant: AppSnackVariant.warning,
       );
       return;
     }
@@ -72,11 +71,10 @@ class _LoginScreenState extends State<LoginScreen> {
       success = await auth.login(username, password);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Нэвтрэхэд алдаа: $e'),
-            backgroundColor: AppColors.error,
-          ),
+        showAppSnackBar(
+          context,
+          'Нэвтрэхэд алдаа: $e',
+          variant: AppSnackVariant.error,
         );
       }
     } finally {
@@ -100,11 +98,10 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       final l10n = AppLocalizations.of(context);
       final err = auth.lastAuthError;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(err ?? l10n.tr('invalid_username_or_password')),
-          backgroundColor: AppColors.error,
-        ),
+      showAppSnackBar(
+        context,
+        err ?? l10n.tr('invalid_username_or_password'),
+        variant: AppSnackVariant.error,
       );
     }
   }
@@ -119,11 +116,10 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!isAvailable) {
         if (mounted) {
           final l10n = AppLocalizations.of(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(l10n.tr('biometric_unavailable')),
-              backgroundColor: AppColors.error,
-            ),
+          showAppSnackBar(
+            context,
+            l10n.tr('biometric_unavailable'),
+            variant: AppSnackVariant.warning,
           );
         }
         return;
@@ -132,11 +128,10 @@ class _LoginScreenState extends State<LoginScreen> {
       success = await auth.loginWithBiometric();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Биометр нэвтрэхэд алдаа: $e'),
-            backgroundColor: AppColors.error,
-          ),
+        showAppSnackBar(
+          context,
+          'Биометр нэвтрэхэд алдаа: $e',
+          variant: AppSnackVariant.error,
         );
       }
     } finally {
@@ -154,11 +149,10 @@ class _LoginScreenState extends State<LoginScreen> {
       final auth = context.read<AuthModel>();
       final l10n = AppLocalizations.of(context);
       final msg = auth.lastAuthError ?? l10n.tr('biometric_failed');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: AppColors.error,
-        ),
+      showAppSnackBar(
+        context,
+        msg,
+        variant: AppSnackVariant.error,
       );
     }
   }

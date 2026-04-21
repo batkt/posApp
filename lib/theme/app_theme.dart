@@ -300,12 +300,14 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.inverseSurfaceLight,
+        elevation: 8,
         contentTextStyle: GoogleFonts.inter(
           fontSize: 14,
+          fontWeight: FontWeight.w600,
           color: AppColors.inverseOnSurfaceLight,
         ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
         behavior: SnackBarBehavior.floating,
       ),
@@ -536,12 +538,14 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.inverseSurfaceDark,
+        elevation: 8,
         contentTextStyle: GoogleFonts.inter(
           fontSize: 14,
+          fontWeight: FontWeight.w600,
           color: AppColors.inverseOnSurfaceDark,
         ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
         behavior: SnackBarBehavior.floating,
       ),

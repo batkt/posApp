@@ -3,12 +3,14 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:provider/provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../data/payment_display_config.dart';
 import '../../models/cart_model.dart';
+import '../../models/sales_model.dart';
 import '../../services/printer_service.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
@@ -34,6 +36,7 @@ class ReceiptScreen extends StatelessWidget {
   String get _paymentMethodName => PaymentDisplayConfig.labelMn(paymentMethod);
 
   void _startNewOrder(BuildContext context) {
+    context.read<SalesModel>().signalCashierReturnToProductsAfterReceipt();
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 

@@ -2,6 +2,7 @@ import 'api_service.dart';
 import '../auth/staff_screen_access.dart';
 import '../models/auth_model.dart';
 import '../models/pos_session.dart';
+import 'baiguullaga_service.dart';
 
 UserRole _roleHintFromAccess(StaffScreenAccess access) {
   if (access.hasFullAccess) return UserRole.admin;
@@ -21,9 +22,34 @@ UserRole _roleHintFromAccess(StaffScreenAccess access) {
 
 class AuthService {
   final ApiService _apiService;
+  final BaiguullagaService _baiguullagaService;
 
-  AuthService({ApiService? apiService})
-      : _apiService = apiService ?? posApiService;
+  AuthService({
+    ApiService? apiService,
+    BaiguullagaService? baiguullagaService,
+  })  : _apiService = apiService ?? posApiService,
+        _baiguullagaService =
+            baiguullagaService ?? BaiguullagaService(apiService: apiService ?? posApiService);
+
+  /// When [ajiltan.salbaruud] is empty, [PosSession.tryParse] falls back to org id as
+  /// `salbariinId`, which does not match `/aguulakh` rows — load the org's first branch.
+  Future<PosSession?> _resolvePosSession(Map<String, dynamic>? userData) async {
+    final base = PosSession.tryParse(userData);
+    if (base == null) return null;
+    final sal = userData?['salbaruud'];
+    if (sal is List && sal.isNotEmpty) return base;
+
+    final resolved = await _baiguullagaService.fetchFirstSalbariinId(
+      base.baiguullagiinId,
+    );
+    if (resolved == null || resolved.isEmpty) return base;
+
+    return PosSession(
+      baiguullagiinId: base.baiguullagiinId,
+      salbariinId: resolved,
+      ajiltan: base.ajiltan,
+    );
+  }
 
   /// Login with username and password
   /// Corresponds to: newterya(khereglech: { burtgeliinDugaar, nuutsUg, namaigsana })
@@ -79,7 +105,7 @@ class AuthService {
             role: _roleHintFromAccess(staffAccess),
           );
 
-          final posSession = PosSession.tryParse(userData);
+          final posSession = await _resolvePosSession(userData);
 
           return AuthResult.success(
             user: user,

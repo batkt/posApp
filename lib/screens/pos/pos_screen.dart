@@ -47,6 +47,7 @@ class _POSScreenState extends State<POSScreen> {
   /// Cashier phone: product step (0) vs cart / payment step (1).
   PageController? _cashierPageController;
   int _cashierMobilePage = 0;
+  int _appliedCashierReturnEpoch = 0;
 
   static const Duration _cashierPageAnim = Duration(milliseconds: 320);
   static const Curve _cashierPageCurve = Curves.easeOutCubic;
@@ -198,6 +199,14 @@ class _POSScreenState extends State<POSScreen> {
   @override
   Widget build(BuildContext context) {
     if (widget.cashierMode && widget.mobileStaffMode) {
+      final returnEpoch =
+          context.select<SalesModel, int>((s) => s.cashierReturnToProductsEpoch);
+      if (returnEpoch != _appliedCashierReturnEpoch && returnEpoch > 0) {
+        _appliedCashierReturnEpoch = returnEpoch;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _goCashierProductsStep();
+        });
+      }
       return _buildCashierMobileTwoStepFlow(context);
     }
 

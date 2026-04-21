@@ -63,13 +63,15 @@ class StaffScreenAccess {
   bool get canPollTerminalPaySignals =>
       hasFullAccess || allowsKiosk || allowsPosSystem;
 
-  /// Non-admins must have a non-empty `tsonkhniiTokhirgoo` (login is denied otherwise).
+  /// Non-admins must have at least one truthy route in `tsonkhniiTokhirgoo`
+  /// (missing, empty, or all-`false` counts as unconfigured for login).
   static bool isPermissionConfigurationMissing(Map<String, dynamic>? data) {
     if (data == null) return true;
     if (data['AdminEsekh'] == true) return false;
     final raw = data['tsonkhniiTokhirgoo'];
     if (raw == null) return true;
     if (raw is! Map || raw.isEmpty) return true;
+    if (!raw.values.any(_truthy)) return true;
     return false;
   }
 
@@ -87,8 +89,13 @@ class StaffScreenAccess {
       });
     }
 
-    if (!admin && (map == null || map.isEmpty)) {
-      return denied;
+    if (!admin) {
+      if (map == null || map.isEmpty) {
+        return denied;
+      }
+      if (!map.values.any(_truthy)) {
+        return denied;
+      }
     }
 
     final full = admin;

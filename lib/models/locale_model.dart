@@ -177,6 +177,7 @@ class AppLocalizations {
       'recent_sales': 'Recent Sales',
 
       // Customers
+      'customers': 'Customers',
       'customers_title': 'Customers',
       'search_customers': 'Search customers...',
       'no_customers': 'No customers found',
@@ -482,7 +483,8 @@ class AppLocalizations {
       'items': 'ширхэг',
 
       // Customers
-      'customers_title': 'Харилцагчид',
+      'customers': 'Харилцагч',
+      'customers_title': 'Харилцагч',
       'search_customers': 'Харилцагч хайх...',
       'no_customers': 'Харилцагч олдсонгүй',
       'add_customer': 'Харилцагч нэмэх',

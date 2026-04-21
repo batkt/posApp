@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/app_snackbar.dart';
 import 'post_login_home.dart';
 
 class TwoFactorAuthScreen extends StatefulWidget {
@@ -251,10 +252,10 @@ class _TwoFactorAuthScreenState extends State<TwoFactorAuthScreen> {
                     ),
                     TextButton(
                       onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Код дахин илгээгдлээ'),
-                          ),
+                        showAppSnackBar(
+                          context,
+                          'Код дахин илгээгдлээ',
+                          variant: AppSnackVariant.success,
                         );
                       },
                       child: const Text('Дахин илгээх'),
