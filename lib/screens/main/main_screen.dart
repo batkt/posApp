@@ -10,6 +10,8 @@ import 'baraa_catalog_screen.dart';
 import 'toololt_screen.dart';
 import 'customers_screen.dart';
 import 'sales_history_screen.dart';
+import 'income_overview_screen.dart';
+import 'purchase_list_screen.dart';
 import 'login_screen.dart';
 import 'out_of_stock_baraa_screen.dart';
 import 'ebarimt_menu_screen.dart';
@@ -18,7 +20,8 @@ class MainScreen extends StatefulWidget {
   const MainScreen({super.key, this.initialSection});
 
   /// Optional drawer section id: `dashboard`, `baraa_catalog`, `inventory`,
-  /// `out_of_stock`, `toololt`, `ebarimt`, `customers`, `history`.
+  /// `out_of_stock`, `toololt`, `ebarimt`, `customers`, `income_overview`,
+  /// `purchase_list`, `history`.
   final String? initialSection;
 
   @override
@@ -134,7 +137,29 @@ class _MainScreenState extends State<MainScreen> {
         ),
       );
     }
+    if (access.allowsHynalt) {
+      push(
+        const IncomeOverviewScreen(showAppBar: false),
+        _MenuItem(
+          icon: Icons.trending_up_outlined,
+          selectedIcon: Icons.trending_up_rounded,
+          label: 'menu_orlogo',
+          section: 'income_overview',
+          index: 0,
+        ),
+      );
+    }
     if (access.allowsBarimtiinJagsaalt) {
+      push(
+        const PurchaseListScreen(showAppBar: false),
+        _MenuItem(
+          icon: Icons.shopping_cart_outlined,
+          selectedIcon: Icons.shopping_cart_rounded,
+          label: 'menu_hudaldan_avalt',
+          section: 'purchase_list',
+          index: 0,
+        ),
+      );
       push(
         const SalesHistoryScreen(showAppBar: false),
         _MenuItem(

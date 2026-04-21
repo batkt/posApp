@@ -7,6 +7,8 @@ import '../../models/sales_model.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
+import 'low_stock_baraa_screen.dart';
+import 'out_of_stock_baraa_screen.dart';
 
 String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 
@@ -297,7 +299,14 @@ class DashboardScreen extends StatelessWidget {
                                     '${outOfStock.length} бүтээгдэхүүн дууссан',
                                 subtitle: 'Шууд нөхөн дүүргэх шаардлагатай',
                                 color: AppColors.error,
-                                onTap: () {},
+                                onTap: () {
+                                  Navigator.of(context).push<void>(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) =>
+                                          const OutOfStockBaraaScreen(),
+                                    ),
+                                  );
+                                },
                               ),
                             if (outOfStock.isNotEmpty && lowStock.isNotEmpty)
                               const SizedBox(height: 8),
@@ -308,7 +317,14 @@ class DashboardScreen extends StatelessWidget {
                                     '${lowStock.length} бүтээгдэхүүн цөөн үлдсэн',
                                 subtitle: 'Тун удахгүй нөхөн дүүргэхийг хүү',
                                 color: AppColors.warning,
-                                onTap: () {},
+                                onTap: () {
+                                  Navigator.of(context).push<void>(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) =>
+                                          const LowStockBaraaScreen(),
+                                    ),
+                                  );
+                                },
                               ),
                           ],
                         );

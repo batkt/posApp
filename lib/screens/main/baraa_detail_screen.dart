@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/inventory_model.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
+import '../../utils/mongolian_date_formatter.dart';
 import '../../widgets/authenticated_image.dart';
 
 class BaraaDetailScreen extends StatelessWidget {
@@ -28,49 +29,69 @@ class BaraaDetailScreen extends StatelessWidget {
       stockLabel = 'Бэлэн байна';
     }
 
+    final categoryLabel = product.category.trim().isNotEmpty
+        ? product.category
+        : (product.angilal?.trim().isNotEmpty == true
+            ? product.angilal!.trim()
+            : '—');
+    final hasImage = product.imageUrl.trim().isNotEmpty;
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
     return Scaffold(
+      backgroundColor: colorScheme.surface,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 268,
+            expandedHeight: 280,
             pinned: true,
             stretch: true,
             backgroundColor: colorScheme.surface,
             surfaceTintColor: Colors.transparent,
+            foregroundColor: colorScheme.onSurface,
             leading: Padding(
-              padding: const EdgeInsets.only(left: 8, top: 8),
-              child: IconButton(
+              padding: const EdgeInsets.only(left: 4, top: 4),
+              child: IconButton.filledTonal(
                 style: IconButton.styleFrom(
                   backgroundColor:
-                      colorScheme.surface.withValues(alpha: 0.92),
-                  foregroundColor: colorScheme.onSurface,
+                      colorScheme.surfaceContainerHighest.withValues(alpha: 0.92),
                 ),
                 onPressed: () => Navigator.maybePop(context),
                 icon: const Icon(Icons.arrow_back_rounded),
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
               ),
             ),
-            actions: const [],
             flexibleSpace: FlexibleSpaceBar(
               stretchModes: const [StretchMode.zoomBackground],
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  AuthenticatedImage(
-                    imageUrl: product.imageUrl,
-                    fit: BoxFit.cover,
-                  ),
+                  if (hasImage)
+                    AuthenticatedImage(
+                      imageUrl: product.imageUrl,
+                      fit: BoxFit.cover,
+                    )
+                  else
+                    ColoredBox(
+                      color: colorScheme.surfaceContainerHighest,
+                      child: Center(
+                        child: Icon(
+                          Icons.inventory_2_outlined,
+                          size: 72,
+                          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
+                        ),
+                      ),
+                    ),
                   DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          colorScheme.shadow.withValues(alpha: 0.22),
+                          colorScheme.shadow.withValues(alpha: 0.18),
                           Colors.transparent,
-                          colorScheme.shadow.withValues(alpha: 0.55),
+                          colorScheme.shadow.withValues(alpha: 0.5),
                         ],
-                        stops: const [0.0, 0.42, 1.0],
+                        stops: const [0.0, 0.45, 1.0],
                       ),
                     ),
                   ),
@@ -81,7 +102,7 @@ class BaraaDetailScreen extends StatelessWidget {
 
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -93,46 +114,38 @@ class BaraaDetailScreen extends StatelessWidget {
                       letterSpacing: 0.2,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
+                  Text(
+                    product.name,
+                    style: textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      height: 1.2,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   Wrap(
-                    spacing: 12,
-                    runSpacing: 10,
+                    spacing: 8,
+                    runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.sizeOf(context).width - 88,
-                        ),
-                        child: Text(
-                          product.name,
-                          style: textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            height: 1.15,
-                            letterSpacing: -0.2,
+                      if (categoryLabel != '—')
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          avatar: Icon(
+                            Icons.label_outline,
+                            size: 18,
+                            color: colorScheme.primary,
                           ),
+                          label: Text(categoryLabel),
+                          side: BorderSide(color: colorScheme.outlineVariant),
+                          backgroundColor:
+                              colorScheme.primaryContainer.withValues(alpha: 0.35),
                         ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          product.category,
-                          style: textTheme.labelMedium?.copyWith(
-                            color: colorScheme.onPrimaryContainer,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
                     ],
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 16),
 
                   Wrap(
                     spacing: 10,
@@ -158,51 +171,62 @@ class BaraaDetailScreen extends StatelessWidget {
                     ],
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 16),
 
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        MntAmountFormatter.formatTugrik(product.price),
-                        style: textTheme.headlineSmall?.copyWith(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      if (product.urtugUne != null &&
-                          product.urtugUne! > 0) ...[
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Text(
-                            'Өртөг: ${MntAmountFormatter.formatTugrik(product.urtugUne!)}',
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w500,
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: colorScheme.outlineVariant),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              MntAmountFormatter.formatTugrik(product.price),
+                              style: textTheme.headlineSmall?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.5,
+                              ),
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
-                    ],
+                          if (product.urtugUne != null && product.urtugUne! > 0)
+                            Expanded(
+                              child: Text(
+                                'Өртөг: ${MntAmountFormatter.formatTugrik(product.urtugUne!)}',
+                                style: textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                textAlign: TextAlign.end,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      color: stockColor.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(14),
+                      color: stockColor.withValues(alpha: 0.09),
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: stockColor.withValues(alpha: 0.35),
+                        color: stockColor.withValues(alpha: 0.38),
                       ),
                     ),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Icon(
                           item.isOutOfStock
@@ -211,87 +235,94 @@ class BaraaDetailScreen extends StatelessWidget {
                                   ? Icons.warning_amber_outlined
                                   : Icons.check_circle_outline,
                           color: stockColor,
-                          size: 28,
+                          size: 30,
                         ),
                         const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              stockLabel,
-                              style: textTheme.titleSmall?.copyWith(
-                                color: stockColor,
-                                fontWeight: FontWeight.w700,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                stockLabel,
+                                style: textTheme.titleSmall?.copyWith(
+                                  color: stockColor,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
-                            ),
-                            Text(
-                              'Үлдэгдэл: ${item.currentStock} ${product.khemjikhNegj ?? product.unitLabel}',
-                              style: textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
+                              const SizedBox(height: 2),
+                              Text(
+                                'Үлдэгдэл: ${item.currentStock} ${product.khemjikhNegj ?? product.unitLabel}',
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                        const Spacer(),
-                        // Big stock number
-                        Text(
-                          '${item.currentStock}',
-                          style: textTheme.displaySmall?.copyWith(
-                            color: stockColor,
-                            fontWeight: FontWeight.w800,
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            '${item.currentStock}',
+                            style: textTheme.displaySmall?.copyWith(
+                              color: stockColor,
+                              fontWeight: FontWeight.w800,
+                              height: 1.0,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
 
-                  _DetailCard(children: [
-                    if (product.code != null && product.code!.isNotEmpty)
+                  _DetailCard(
+                    children: [
                       _DetailRow(
-                        icon: Icons.qr_code,
-                        label: 'Код',
-                        value: product.code!,
+                        icon: Icons.category_outlined,
+                        label: 'Ангилал',
+                        value: categoryLabel,
                       ),
-                    if (product.barCode != null && product.barCode!.isNotEmpty)
+                      if (product.angilal != null &&
+                          product.angilal!.trim().isNotEmpty &&
+                          product.angilal!.trim() != product.category.trim())
+                        _DetailRow(
+                          icon: Icons.folder_outlined,
+                          label: 'Төрөл / ангилал',
+                          value: product.angilal!.trim(),
+                        ),
                       _DetailRow(
-                        icon: Icons.barcode_reader,
-                        label: 'Баркод',
-                        value: product.barCode!,
+                        icon: Icons.straighten_outlined,
+                        label: 'Хэмжих нэгж',
+                        value: product.khemjikhNegj ?? product.unitLabel,
                       ),
-                    _DetailRow(
-                      icon: Icons.category_outlined,
-                      label: 'Ангилал',
-                      value: product.category,
-                    ),
-                    _DetailRow(
-                      icon: Icons.straighten_outlined,
-                      label: 'Хэмжих нэгж',
-                      value: product.khemjikhNegj ?? product.unitLabel,
-                    ),
-                    _DetailRow(
-                      icon: Icons.inventory_2_outlined,
-                      label: 'Хамгийн бага нөөц',
-                      value: '${item.minStockLevel}',
-                    ),
-                    if (item.lastRestocked != null)
                       _DetailRow(
-                        icon: Icons.update,
-                        label: 'Сүүлд нөхсөн',
-                        value: _formatDate(item.lastRestocked!),
+                        icon: Icons.inventory_2_outlined,
+                        label: 'Хамгийн бага нөөц',
+                        value: '${item.minStockLevel}',
                       ),
-                    if (product.noatBodohEsekh == true)
-                      _DetailRow(
-                        icon: Icons.receipt_long_outlined,
-                        label: 'НӨАТ',
-                        value: product.noatiinDun != null
-                            ? MntAmountFormatter.formatTugrik(product.noatiinDun!)
-                            : 'Тийм',
-                      ),
-                  ]),
+                      if (item.lastRestocked != null)
+                        _DetailRow(
+                          icon: Icons.update,
+                          label: 'Сүүлд нөхсөн',
+                          value: MongolianDateFormatter.formatShortDate(
+                            item.lastRestocked!,
+                          ),
+                        ),
+                      if (product.noatBodohEsekh == true)
+                        _DetailRow(
+                          icon: Icons.receipt_long_outlined,
+                          label: 'НӨАТ',
+                          value: product.noatiinDun != null
+                              ? MntAmountFormatter.formatTugrik(product.noatiinDun!)
+                              : 'Тийм',
+                        ),
+                    ],
+                  ),
 
-                  const SizedBox(height: 40),
+                  SizedBox(height: 16 + bottomPad),
                 ],
               ),
             ),
@@ -299,10 +330,6 @@ class BaraaDetailScreen extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
 }
@@ -368,7 +395,7 @@ class _DetailCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surface,
+        color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colorScheme.outlineVariant),
       ),
@@ -382,6 +409,7 @@ class _DetailCard extends StatelessWidget {
               style: textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.2,
+                color: colorScheme.primary,
               ),
             ),
           ),
@@ -447,15 +475,14 @@ class _DetailRow extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(left: 12),
-              child: Text(
+              child: SelectableText(
                 value,
                 style: textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: colorScheme.onSurface,
                 ),
                 textAlign: TextAlign.end,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 4,
+                maxLines: 6,
               ),
             ),
           ),

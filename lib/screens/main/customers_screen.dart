@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/auth_model.dart';
 import '../../models/customer_model.dart';
 import '../../models/locale_model.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 
 class CustomersScreen extends StatefulWidget {
@@ -50,34 +52,63 @@ class _CustomersScreenState extends State<CustomersScreen> {
             )
           : null,
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Consumer<LocaleModel>(
-              builder: (context, localeModel, child) {
-                final l10n = AppLocalizations(localeModel.locale);
-                return TextField(
-                  controller: _searchController,
-                  onChanged: (value) {
-                    context.read<CustomerModel>().setSearchQuery(value);
-                  },
-                  decoration: InputDecoration(
-                    hintText: l10n.tr('search_customers'),
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _searchController.clear();
-                              context.read<CustomerModel>().setSearchQuery('');
-                            },
-                          )
-                        : null,
-                  ),
-                );
-              },
-            ),
+          // Search + register entry: fixed header, list gets remaining space.
+          Consumer<LocaleModel>(
+            builder: (context, localeModel, child) {
+              final l10n = AppLocalizations(localeModel.locale);
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: _searchController,
+                      onChanged: (value) {
+                        context.read<CustomerModel>().setSearchQuery(value);
+                        setState(() {});
+                      },
+                      decoration: InputDecoration(
+                        hintText: l10n.tr('search_customers'),
+                        filled: true,
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                tooltip: MaterialLocalizations.of(context)
+                                    .deleteButtonTooltip,
+                                icon: const Icon(Icons.clear_rounded),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  context
+                                      .read<CustomerModel>()
+                                      .setSearchQuery('');
+                                  setState(() {});
+                                },
+                              )
+                            : null,
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: () => _openCustomerRegisterSheet(context),
+                      icon: const Icon(Icons.person_add_alt_1_rounded),
+                      label: Text(l10n.tr('customer_register_section')),
+                      style: OutlinedButton.styleFrom(
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              );
+            },
           ),
 
           // Customer List
@@ -191,6 +222,267 @@ class _CustomersScreenState extends State<CustomersScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => CustomerDetailsSheet(customer: customer),
+    );
+  }
+
+  Future<void> _openCustomerRegisterSheet(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.sizeOf(context).width,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.92,
+      ),
+      builder: (ctx) {
+        final mq = MediaQuery.of(ctx);
+        return Padding(
+          padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
+          child: const _CustomerRegisterSheet(),
+        );
+      },
+    );
+  }
+}
+
+/// Харилцагч бүртгэх · `POST /khariltsagchBurtgeye` (modal body).
+class _CustomerRegisterSheet extends StatefulWidget {
+  const _CustomerRegisterSheet();
+
+  @override
+  State<_CustomerRegisterSheet> createState() => _CustomerRegisterSheetState();
+}
+
+class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _ovog = TextEditingController();
+  final _ner = TextEditingController();
+  final _utas = TextEditingController();
+  final _register = TextEditingController();
+  final _mail = TextEditingController();
+  final _khayag = TextEditingController();
+
+  String _turul = 'Иргэн';
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _ovog.dispose();
+    _ner.dispose();
+    _utas.dispose();
+    _register.dispose();
+    _mail.dispose();
+    _khayag.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit(BuildContext context) async {
+    if (!_formKey.currentState!.validate()) return;
+    final auth = context.read<AuthModel>();
+    if (auth.posSession == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Салбарын сесс олдсонгүй'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    final model = context.read<CustomerModel>();
+    setState(() => _submitting = true);
+    final msg = await model.registerCustomer(
+      turul: _turul,
+      ovog: _ovog.text.trim().isEmpty ? null : _ovog.text.trim(),
+      ner: _ner.text.trim(),
+      utas: _utas.text.trim(),
+      register: _register.text.trim().isEmpty ? null : _register.text.trim(),
+      mail: _mail.text.trim().isEmpty ? null : _mail.text.trim(),
+      khayag: _khayag.text.trim().isEmpty ? null : _khayag.text.trim(),
+    );
+    if (!mounted) return;
+    setState(() => _submitting = false);
+    if (msg == null) {
+      _ovog.clear();
+      _ner.clear();
+      _utas.clear();
+      _register.clear();
+      _mail.clear();
+      _khayag.clear();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Амжилттай бүртгэгдлээ'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      if (context.mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final auth = context.watch<AuthModel>();
+
+    return Material(
+      color: colorScheme.surface,
+      child: Consumer<LocaleModel>(
+        builder: (context, localeModel, _) {
+          final l10n = AppLocalizations(localeModel.locale);
+          return SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  l10n.tr('customer_register_section'),
+                  style: textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (auth.posSession == null)
+                  Text(
+                    'Салбарын сесс олдсонгүй',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.error,
+                    ),
+                  )
+                else
+                  Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SegmentedButton<String>(
+                          segments: [
+                            ButtonSegment(
+                              value: 'Иргэн',
+                              label: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                                child: Text(l10n.tr('customer_type_irgen')),
+                              ),
+                            ),
+                            ButtonSegment(
+                              value: 'ААН',
+                              label: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8),
+                                child: Text(l10n.tr('customer_type_aan')),
+                              ),
+                            ),
+                          ],
+                          selected: {_turul},
+                          onSelectionChanged: (s) {
+                            setState(() => _turul = s.first);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _ovog,
+                          decoration: InputDecoration(
+                            labelText: l10n.tr('customer_field_ovog'),
+                            filled: true,
+                            border: const OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _ner,
+                          decoration: InputDecoration(
+                            labelText: l10n.tr('customer_field_ner'),
+                            filled: true,
+                            border: const OutlineInputBorder(),
+                          ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Заавал';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _utas,
+                          keyboardType: TextInputType.phone,
+                          decoration: InputDecoration(
+                            labelText: l10n.tr('customer_field_utas'),
+                            filled: true,
+                            border: const OutlineInputBorder(),
+                          ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Заавал';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _register,
+                          decoration: InputDecoration(
+                            labelText: l10n.tr('customer_field_register'),
+                            filled: true,
+                            border: const OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _mail,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: InputDecoration(
+                            labelText: l10n.tr('customer_field_mail'),
+                            filled: true,
+                            border: const OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _khayag,
+                          maxLines: 2,
+                          decoration: InputDecoration(
+                            labelText: l10n.tr('customer_field_address'),
+                            filled: true,
+                            border: const OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        FilledButton.icon(
+                          onPressed:
+                              _submitting ? null : () => _submit(context),
+                          icon: _submitting
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.save_rounded),
+                          label: Text(l10n.tr('customer_register_save')),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

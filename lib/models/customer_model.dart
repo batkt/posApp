@@ -208,6 +208,39 @@ class CustomerModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// `POST /khariltsagchBurtgeye` — same as web `khariltsagchNemekhModal`.
+  /// [turul] must be `Иргэн` or `ААН` (server convention).
+  Future<String?> registerCustomer({
+    required String turul,
+    String? ovog,
+    required String ner,
+    required String utas,
+    String? register,
+    String? mail,
+    String? khayag,
+  }) async {
+    final session = _session;
+    if (session == null) {
+      return 'Салбарын сесс олдсонгүй';
+    }
+    final res = await _service.registerBurtgeye(
+      baiguullagiinId: session.baiguullagiinId,
+      salbariinId: session.salbariinId,
+      turul: turul,
+      ovog: ovog,
+      ner: ner,
+      utas: [utas],
+      register: register,
+      mail: mail,
+      khayag: khayag,
+    );
+    if (res.success) {
+      await refresh();
+      return null;
+    }
+    return res.error ?? 'Бүртгэл амжилтгүй';
+  }
+
   void addCustomer(Customer customer) {
     _customers.add(customer);
     notifyListeners();

@@ -198,7 +198,11 @@ class _POSScreenState extends State<POSScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.cashierMode && widget.mobileStaffMode) {
+    // Two-step PageView (products → cart/pay): mobile staff always; kiosk only on narrow width.
+    // After receipt, [ReceiptScreen] bumps [cashierReturnToProductsEpoch] — must animate to page 0 for both.
+    final cashierMobileTwoStep = widget.cashierMode &&
+        (widget.mobileStaffMode || ResponsiveHelper.isMobile(context));
+    if (cashierMobileTwoStep) {
       final returnEpoch =
           context.select<SalesModel, int>((s) => s.cashierReturnToProductsEpoch);
       if (returnEpoch != _appliedCashierReturnEpoch && returnEpoch > 0) {

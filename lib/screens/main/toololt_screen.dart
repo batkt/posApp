@@ -11,6 +11,7 @@ import '../../services/category_service.dart';
 import '../../services/product_service.dart';
 import '../../services/toololt_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/app_date_range_picker.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../widgets/barcode_scan_sheet.dart';
@@ -154,18 +155,26 @@ class _ToololtScreenState extends State<ToololtScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
-        child: _ToololtStartSheet(
-          pos: pos,
-          l10n: l10n,
-          onDone: () {
-            Navigator.pop(ctx);
-            _refresh();
-          },
-        ),
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.sizeOf(context).width,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.92,
       ),
+      builder: (ctx) {
+        final mq = MediaQuery.of(ctx);
+        return Padding(
+          padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
+          child: _ToololtStartSheet(
+            pos: pos,
+            l10n: l10n,
+            onDone: () {
+              Navigator.pop(ctx);
+              _refresh();
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -1242,11 +1251,15 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
   }
 
   Future<void> _pickRange() async {
-    final picked = await showDateRangePicker(
+    final l10n = widget.l10n;
+    final picked = await showAppDateRangePicker(
       context: context,
+      initialDateRange: _range,
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
-      initialDateRange: _range,
+      helpText: l10n.tr('date_picker_range_help'),
+      cancelText: l10n.tr('date_picker_cancel'),
+      confirmText: l10n.tr('date_picker_confirm'),
     );
     if (picked != null) {
       setState(() => _range = picked);
@@ -1478,47 +1491,73 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
   Widget build(BuildContext context) {
     final l10n = widget.l10n;
     final scheme = Theme.of(context).colorScheme;
-    return SafeArea(
+    final textTheme = Theme.of(context).textTheme;
+    return Material(
+      color: scheme.surface,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        physics: const ClampingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
               l10n.tr('toololt_start_count'),
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+              style: textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _nameCtrl,
+              textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
                 labelText: l10n.tr('toololt_start_name'),
                 hintText: l10n.tr('toololt_start_name_hint'),
+                filled: true,
                 border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(l10n.tr('toololt_start_dates')),
-              subtitle: Text(
-                '${_range.start.toIso8601String().split('T').first} — ${_range.end.toIso8601String().split('T').first}',
+            Card(
+              margin: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                title: Text(
+                  l10n.tr('toololt_start_dates'),
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: Text(
+                  MongolianDateFormatter.formatDateRangeLine(
+                    _range.start,
+                    _range.end,
+                  ),
+                  style: textTheme.bodyMedium,
+                ),
+                trailing: Icon(
+                  Icons.date_range_rounded,
+                  color: scheme.primary,
+                ),
+                onTap: _pickRange,
               ),
-              trailing: const Icon(Icons.date_range_rounded),
-              onTap: _pickRange,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             InputDecorator(
               decoration: InputDecoration(
                 labelText: l10n.tr('toololt_start_type'),
+                filled: true,
                 border: const OutlineInputBorder(),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   value: _turul,
                   isExpanded: true,
+                  isDense: true,
                   items: [
                     DropdownMenuItem(
                       value: 'Бүх бараа',
@@ -1541,7 +1580,7 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
               ),
             ),
             if (_turul == 'Бараа сонгох') ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               OutlinedButton.icon(
                 onPressed: _pickProducts,
                 icon: const Icon(Icons.inventory_2_outlined),
@@ -1551,7 +1590,7 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
               ),
             ],
             if (_turul == 'Ангилал') ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               OutlinedButton.icon(
                 onPressed: _pickCategories,
                 icon: const Icon(Icons.category_outlined),
@@ -1560,19 +1599,26 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
                 ),
               ),
             ],
+            const SizedBox(height: 4),
             SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(l10n.tr('toololt_start_include_zero_stock')),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 0),
+              title: Text(
+                l10n.tr('toololt_start_include_zero_stock'),
+                style: textTheme.bodyLarge,
+              ),
               value: _zeroStock,
               onChanged: (v) => setState(() => _zeroStock = v),
             ),
             SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(l10n.tr('toololt_start_prefill_counts')),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 0),
+              title: Text(
+                l10n.tr('toololt_start_prefill_counts'),
+                style: textTheme.bodyLarge,
+              ),
               value: _prefill,
               onChanged: (v) => setState(() => _prefill = v),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             FilledButton(
               onPressed: _submitting ? null : _submit,
               child: _submitting
@@ -1583,7 +1629,7 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
                     )
                   : Text(l10n.tr('toololt_start_count')),
             ),
-            SizedBox(height: scheme.brightness == Brightness.dark ? 8 : 0),
+            const SizedBox(height: 8),
           ],
         ),
       ),

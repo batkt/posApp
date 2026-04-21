@@ -57,6 +57,76 @@ class KhariltsagchService {
       return KhariltsagchListResult.fail(e.toString());
     }
   }
+
+  /// Web parity: `POST /khariltsagchBurtgeye` (`khariltsagchNemekhModal.js`).
+  Future<KhariltsagchRegisterResult> registerBurtgeye({
+    required String baiguullagiinId,
+    required String salbariinId,
+    required String turul,
+    String? ovog,
+    required String ner,
+    required List<String> utas,
+    String? register,
+    String? mail,
+    String? khayag,
+  }) async {
+    final body = <String, dynamic>{
+      'baiguullagiinId': baiguullagiinId,
+      'salbariinId': salbariinId,
+      'turul': turul,
+      'khariltsagchiinTurul': turul,
+      'ner': ner.trim(),
+      'utas': utas.map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+      'khunglukhEsekh': false,
+      'khunglukhTurul': 'Мөнгөн дүн',
+      'khunglukhDun': 0,
+      'khunglukhKhuvi': 0,
+      'tsonkhniiTokhirgoo': {'posSystem': true},
+    };
+    final o = ovog?.trim();
+    if (o != null && o.isNotEmpty) body['ovog'] = o;
+    final r = register?.trim();
+    if (r != null && r.isNotEmpty) body['register'] = r;
+    final m = mail?.trim();
+    if (m != null && m.isNotEmpty) body['mail'] = m;
+    final k = khayag?.trim();
+    if (k != null && k.isNotEmpty) body['khayag'] = k;
+
+    try {
+      final response = await _api.post<dynamic>(
+        '/khariltsagchBurtgeye',
+        body: body,
+        parser: (d) => d,
+      );
+      final data = response.data;
+      final ok = response.success &&
+          (data == 'Amjilttai' ||
+              (data != null && data.toString().contains('Amjilttai')));
+      if (ok) {
+        return KhariltsagchRegisterResult.ok();
+      }
+      return KhariltsagchRegisterResult.fail(
+        response.message ?? 'Бүртгэл амжилтгүй',
+      );
+    } on ApiException catch (e) {
+      return KhariltsagchRegisterResult.fail(e.message);
+    } catch (e) {
+      return KhariltsagchRegisterResult.fail(e.toString());
+    }
+  }
+}
+
+class KhariltsagchRegisterResult {
+  KhariltsagchRegisterResult._({required this.success, this.error});
+
+  final bool success;
+  final String? error;
+
+  factory KhariltsagchRegisterResult.ok() =>
+      KhariltsagchRegisterResult._(success: true);
+
+  factory KhariltsagchRegisterResult.fail(String message) =>
+      KhariltsagchRegisterResult._(success: false, error: message);
 }
 
 class KhariltsagchListResult {

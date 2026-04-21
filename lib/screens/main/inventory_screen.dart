@@ -6,6 +6,7 @@ import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/authenticated_image.dart';
 import '../../widgets/barcode_scan_sheet.dart';
 import 'baraa_detail_screen.dart';
+import 'low_stock_baraa_screen.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key, this.showAppBar = true});
@@ -151,6 +152,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       color: inventory.lowStockCount > 0
                           ? AppColors.warning
                           : colorScheme.outline,
+                      onTap: inventory.lowStockCount > 0
+                          ? () {
+                              Navigator.push<void>(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      const LowStockBaraaScreen(),
+                                ),
+                              );
+                            }
+                          : null,
                     ),
                   ],
                 );
@@ -236,7 +248,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   void _showRestockDialog(BuildContext context, InventoryItem item) {
-    final quantityController = TextEditingController(text: '10');
+    final quantityController = TextEditingController();
 
     showDialog(
       context: context,
@@ -336,18 +348,20 @@ class _StatChip extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
+  final VoidCallback? onTap;
 
   const _StatChip({
     required this.label,
     required this.value,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
+    final child = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
@@ -369,6 +383,19 @@ class _StatChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+
+    if (onTap == null) {
+      return child;
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: child,
       ),
     );
   }

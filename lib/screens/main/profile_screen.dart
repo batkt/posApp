@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../services/printer_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/mongolian_date_formatter.dart';
 import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -212,7 +212,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _InfoCard(
                   icon: Icons.calendar_today,
                   title: 'Бүртгүүлсэн',
-                  value: DateFormat('yyyy/MM/dd').format(user.createdAt),
+                  value: MongolianDateFormatter.formatDateYmdWords(
+                    user.createdAt,
+                  ),
                 ),
                 const SizedBox(height: 12),
 

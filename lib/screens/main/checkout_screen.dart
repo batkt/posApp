@@ -23,7 +23,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _isProcessing = false;
   /// Blocks double-submit before the next frame applies [_isProcessing].
   bool _paymentInFlight = false;
-  Map<String, dynamic>? _lastEbarimt;
 
   @override
   void initState() {
@@ -51,7 +50,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (_paymentInFlight) return;
     _paymentInFlight = true;
     setState(() => _isProcessing = true);
-    _lastEbarimt = null;
     final sales = context.read<SalesModel>();
     final auth = context.read<AuthModel>();
 
@@ -102,13 +100,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         guilgeeMongoId =
             PosTransactionService.parseGuilgeeniiMongoIdFromSaveResponse(
                 saveResp);
-        if (guilgeeMongoId != null && guilgeeMongoId.isNotEmpty) {
-          _lastEbarimt = await svc.requestCitizenEbarimtAfterSale(
-            guilgeeniiMongoId: guilgeeMongoId,
-            baiguullagiinId: session.baiguullagiinId,
-            salbariinId: session.salbariinId,
-          );
-        }
 
         if (!mounted) return;
         final completedSale = sales.completeSale(
@@ -117,7 +108,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         );
         _goReceipt(
           completedSale,
-          ebarimt: _lastEbarimt,
+          guilgeeniiMongoId: guilgeeMongoId,
         );
       } else {
         if (!mounted) return;
@@ -144,7 +135,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   void _goReceipt(
     CompletedSale completedSale, {
-    Map<String, dynamic>? ebarimt,
+    String? guilgeeniiMongoId,
   }) {
     Navigator.pushReplacement(
       context,
@@ -156,7 +147,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           total: completedSale.total,
           paymentMethod: _selectedPaymentMethod,
           orderNumber: completedSale.id,
-          ebarimt: ebarimt,
+          guilgeeniiMongoId: guilgeeniiMongoId,
         ),
       ),
     );

@@ -17,6 +17,7 @@ class StaffScreenAccess {
     required this.allowsKhariltsagch,
     required this.allowsDashboard,
     required this.allowsEbarimt,
+    required this.allowsHynalt,
   });
 
   /// Only `AdminEsekh` — used for unrestricted UI (e.g. CAdmin) and legacy “see all”.
@@ -51,6 +52,9 @@ class StaffScreenAccess {
 
   /// Web route `/khyanalt/eBarimt` and similar (per-employee `tsonkhniiTokhirgoo`).
   final bool allowsEbarimt;
+
+  /// Web `/khyanalt/hynalt` — Хяналт dashboard (Орлого summary + top-selling table).
+  final bool allowsHynalt;
 
   /// Same as [allowsBarimtiinJagsaalt] — barcode/receipt history screen guard.
   bool get allowsSalesHistory => allowsBarimtiinJagsaalt;
@@ -132,6 +136,9 @@ class StaffScreenAccess {
     final khariltsagch = full || match('khariltsagch');
     final dashboard = full;
     final ebarimt = full || match('ebarimt');
+    final hynalt = full ||
+        match('/khyanalt/hynalt') ||
+        match('khyanalt/hynalt');
 
     return StaffScreenAccess(
       hasFullAccess: full,
@@ -146,6 +153,7 @@ class StaffScreenAccess {
       allowsKhariltsagch: khariltsagch,
       allowsDashboard: dashboard,
       allowsEbarimt: ebarimt,
+      allowsHynalt: hynalt,
     );
   }
 
@@ -162,6 +170,7 @@ class StaffScreenAccess {
     allowsKhariltsagch: false,
     allowsDashboard: false,
     allowsEbarimt: false,
+    allowsHynalt: false,
   );
 
   static bool _truthy(dynamic v) {

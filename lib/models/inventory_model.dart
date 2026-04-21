@@ -227,6 +227,49 @@ class InventoryModel extends ChangeNotifier {
     return list;
   }
 
+  /// Low-stock rows for the current branch, newest first; optional category + name/code search.
+  List<InventoryItem> lowStockItemsFiltered({
+    required String category,
+    required String searchQuery,
+  }) {
+    final showAll = category == 'Бүгд' || category == 'All';
+    final q = searchQuery.trim().toLowerCase();
+
+    bool matchesCategory(InventoryItem item) {
+      if (showAll) return true;
+      final p = item.product;
+      return p.category == category ||
+          p.angilal == category ||
+          (p.angilal?.contains(category) == true);
+    }
+
+    bool matchesSearch(InventoryItem item) {
+      if (q.isEmpty) return true;
+      final p = item.product;
+      return p.name.toLowerCase().contains(q) ||
+          p.id.toLowerCase().contains(q) ||
+          (p.code?.toLowerCase().contains(q) == true) ||
+          (p.barCode?.toLowerCase().contains(q) == true);
+    }
+
+    final list = _inventory
+        .where((i) => i.isLowStock)
+        .where(matchesCategory)
+        .where(matchesSearch)
+        .toList();
+
+    int sortKey(InventoryItem i) {
+      final t = i.product.createdAt ??
+          i.product.updatedAt ??
+          i.lastRestocked ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      return t.millisecondsSinceEpoch;
+    }
+
+    list.sort((a, b) => sortKey(b).compareTo(sortKey(a)));
+    return list;
+  }
+
   String get selectedCategory => _selectedCategory;
   String get searchQuery => _searchQuery;
 

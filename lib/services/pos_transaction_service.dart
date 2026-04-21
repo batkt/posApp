@@ -321,6 +321,23 @@ class PosTransactionService {
     );
   }
 
+  /// Same as web `GET /tatvaraasBaiguullagaAvya/:regno` — TIN / org lookup for register.
+  Future<Map<String, dynamic>?> fetchTatvarRegisterInfo(String regNo) async {
+    final trimmed = regNo.trim();
+    if (trimmed.isEmpty) return null;
+    final uri = Uri.parse(
+      '${ApiConfig.posBaseUrl}/tatvaraasBaiguullagaAvya/${Uri.encodeComponent(trimmed)}',
+    );
+    try {
+      final res =
+          await _http.get(uri, headers: _headers()).timeout(ApiConfig.timeout);
+      if (res.statusCode < 200 || res.statusCode >= 300) return null;
+      final data = _decodeBody(res.body);
+      if (data is Map) return Map<String, dynamic>.from(data);
+    } catch (_) {}
+    return null;
+  }
+
   static String? _messageFromErrorBody(String body) {
     try {
       final j = jsonDecode(body);

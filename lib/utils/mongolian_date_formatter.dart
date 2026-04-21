@@ -41,6 +41,20 @@ class MongolianDateFormatter {
     return '$day $month $year';
   }
 
+  /// Албан ёсны уншигдахуйц: **2026 оны 4-р сарын 5** (цонх, товч, хугацааны сонголт).
+  static String formatDateYmdWords(DateTime date) {
+    final local = date.toLocal();
+    final y = local.year;
+    final m = mongolianMonths[local.month - 1];
+    final d = local.day;
+    return '$y оны $mын $d';
+  }
+
+  /// Эхлэл — төгсгөл (мөр бүрт монгол сарын нэрээр).
+  static String formatDateRangeLine(DateTime start, DateTime end) {
+    return '${formatDateYmdWords(start)} — ${formatDateYmdWords(end)}';
+  }
+
   /// Section title for sales history (weekday + calendar date in Mongolian).
   static String formatSalesHistorySectionDate(DateTime date) {
     final weekday = mongolianWeekdays[date.weekday - 1];
@@ -55,6 +69,17 @@ class MongolianDateFormatter {
 
   static String formatDateTime(DateTime date) {
     return '${formatDate(date)} ${formatTime(date)}';
+  }
+
+  /// Receipt / thermal: `2026/04/21       13:59:59` (no weekday — avoids "Мягмар" etc.).
+  static String formatReceiptNumericDateTime(DateTime date) {
+    final y = date.year.toString().padLeft(4, '0');
+    final mo = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    final h = date.hour.toString().padLeft(2, '0');
+    final mi = date.minute.toString().padLeft(2, '0');
+    final s = date.second.toString().padLeft(2, '0');
+    return '$y/$mo/$d       $h:$mi:$s';
   }
 
   static String formatRelativeDate(DateTime date) {

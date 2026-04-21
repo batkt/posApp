@@ -10,6 +10,8 @@ import '../screens/main/customers_screen.dart';
 import '../screens/main/inventory_screen.dart';
 import '../screens/main/out_of_stock_baraa_screen.dart';
 import '../screens/main/sales_history_screen.dart';
+import '../screens/main/income_overview_screen.dart';
+import '../screens/main/purchase_list_screen.dart';
 import '../screens/main/toololt_screen.dart';
 import '../theme/app_theme.dart';
 import '../services/printer_service.dart';
@@ -83,6 +85,34 @@ class KioskDrawer extends StatelessWidget {
               ctx,
               MaterialPageRoute<void>(
                 builder: (_) => const EbarimtMenuScreen(),
+              ),
+            );
+          },
+        ),
+      if (access.allowsHynalt)
+        _KioskMenuAction(
+          icon: Icons.trending_up_rounded,
+          labelKey: 'menu_orlogo',
+          onTap: (ctx) {
+            Navigator.pop(ctx);
+            Navigator.push<void>(
+              ctx,
+              MaterialPageRoute<void>(
+                builder: (_) => const IncomeOverviewScreen(),
+              ),
+            );
+          },
+        ),
+      if (access.allowsBarimtiinJagsaalt)
+        _KioskMenuAction(
+          icon: Icons.shopping_cart_outlined,
+          labelKey: 'menu_hudaldan_avalt',
+          onTap: (ctx) {
+            Navigator.pop(ctx);
+            Navigator.push<void>(
+              ctx,
+              MaterialPageRoute<void>(
+                builder: (_) => const PurchaseListScreen(),
               ),
             );
           },
@@ -177,6 +207,134 @@ class KioskDrawer extends StatelessWidget {
                   backgroundColor:
                       res.success ? AppColors.success : AppColors.error,
                   behavior: SnackBarBehavior.floating,
+                ),
+              );
+
+              final debugBody = PrinterService.formatEposHealthCheckDebugText(res);
+              await showDialog<void>(
+                context: ctx,
+                builder: (dCtx) => AlertDialog(
+                  title: Text(
+                    res.success
+                        ? 'EPOS холболт (дэлгэрэнгүй)'
+                        : 'EPOS алдаа (дэлгэрэнгүй)',
+                  ),
+                  content: SizedBox(
+                    width: double.maxFinite,
+                    height: 360,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(dCtx).colorScheme.outlineVariant,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(10),
+                        child: SelectableText(
+                          debugBody,
+                          style: TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 11,
+                            height: 1.35,
+                            color: Theme.of(dCtx).colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dCtx),
+                      child: const Text('Хаах'),
+                    ),
+                  ],
+                ),
+              );
+            }
+          },
+        ),
+      if (access.allowsEbarimt)
+        _KioskMenuAction(
+          icon: Icons.print_outlined,
+          labelKey: 'pax_test_print',
+          onTap: (ctx) async {
+            final l10n = AppLocalizations.of(ctx);
+            Navigator.pop(ctx);
+
+            ScaffoldMessenger.of(ctx).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(l10n.tr('pax_test_print_hint'))),
+                  ],
+                ),
+              ),
+            );
+
+            final res = await PrinterService.testPrint();
+
+            if (ctx.mounted) {
+              ScaffoldMessenger.of(ctx).hideCurrentSnackBar();
+
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                SnackBar(
+                  content: Text(res.message),
+                  backgroundColor:
+                      res.success ? AppColors.success : AppColors.error,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+
+              final debugBody =
+                  PrinterService.formatPaxTestPrintDebugText(res);
+              await showDialog<void>(
+                context: ctx,
+                builder: (dCtx) => AlertDialog(
+                  title: Text(
+                    res.success
+                        ? 'PAX тест (дэлгэрэнгүй)'
+                        : 'PAX тест — алдаа (дэлгэрэнгүй)',
+                  ),
+                  content: SizedBox(
+                    width: double.maxFinite,
+                    height: 360,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(dCtx).colorScheme.outlineVariant,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(10),
+                        child: SelectableText(
+                          debugBody,
+                          style: TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 11,
+                            height: 1.35,
+                            color: Theme.of(dCtx).colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dCtx),
+                      child: const Text('Хаах'),
+                    ),
+                  ],
                 ),
               );
             }

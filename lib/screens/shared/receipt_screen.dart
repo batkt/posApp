@@ -3,37 +3,56 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../data/payment_display_config.dart';
+import '../../models/auth_model.dart';
 import '../../models/cart_model.dart';
 import '../../models/sales_model.dart';
+import '../../services/pos_transaction_service.dart';
 import '../../services/printer_service.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
+import '../../utils/thermal_receipt_image.dart';
 
-class ReceiptScreen extends StatelessWidget {
-  ReceiptScreen({
+class ReceiptScreen extends StatefulWidget {
+  const ReceiptScreen({
     super.key,
     required this.items,
     required this.total,
     required this.paymentMethod,
     required this.orderNumber,
-    this.ebarimt,
+    this.initialEbarimt,
+    this.guilgeeniiMongoId,
   });
-
-  final GlobalKey _printKey = GlobalKey();
 
   final List<CartItem> items;
   final double total;
   final String paymentMethod;
   final String orderNumber;
-  final Map<String, dynamic>? ebarimt;
+  final Map<String, dynamic>? initialEbarimt;
+  final String? guilgeeniiMongoId;
 
-  String get _paymentMethodName => PaymentDisplayConfig.labelMn(paymentMethod);
+  @override
+  State<ReceiptScreen> createState() => _ReceiptScreenState();
+}
+
+class _ReceiptScreenState extends State<ReceiptScreen> {
+  final GlobalKey _printKey = GlobalKey();
+  Map<String, dynamic>? _ebarimt;
+
+  @override
+  void initState() {
+    super.initState();
+    _ebarimt = widget.initialEbarimt;
+  }
+
+  String get _paymentMethodName =>
+      PaymentDisplayConfig.labelMn(widget.paymentMethod);
 
   void _startNewOrder(BuildContext context) {
     context.read<SalesModel>().signalCashierReturnToProductsAfterReceipt();
@@ -49,6 +68,112 @@ class ReceiptScreen extends StatelessWidget {
   }
 
   static String _str(dynamic v) => (v ?? '').toString().trim();
+
+  static double _ebarimtKhungulukh(Map<String, dynamic>? e) {
+    if (e == null) return 0;
+    return _num(e['khungulukhDun']);
+  }
+
+  /// Approximate НӨАТ / НӨАТ-гүй / НХАТ from cart when И-Баримт map is missing.
+  static ({double noatgui, double noat, double nhat}) _cartTaxApprox(
+      List<CartItem> items) {
+    var noatgui = 0.0;
+    var noat = 0.0;
+    var nhat = 0.0;
+    for (final i in items) {
+      final lt = i.total;
+      final p = i.product;
+      if (p.noatBodohEsekh == true) {
+        final net = lt / 1.1;
+        noatgui += net;
+        noat += lt - net;
+      } else {
+        noatgui += lt;
+      }
+      final nh = p.nhatiinDun;
+      if (nh != null && nh > 0) {
+        nhat += nh * i.quantity;
+      }
+    }
+    return (noatgui: noatgui, noat: noat, nhat: nhat);
+  }
+
+  /// e-barimt API / printer may use different keys for the QR payload.
+  static String _qrDataFromEbarimt(Map<String, dynamic>? e) {
+    if (e == null) return '';
+    for (final key in const [
+      'qrData',
+      'qr_data',
+      'QRData',
+      'qr',
+      'qrCode',
+      'qrString',
+    ]) {
+      final s = _str(e[key]);
+      if (s.isNotEmpty) return s;
+    }
+    return '';
+  }
+
+  /// [tatvaraasBaiguullagaAvya] merges `getInfo` with `tin`; name field varies.
+  static String _companyNameFromTatvarMap(Map<String, dynamic>? m) {
+    if (m == null) return '';
+    for (final key in const [
+      'name',
+      'mongolianName',
+      'companyName',
+      'ner',
+      'fullName',
+      'buyerName',
+      'baiguullagiinNer',
+      'registerUserName',
+    ]) {
+      final s = _str(m[key]);
+      if (s.isNotEmpty) return s;
+    }
+    return '';
+  }
+
+  static String _companyNameFromEbarimt(Map<String, dynamic>? e) {
+    if (e == null) return '';
+    for (final key in const [
+      'baiguullagiinNer',
+      'companyDisplayName',
+      'customerName',
+      'buyerName',
+      'companyName',
+      'name',
+    ]) {
+      final s = _str(e[key]);
+      if (s.isNotEmpty) return s;
+    }
+    return '';
+  }
+
+  /// Merges [tatvaraasBaiguullagaAvya] body (`name`, `tin`, …) into the e-barimt API map for the receipt.
+  static Map<String, dynamic> mergeTatvarIntoEbarimtResult(
+    Map<String, dynamic> apiResult,
+    Map<String, dynamic>? tatvarLookup,
+  ) {
+    final m = Map<String, dynamic>.from(apiResult);
+    final ner = _companyNameFromTatvarMap(tatvarLookup);
+    if (ner.isNotEmpty) {
+      m['baiguullagiinNer'] = ner;
+      m['companyDisplayName'] = ner;
+    }
+    return m;
+  }
+
+  /// Thermal print: default [Text] line metrics add a large gap under/over dashes.
+  static const Widget _thermalDashLine = Text(
+    '----------------------------------------------',
+    textAlign: TextAlign.center,
+    style: TextStyle(
+      color: Colors.black,
+      fontSize: 9,
+      height: 1.0,
+    ),
+  );
 
   static List<Map<String, dynamic>> _extractEbarimtItems(
       Map<String, dynamic>? e) {
@@ -75,22 +200,24 @@ class ReceiptScreen extends StatelessWidget {
       if (boundary == null) {
         throw Exception('Print boundary not ready');
       }
-      final ui.Image image = await boundary.toImage(pixelRatio: 1.5);
-      final ByteData? byteData =
-          await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) {
-        throw Exception('Unable to render print image');
+      // High DPI + thermal binarization (see [encodeThermalReceiptPng]) so text stays
+      // solid black on paper; low pixelRatio + PNG gray fringes look blurry on PAX.
+      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      final Uint8List pngBytes;
+      try {
+        pngBytes = await encodeThermalReceiptPng(image);
+      } finally {
+        image.dispose();
       }
-      final Uint8List pngBytes = byteData.buffer.asUint8List();
-      final e = ebarimt;
+      final e = _ebarimt;
       final totalAmount =
           _num(e?['amount']) > 0 ? _num(e?['amount']) : _num(e?['totalAmount']);
       final dbRefNo =
           _str(e?['billId']).isNotEmpty ? _str(e?['billId']) : _str(e?['id']);
       final result = await PrinterService.printReceiptImage(
         pngBytes,
-        amount: totalAmount > 0 ? totalAmount : total,
-        dbRefNo: dbRefNo.isNotEmpty ? dbRefNo : orderNumber,
+        amount: totalAmount > 0 ? totalAmount : widget.total,
+        dbRefNo: dbRefNo.isNotEmpty ? dbRefNo : widget.orderNumber,
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -125,7 +252,7 @@ class ReceiptScreen extends StatelessWidget {
   }
 
   Future<void> _printViaSystemDialog() async {
-    final e = ebarimt;
+    final e = _ebarimt;
     final totalAmount =
         _num(e?['amount']) > 0 ? _num(e?['amount']) : _num(e?['totalAmount']);
     final totalVat =
@@ -150,11 +277,93 @@ class ReceiptScreen extends StatelessWidget {
     await Printing.layoutPdf(onLayout: (_) async => doc.save());
   }
 
+  Future<void> _onEbarimtPrintPressed(BuildContext context) async {
+    if (_ebarimt != null) {
+      await _printOnPaxDevice(context);
+      return;
+    }
+    final auth = context.read<AuthModel>();
+    final id = widget.guilgeeniiMongoId;
+    if (id == null || id.isEmpty || !auth.canSubmitPosSales) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('И-Баримт авах боломжгүй')),
+        );
+      }
+      return;
+    }
+    final session = auth.posSession!;
+    final result = await showDialog<Map<String, dynamic>?>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _EbarimtBuyerDialog(
+        guilgeeniiMongoId: id,
+        baiguullagiinId: session.baiguullagiinId,
+        salbariinId: session.salbariinId,
+      ),
+    );
+    if (!mounted || result == null) return;
+    if (!context.mounted) return;
+    setState(() => _ebarimt = result);
+    await SchedulerBinding.instance.endOfFrame;
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    if (!mounted || !context.mounted) return;
+    await _printOnPaxDevice(context);
+  }
+
+  /// Single label/value row on the white thermal receipt (black text).
+  Widget _thermalPaymentMoneyRow(
+    TextTheme t, {
+    required String label,
+    required String value,
+    double fontSize = 14,
+    FontWeight lw = FontWeight.w600,
+    FontWeight vw = FontWeight.w700,
+    double topPad = 2,
+  }) {
+    return Padding(
+      padding: EdgeInsets.only(top: topPad),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: t.bodySmall?.copyWith(
+                color: Colors.black,
+                fontSize: fontSize,
+                fontWeight: lw,
+                height: 1.15,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            textAlign: TextAlign.right,
+            style: t.bodySmall?.copyWith(
+              color: Colors.black,
+              fontSize: fontSize,
+              fontWeight: vw,
+              height: 1.15,
+              fontFeatures: const [ui.FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final e = ebarimt;
+    final cashierName =
+        (context.watch<AuthModel>().currentUser?.name ?? '').trim();
+    final auth = context.watch<AuthModel>();
+    final canPosEbarimt = auth.canSubmitPosSales &&
+        widget.guilgeeniiMongoId != null &&
+        widget.guilgeeniiMongoId!.isNotEmpty;
+    final e = _ebarimt;
     final totalAmount =
         _num(e?['amount']) > 0 ? _num(e?['amount']) : _num(e?['totalAmount']);
     final totalVat =
@@ -173,7 +382,23 @@ class ReceiptScreen extends StatelessWidget {
     final ebarimtCustomerTin = _str(e?['customerTin']);
     final ebarimtLottery = _str(e?['lottery']);
     final ebarimtItems = _extractEbarimtItems(e);
-    final qrData = _str(e?['qrData']);
+    final qrData = _qrDataFromEbarimt(e);
+    final ebarimtCompanyNer = _companyNameFromEbarimt(e);
+    final khungulE = _ebarimtKhungulukh(e);
+    final cartTax = _cartTaxApprox(widget.items);
+    final thermalPay = e != null
+        ? (totalAmount > 0 ? totalAmount : widget.total)
+        : widget.total;
+    final thermalVat = e != null ? totalVat : cartTax.noat;
+    final thermalCt = e != null ? totalCityTax : cartTax.nhat;
+    final thermalNoatguiRaw = e != null
+        ? (thermalPay - thermalVat - thermalCt)
+        : cartTax.noatgui;
+    final thermalNoatgui =
+        thermalNoatguiRaw < 0 ? 0.0 : thermalNoatguiRaw;
+    final thermalNiitDun = e != null ? (thermalPay + khungulE) : thermalPay;
+    final thermalTulukh = thermalPay;
+    final thermalIb = thermalPay;
 
     return Scaffold(
       body: SafeArea(
@@ -204,14 +429,18 @@ class ReceiptScreen extends StatelessWidget {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'И-Баримт бэлэн',
+                                  e != null
+                                      ? 'И-Баримт бэлэн'
+                                      : (canPosEbarimt
+                                          ? 'Баримт (И-Баримт сонгоно)'
+                                          : 'Баримт'),
                                   style: textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
                               ),
                               Text(
-                                _fmtMnt(total),
+                                _fmtMnt(widget.total),
                                 style: textTheme.titleMedium?.copyWith(
                                   color: colorScheme.primary,
                                   fontWeight: FontWeight.w900,
@@ -221,35 +450,48 @@ class ReceiptScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Захиалга: $orderNumber',
+                            'БД: ${widget.orderNumber}',
                             style: textTheme.bodyMedium?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
                           ),
                           const SizedBox(height: 4),
+                          if (cashierName.isNotEmpty) ...[
+                            Text(
+                              'Касс: $cashierName',
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                          ],
                           Text(
-                            MongolianDateFormatter.formatDateTime(DateTime.now()),
+                            MongolianDateFormatter.formatReceiptNumericDateTime(
+                              DateTime.now(),
+                            ),
                             style: textTheme.bodySmall?.copyWith(
                               color: colorScheme.onSurfaceVariant,
+                              fontFeatures: const [
+                                ui.FontFeature.tabularFigures(),
+                              ],
                             ),
                           ),
                           if (e != null) ...[
                             const SizedBox(height: 10),
                             const Divider(height: 1),
                             const SizedBox(height: 10),
-                            Text(
-                              'И-БАРИМТ · $ebarimtType',
-                              style: textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
                             if (ebarimtDate.isNotEmpty)
                               _detailRow(context, 'Огноо', ebarimtDate),
                             if (ebarimtBillId.isNotEmpty)
                               _detailRow(context, 'ДДТД', ebarimtBillId),
                             if (ebarimtRegister.isNotEmpty)
                               _detailRow(context, 'Регистр', ebarimtRegister),
+                            if (ebarimtType == 'ААН' && ebarimtCompanyNer.isNotEmpty)
+                              _detailRow(
+                                context,
+                                'Байгууллагын нэр',
+                                ebarimtCompanyNer,
+                              ),
                             if (ebarimtCustomerTin.isNotEmpty)
                               _detailRow(
                                   context, 'Харилцагч ТТД', ebarimtCustomerTin),
@@ -271,7 +513,7 @@ class ReceiptScreen extends StatelessWidget {
                             const SizedBox(height: 6),
                             ...(ebarimtItems.isNotEmpty
                                     ? ebarimtItems
-                                    : items
+                                    : widget.items
                                         .map((i) => {
                                               'name': i.product.name,
                                               'qty': i.quantity,
@@ -282,12 +524,12 @@ class ReceiptScreen extends StatelessWidget {
                                 .map((item) => _ebarimtItemRow(context, item)),
                             if ((ebarimtItems.isNotEmpty
                                         ? ebarimtItems.length
-                                        : items.length) >
+                                        : widget.items.length) >
                                     12)
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),
                                 child: Text(
-                                  '+${(ebarimtItems.isNotEmpty ? ebarimtItems.length : items.length) - 12} мөр...',
+                                  '+${(ebarimtItems.isNotEmpty ? ebarimtItems.length : widget.items.length) - 12} мөр...',
                                   style: textTheme.bodySmall?.copyWith(
                                     color: colorScheme.onSurfaceVariant,
                                   ),
@@ -300,7 +542,7 @@ class ReceiptScreen extends StatelessWidget {
                               child: QrImageView(
                                 data: qrData,
                                 version: QrVersions.auto,
-                                size: 120,
+                                size: 220,
                                 backgroundColor: Colors.white,
                               ),
                             ),
@@ -320,261 +562,275 @@ class ReceiptScreen extends StatelessWidget {
                         width: 380,
                         padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'POSEASE БАРИМТ',
-                              textAlign: TextAlign.center,
-                              style: textTheme.titleMedium?.copyWith(
-                                color: Colors.black,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1.1,
-                                fontSize: 22,
+                            SizedBox(
+                              width: double.infinity,
+                              child: Text(
+                                'POSEASE БАРИМТ',
+                                textAlign: TextAlign.center,
+                                style: textTheme.titleSmall?.copyWith(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.6,
+                                  fontSize: 16,
+                                ),
                               ),
                             ),
+                            if (cashierName.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Касс: $cashierName',
+                                textAlign: TextAlign.start,
+                                style: textTheme.labelMedium?.copyWith(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 2),
                             Text(
-                              'Захиалга: $orderNumber',
-                              textAlign: TextAlign.center,
+                              'БД: ${widget.orderNumber}',
+                              textAlign: TextAlign.start,
                               style: textTheme.labelLarge?.copyWith(
                                 color: Colors.black,
                                 fontWeight: FontWeight.w700,
-                                fontSize: 16,
+                                fontSize: 14,
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              MongolianDateFormatter.formatDateTime(
+                              MongolianDateFormatter.formatReceiptNumericDateTime(
                                 DateTime.now(),
                               ),
-                              textAlign: TextAlign.center,
+                              textAlign: TextAlign.start,
                               style: textTheme.bodySmall?.copyWith(
                                 color: Colors.black,
-                                fontSize: 15,
+                                fontSize: 13,
                                 fontFeatures: const [
                                   ui.FontFeature.tabularFigures(),
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 10),
-                            const Text(
-                              '----------------------------------------------',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.black),
-                            ),
-                            Row(
+                            if (ebarimtBillId.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'ДДТД: $ebarimtBillId',
+                                textAlign: TextAlign.start,
+                                style: textTheme.labelSmall?.copyWith(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                  fontFeatures: const [
+                                    ui.FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            if (ebarimtType == 'ААН' &&
+                                ebarimtCompanyNer.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Худалдан авагч: $ebarimtCompanyNer',
+                                textAlign: TextAlign.start,
+                                style: textTheme.labelSmall?.copyWith(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            const SizedBox(height: 1),
+                            _thermalDashLine,
+                            SizedBox(
+                              width: double.infinity,
+                              child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Text(
-                                  'Бараа',
-                                  style: textTheme.bodyMedium?.copyWith(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 17,
+                                Expanded(
+                                  child: Text(
+                                    'Бараа',
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                    ),
                                   ),
                                 ),
-                                const Spacer(),
-                                Text(
-                                  '${items.length}',
-                                  style: textTheme.bodyMedium?.copyWith(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 17,
+                                SizedBox(
+                                  width: 76,
+                                  height: 12,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      'Тоо ширхэг',
+                                      maxLines: 1,
+                                      textAlign: TextAlign.center,
+                                      style: textTheme.labelSmall?.copyWith(
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 12,
+                                        height: 1.0,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 84,
+                                  child: Text(
+                                    'Үнэ',
+                                    textAlign: TextAlign.right,
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 6),
-                            ...items.take(8).map(
+                            ),
+                            const SizedBox(height: 1),
+                            ...widget.items.take(8).map(
                               (item) => Padding(
-                                padding: const EdgeInsets.only(bottom: 4),
+                                padding: const EdgeInsets.only(bottom: 2),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        '${item.quantity}x ${item.product.name}',
+                                        item.product.name,
                                         style: textTheme.bodySmall?.copyWith(
                                           color: Colors.black,
                                           fontWeight: FontWeight.w500,
-                                          fontSize: 16,
+                                          fontSize: 13,
                                         ),
-                                        maxLines: 1,
+                                        maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      _fmtMnt(item.total),
-                                      style: textTheme.bodySmall?.copyWith(
-                                        color: Colors.black,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 16,
-                                        fontFeatures: const [
-                                          ui.FontFeature.tabularFigures(),
-                                        ],
+                                    SizedBox(
+                                      width: 76,
+                                      child: Text(
+                                        '${item.quantity}',
+                                        textAlign: TextAlign.center,
+                                        style: textTheme.bodySmall?.copyWith(
+                                          color: Colors.black,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                          fontFeatures: const [
+                                            ui.FontFeature.tabularFigures(),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 84,
+                                      child: Text(
+                                        _fmtMnt(item.product.price),
+                                        textAlign: TextAlign.right,
+                                        style: textTheme.bodySmall?.copyWith(
+                                          color: Colors.black,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                          fontFeatures: const [
+                                            ui.FontFeature.tabularFigures(),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
                             ),
-                            if (items.length > 8)
+                            if (widget.items.length > 8)
                               Padding(
-                                padding: const EdgeInsets.only(top: 2, bottom: 4),
+                                padding: const EdgeInsets.only(top: 2, bottom: 2),
                                 child: Text(
-                                  '+${items.length - 8} бараа...',
+                                  '+${widget.items.length - 8} бараа...',
                                   style: textTheme.labelSmall?.copyWith(
                                     color: Colors.black,
-                                    fontSize: 14,
+                                    fontSize: 12,
                                   ),
                                 ),
                               ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              '----------------------------------------------',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.black),
-                            ),
-                            Row(
-                              children: [
-                                Text(
-                                  'Төлбөр',
-                                  style: textTheme.bodyMedium?.copyWith(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 17,
-                                  ),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  _paymentMethodName,
-                                  style: textTheme.bodyMedium?.copyWith(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 17,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Text(
-                                  'Нийт дүн',
-                                  style: textTheme.bodyMedium?.copyWith(
-                                    color: Colors.black,
-                                    fontSize: 17,
-                                  ),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  _fmtMnt(totalAmount > 0 ? totalAmount : total),
-                                  style: textTheme.bodyMedium?.copyWith(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 17,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (totalVat > 0) ...[
-                              const SizedBox(height: 2),
-                              Row(
+                            _thermalDashLine,
+                            SizedBox(
+                              width: double.infinity,
+                              child: Row(
                                 children: [
                                   Text(
-                                    'НӨАТ',
-                                    style: textTheme.bodySmall?.copyWith(
+                                    'Төлбөр',
+                                    style: textTheme.bodyMedium?.copyWith(
                                       color: Colors.black,
-                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 17,
                                     ),
                                   ),
                                   const Spacer(),
                                   Text(
-                                    _fmtMnt(totalVat),
-                                    style: textTheme.bodySmall?.copyWith(
+                                    _paymentMethodName,
+                                    style: textTheme.bodyMedium?.copyWith(
                                       color: Colors.black,
-                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 17,
                                     ),
                                   ),
                                 ],
                               ),
-                            ],
-                            if (totalCityTax > 0) ...[
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  Text(
-                                    'НХАТ',
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: Colors.black,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    _fmtMnt(totalCityTax),
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: Colors.black,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Text(
-                                  'ТӨЛӨХ ДҮН',
-                                  style: textTheme.titleMedium?.copyWith(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.7,
-                                    fontSize: 23,
-                                  ),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  _fmtMnt(total),
-                                  style: textTheme.titleMedium?.copyWith(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 23,
-                                    fontFeatures: const [
-                                      ui.FontFeature.tabularFigures(),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                            ),
+                            _thermalPaymentMoneyRow(
+                              textTheme,
+                              label: 'Нийт дүн',
+                              value: _fmtMnt(thermalNiitDun),
+                              topPad: 6,
+                              fontSize: 15,
+                            ),
+                            _thermalPaymentMoneyRow(
+                              textTheme,
+                              label: 'НӨАТ-гүй дүн',
+                              value: _fmtMnt(thermalNoatgui),
+                              fontSize: 14,
+                            ),
+                            _thermalPaymentMoneyRow(
+                              textTheme,
+                              label: 'НӨАТ',
+                              value: _fmtMnt(thermalVat),
+                              fontSize: 14,
+                            ),
+                            _thermalPaymentMoneyRow(
+                              textTheme,
+                              label: 'НХАТ',
+                              value: _fmtMnt(thermalCt),
+                              fontSize: 14,
+                            ),
+                            _thermalPaymentMoneyRow(
+                              textTheme,
+                              label: 'Төлөх дүн',
+                              value: _fmtMnt(thermalTulukh),
+                              fontSize: 16,
+                              lw: FontWeight.w800,
+                              vw: FontWeight.w900,
+                              topPad: 4,
+                            ),
+                            _thermalPaymentMoneyRow(
+                              textTheme,
+                              label: 'И-Баримт дүн',
+                              value: _fmtMnt(thermalIb),
+                              fontSize: 16,
+                              lw: FontWeight.w800,
+                              vw: FontWeight.w900,
                             ),
                             if (e != null) ...[
-                              const SizedBox(height: 6),
-                              const Text(
-                                '----------------------------------------------',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.black),
-                              ),
                               const SizedBox(height: 4),
-                              Text(
-                                'И-БАРИМТ · $ebarimtType',
-                                textAlign: TextAlign.center,
-                                style: textTheme.labelLarge?.copyWith(
-                                  color: Colors.black,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              if (ebarimtDate.isNotEmpty)
-                                Text(
-                                  ebarimtDate,
-                                  textAlign: TextAlign.center,
-                                  style: textTheme.labelSmall?.copyWith(
-                                    color: Colors.black,
-                                    fontSize: 14,
-                                  ),
-                                ),
+                              _thermalDashLine,
+                              const SizedBox(height: 2),
                               if (_str(e['lottery']).isNotEmpty)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 4),
@@ -623,7 +879,9 @@ class ReceiptScreen extends StatelessWidget {
                                   Text(
                                     qrData.isNotEmpty
                                         ? 'QR уншуулаад баримтаа шалгана уу'
-                                        : 'QR мэдээлэл олдсонгүй',
+                                        : (e != null
+                                            ? 'ebarimt.mn эсвэл ДДТД-аар шалгана уу'
+                                            : 'QR мэдээлэл олдсонгүй'),
                                     textAlign: TextAlign.center,
                                     style: textTheme.labelMedium?.copyWith(
                                       color: Colors.black,
@@ -668,13 +926,17 @@ class ReceiptScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    if (ebarimt != null) ...[
+                    if (canPosEbarimt) ...[
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          onPressed: () => _printOnPaxDevice(context),
+                          onPressed: () => _onEbarimtPrintPressed(context),
                           icon: const Icon(Icons.print_outlined),
-                          label: const Text('И-Баримт хэвлэх'),
+                          label: Text(
+                            _ebarimt == null
+                                ? 'И-Баримт сонгоод хэвлэх'
+                                : 'И-Баримт хэвлэх',
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -762,3 +1024,293 @@ class ReceiptScreen extends StatelessWidget {
   }
 
 }
+
+/// Web parity: [pos/components/modalBody/posSystem/eBarimt.js] — Иргэн vs ААН, `POST /ebarimtShivye`.
+class _EbarimtBuyerDialog extends StatefulWidget {
+  const _EbarimtBuyerDialog({
+    required this.guilgeeniiMongoId,
+    required this.baiguullagiinId,
+    required this.salbariinId,
+  });
+
+  final String guilgeeniiMongoId;
+  final String baiguullagiinId;
+  final String salbariinId;
+
+  @override
+  State<_EbarimtBuyerDialog> createState() => _EbarimtBuyerDialogState();
+}
+
+class _EbarimtBuyerDialogState extends State<_EbarimtBuyerDialog> {
+  bool _aan = false;
+  final TextEditingController _reg = TextEditingController();
+  bool _loading = false;
+  String? _tin;
+  /// Full JSON from `GET /tatvaraasBaiguullagaAvya/:regno` (includes `name`, `found`, `tin`).
+  Map<String, dynamic>? _tatvarInfo;
+
+  @override
+  void dispose() {
+    _reg.dispose();
+    super.dispose();
+  }
+
+  static String? _tinFromMap(Map<String, dynamic>? m) {
+    if (m == null) return null;
+    final t = m['tin'] ?? m['data'];
+    if (t == null) return null;
+    final s = t.toString().trim();
+    return s.isEmpty ? null : s;
+  }
+
+  Future<void> _resolveTinForRegister(String reg) async {
+    if (reg.isEmpty) {
+      setState(() {
+        _tin = null;
+        _tatvarInfo = null;
+      });
+      return;
+    }
+    if (_aan && reg.length != 7) {
+      setState(() {
+        _tin = null;
+        _tatvarInfo = null;
+      });
+      return;
+    }
+    if (!_aan && reg.length != 10) {
+      setState(() {
+        _tin = null;
+        _tatvarInfo = null;
+      });
+      return;
+    }
+    setState(() => _loading = true);
+    final info = await PosTransactionService().fetchTatvarRegisterInfo(reg);
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _tin = _tinFromMap(info);
+      _tatvarInfo = info;
+    });
+  }
+
+  Future<void> _submit() async {
+    final raw = _reg.text.trim();
+    final reg = raw.toUpperCase();
+    final svc = PosTransactionService();
+
+    if (_aan) {
+      if (reg.length != 7) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('ААН байгууллагын регистр (7 орон) оруулна уу'),
+            ),
+          );
+        }
+        return;
+      }
+      setState(() => _loading = true);
+      final result = await svc.requestEbarimtAfterSale(
+        guilgeeniiMongoId: widget.guilgeeniiMongoId,
+        baiguullagiinId: widget.baiguullagiinId,
+        salbariinId: widget.salbariinId,
+        register: reg,
+        turul: '3',
+        customerTin: (_tin != null && _tin!.isNotEmpty) ? _tin : null,
+      );
+      if (!mounted) return;
+      setState(() => _loading = false);
+      if (result == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('И-Баримт авахад алдаа гарлаа')),
+        );
+        return;
+      }
+      Map<String, dynamic>? lookup = _tatvarInfo;
+      lookup ??= await svc.fetchTatvarRegisterInfo(reg);
+      if (!mounted) return;
+      Navigator.of(context).pop(
+        _ReceiptScreenState.mergeTatvarIntoEbarimtResult(result, lookup),
+      );
+      return;
+    }
+
+    // Иргэн
+    if (reg.isEmpty) {
+      setState(() => _loading = true);
+      final result = await svc.requestCitizenEbarimtAfterSale(
+        guilgeeniiMongoId: widget.guilgeeniiMongoId,
+        baiguullagiinId: widget.baiguullagiinId,
+        salbariinId: widget.salbariinId,
+      );
+      if (!mounted) return;
+      setState(() => _loading = false);
+      if (result == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('И-Баримт авахад алдаа гарлаа')),
+        );
+        return;
+      }
+      Navigator.of(context).pop(result);
+      return;
+    }
+
+    if (reg.length != 10) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Иргэний регистр хоосон эсвэл 10 оронтой байна'),
+          ),
+        );
+      }
+      return;
+    }
+
+    var tin = _tin;
+    Map<String, dynamic>? lookupForName = _tatvarInfo;
+    if (tin == null || tin.isEmpty) {
+      setState(() => _loading = true);
+      final info = await svc.fetchTatvarRegisterInfo(reg);
+      if (!mounted) return;
+      tin = _tinFromMap(info);
+      lookupForName = info;
+      setState(() {
+        _loading = false;
+        _tin = tin;
+        _tatvarInfo = info;
+      });
+    }
+    if (tin == null || tin.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Регистрийн дугаар таарахгүй байна'),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _loading = true);
+    final result = await svc.requestEbarimtAfterSale(
+      guilgeeniiMongoId: widget.guilgeeniiMongoId,
+      baiguullagiinId: widget.baiguullagiinId,
+      salbariinId: widget.salbariinId,
+      register: reg,
+      turul: '3',
+      customerTin: tin,
+    );
+    if (!mounted) return;
+    setState(() => _loading = false);
+    if (result == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('И-Баримт авахад алдаа гарлаа')),
+      );
+      return;
+    }
+    Navigator.of(context).pop(
+      _ReceiptScreenState.mergeTatvarIntoEbarimtResult(result, lookupForName),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tatvarBaiguullagiinNer =
+        _ReceiptScreenState._companyNameFromTatvarMap(_tatvarInfo);
+    return AlertDialog(
+      title: const Text('И-Баримт'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment<bool>(
+                  value: false,
+                  label: Text('Иргэн'),
+                ),
+                ButtonSegment<bool>(
+                  value: true,
+                  label: Text('ААН'),
+                ),
+              ],
+              selected: {_aan},
+              onSelectionChanged: (s) {
+                setState(() {
+                  _aan = s.first;
+                  _tin = null;
+                  _tatvarInfo = null;
+                  _reg.clear();
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _reg,
+              enabled: !_loading,
+              textCapitalization: TextCapitalization.characters,
+              decoration: InputDecoration(
+                labelText: _aan
+                    ? 'Регистр (7 орон)'
+                    : 'Регистр (хоосон эсвэл 10 орон)',
+                border: const OutlineInputBorder(),
+              ),
+              onChanged: (_) async {
+                final r = _reg.text.trim().toUpperCase();
+                if (_aan && r.length == 7) {
+                  await _resolveTinForRegister(r);
+                } else if (!_aan && r.length == 10) {
+                  await _resolveTinForRegister(r);
+                } else {
+                  setState(() {
+                    _tin = null;
+                    _tatvarInfo = null;
+                  });
+                }
+              },
+            ),
+            if (_tin != null && _tin!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'ТТД: $_tin',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+            if (_aan && tatvarBaiguullagiinNer.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Байгууллагын нэр: $tatvarBaiguullagiinNer',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _loading ? null : () => Navigator.of(context).pop(),
+          child: const Text('Болих'),
+        ),
+        FilledButton(
+          onPressed: _loading ? null : _submit,
+          child: _loading
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Болсон'),
+        ),
+      ],
+    );
+  }
+}
+

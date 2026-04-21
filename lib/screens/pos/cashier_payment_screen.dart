@@ -51,7 +51,6 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
 
   /// Blocks double-submit before the next frame applies [_busy].
   bool _submitInFlight = false;
-  Map<String, dynamic>? _lastEbarimt;
 
   late final String _orderPreview;
 
@@ -215,13 +214,6 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
 
     guilgeeMongoId =
         PosTransactionService.parseGuilgeeniiMongoIdFromSaveResponse(saveResp);
-    if (guilgeeMongoId != null && guilgeeMongoId.isNotEmpty) {
-      _lastEbarimt = await svc.requestCitizenEbarimtAfterSale(
-        guilgeeniiMongoId: guilgeeMongoId,
-        baiguullagiinId: session.baiguullagiinId,
-        salbariinId: session.salbariinId,
-      );
-    }
 
     if (!mounted) return;
     final completed = sales.completeCashierSale(
@@ -232,7 +224,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     );
     _goReceipt(
       completed,
-      ebarimt: _lastEbarimt,
+      guilgeeniiMongoId: guilgeeMongoId,
     );
   }
 
@@ -256,8 +248,6 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
 
     _submitInFlight = true;
     setState(() => _busy = true);
-    _lastEbarimt = null;
-
     try {
       var orderNo = sales.guilgeeniiDugaar;
       if (orderNo == null || orderNo.isEmpty) {
@@ -351,7 +341,6 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
 
     _submitInFlight = true;
     setState(() => _busy = true);
-    _lastEbarimt = null;
     try {
       if (useApi) {
         if (_kind == _PayKind.card &&
@@ -407,7 +396,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
 
   void _goReceipt(
     CompletedSale completed, {
-    Map<String, dynamic>? ebarimt,
+    String? guilgeeniiMongoId,
   }) {
     Navigator.pushReplacement(
       context,
@@ -419,7 +408,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           total: completed.total,
           paymentMethod: completed.paymentMethod,
           orderNumber: completed.id,
-          ebarimt: ebarimt,
+          guilgeeniiMongoId: guilgeeniiMongoId,
         ),
       ),
     );

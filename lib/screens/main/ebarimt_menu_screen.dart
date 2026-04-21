@@ -113,17 +113,7 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                      child: Text(
-                        l10n.tr('ebarimt_menu_hint'),
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          height: 1.35,
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
                       child: Text(
                         l10n.tr('ebarimt_recent_list_title'),
                         style: textTheme.titleMedium?.copyWith(
@@ -294,6 +284,25 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
               },
             );
 
+    Widget? topDescription;
+    if (pos != null) {
+      topDescription = Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          widget.showAppBar ? 12 : 4,
+          20,
+          8,
+        ),
+        child: Text(
+          l10n.tr('ebarimt_menu_hint'),
+          style: textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            height: 1.35,
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: widget.showAppBar
           ? AppBar(
@@ -312,15 +321,30 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (!widget.showAppBar && _future != null && pos != null)
-            Align(
-              alignment: Alignment.centerRight,
-              child: IconButton(
-                tooltip: l10n.tr('sales_history_refresh'),
-                onPressed: () => _reload(auth),
-                icon: const Icon(Icons.refresh_rounded),
+          if (!widget.showAppBar && pos != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.tr('ebarimt'),
+                      style: textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  if (_future != null)
+                    IconButton(
+                      tooltip: l10n.tr('sales_history_refresh'),
+                      onPressed: () => _reload(auth),
+                      icon: const Icon(Icons.refresh_rounded),
+                    ),
+                ],
               ),
             ),
+          if (topDescription != null) topDescription,
           Expanded(child: bodyCore),
         ],
       ),
