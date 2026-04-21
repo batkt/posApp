@@ -309,6 +309,8 @@ class AppLocalizations {
       'dashboard_total_recorded': 'Total recorded sales',
       'dashboard_total_recorded_hint': 'On this device / session',
       'dashboard_sale_count': '{n} sales',
+      'epos_sync': 'EPOS Sync',
+      'epos_sync_hint': 'Synchronize terminal keys and config',
     },
     'mn': {
       // Login
@@ -608,6 +610,8 @@ class AppLocalizations {
       'dashboard_total_recorded': 'Бүртгэгдсэн нийт дүн',
       'dashboard_total_recorded_hint': 'Энэ төхөөрөмж дээрх түүх',
       'dashboard_sale_count': '{n} борлуулалт',
+      'epos_sync': 'EPOS Холболт шалгах',
+      'epos_sync_hint': 'Терминалын түлхүүр болон тохиргоо шинэчлэх',
     },
   };
 

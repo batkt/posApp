@@ -83,7 +83,8 @@ class _TwoFactorAuthScreenState extends State<TwoFactorAuthScreen> {
         MaterialPageRoute(builder: (_) => const PostLoginHome()),
       );
     } else {
-      setState(() => _errorMessage = 'Invalid verification code');
+      final err = context.read<AuthModel>().lastAuthError;
+      setState(() => _errorMessage = err ?? 'Invalid verification code');
       // Clear all fields
       for (final controller in _controllers) {
         controller.clear();

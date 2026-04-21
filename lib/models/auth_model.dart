@@ -85,6 +85,10 @@ class AuthModel extends ChangeNotifier {
 
   StaffScreenAccess get staffAccess => _staffAccess;
 
+  /// Set when [login] or [verifyTwoFactorCode] fails; cleared on success.
+  String? _lastAuthError;
+  String? get lastAuthError => _lastAuthError;
+
   /// Persists credentials for biometric login. Must not block login indefinitely
   /// (secure storage can hang on some devices / keystore states).
   Future<void> _saveBiometricLoginCredentials(
@@ -117,6 +121,7 @@ class AuthModel extends ChangeNotifier {
     );
 
     if (result.success) {
+      _lastAuthError = null;
       // Save credentials for future biometric login.
       // (Stored encrypted by OS via flutter_secure_storage).
       await _saveBiometricLoginCredentials(username.trim(), password);
@@ -136,6 +141,8 @@ class AuthModel extends ChangeNotifier {
       return true;
     }
 
+    _lastAuthError = result.error;
+    notifyListeners();
     return false;
   }
 
@@ -147,6 +154,7 @@ class AuthModel extends ChangeNotifier {
     );
 
     if (result.success) {
+      _lastAuthError = null;
       if (result.staffAccess != null) {
         _staffAccess = result.staffAccess!;
       }
@@ -159,6 +167,8 @@ class AuthModel extends ChangeNotifier {
       return true;
     }
 
+    _lastAuthError = result.error;
+    notifyListeners();
     return false;
   }
 
@@ -212,6 +222,7 @@ class AuthModel extends ChangeNotifier {
     _currentUser = null;
     _posSession = null;
     _staffAccess = StaffScreenAccess.denied;
+    _lastAuthError = null;
     _isAuthenticated = false;
     _requiresTwoFactor = false;
     _pending2FAUsername = '';

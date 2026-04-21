@@ -10,6 +10,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.util.Base64
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.lang.ClassNotFoundException
 import java.lang.IllegalStateException
 import java.util.Locale
@@ -60,6 +61,35 @@ class MainActivity : FlutterFragmentActivity() {
                         try {
                             val text = call.argument<String>("text")
                             val bitmap = buildTestBitmap(text)
+                            val preferred = call.argument<String>("packageName")
+                            val targetEposPackage = resolveEposTargetPackage(preferred)
+                            if (targetEposPackage != null) {
+                                if (pendingEposResult != null) {
+                                    result.error("BUSY", "EPOS request already in progress", null)
+                                    return@setMethodCallHandler
+                                }
+                                val base64 = bitmapToBase64(bitmap)
+                                val payload = JSONObject().apply {
+                                    put("category", "android.epos.payment.printBitmap")
+                                    put("commandType", "28")
+                                    put("amount", "1.00")
+                                    put("dbRefNo", System.currentTimeMillis().toString())
+                                    put("bitmap", base64)
+                                }
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, payload.toString())
+                                    setPackage(targetEposPackage)
+                                }
+                                if (intent.resolveActivity(packageManager) != null) {
+                                    pendingEposResult = result
+                                    @Suppress("DEPRECATION")
+                                    startActivityForResult(intent, eposRequestCode)
+                                    return@setMethodCallHandler
+                                }
+                            }
+
+                            // Fallback for terminals where EPOS app is not installed.
                             printBitmapOnPax(bitmap)
                             result.success("printed")
                         } catch (e: Throwable) {
@@ -140,6 +170,20 @@ class MainActivity : FlutterFragmentActivity() {
                             result.error("EPOS_ERROR", e.message, null)
                         }
                     }
+                    "android.epos.payment.healthCheck" -> {
+                        try {
+                            val payload = JSONObject().apply {
+                                put("category", "android.epos.payment.healthCheck")
+                                put("commandType", "1")
+                                put("request-type", "healthCheck")
+                                put("dbRefNo", System.currentTimeMillis().toString())
+                            }
+                            val preferred = call.argument<String>("packageName")
+                            launchEpos(payload.toString(), result, preferred)
+                        } catch (e: Throwable) {
+                            result.error("EPOS_ERROR", e.message, null)
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -191,7 +235,10 @@ class MainActivity : FlutterFragmentActivity() {
             if (pkg == mine) continue
             if (isPackageInstalled(pkg) && canUniPosHandleSend(pkg)) return pkg
         }
-        return discoverUniPosFromSendHandlers(mine)
+        // 1) Prefer known terminal-like packages (UniPOS/EPOS/etc)
+        discoverUniPosFromSendHandlers(mine)?.let { return it }
+        // 2) Fallback: any other third-party SEND handler except our own app/browser.
+        return discoverAnyTerminalFromSendHandlers(mine)
     }
 
     private fun launchEpos(
@@ -284,10 +331,48 @@ class MainActivity : FlutterFragmentActivity() {
             .firstOrNull { canUniPosHandleSend(it) }
     }
 
+    private fun discoverAnyTerminalFromSendHandlers(excludePackage: String): String? {
+        val probe = Intent(Intent.ACTION_SEND).apply { type = "text/plain" }
+        val infos = packageManager.queryIntentActivities(
+            probe,
+            PackageManager.MATCH_DEFAULT_ONLY,
+        )
+        return infos.asSequence()
+            .map { it.activityInfo.packageName }
+            .distinct()
+            .filter { it != excludePackage }
+            .filterNot { isProbablyGenericShareTarget(it) }
+            .firstOrNull { canUniPosHandleSend(it) }
+    }
+
     private fun isLikelyUniPosPackage(pkg: String): Boolean {
         val p = pkg.lowercase(Locale.US)
         if (p.contains("unipos")) return true
         if (p.contains("genesis") && p.contains("terminal")) return true
+        if (p.contains("epos")) return true
+        if (p.contains("databank")) return true
+        if (p.contains("pax")) return true
+        if (p.contains("newpos")) return true
+        if (p.contains("sunmi")) return true
+        if (p.contains("verifone")) return true
+        if (p.contains("ingenico")) return true
+        if (p.contains("castles")) return true
+        if (p.contains("terminal") && (p.contains("pos") || p.contains("pay"))) return true
+        return false
+    }
+
+    private fun isProbablyGenericShareTarget(pkg: String): Boolean {
+        val p = pkg.lowercase(Locale.US)
+        if (p.contains("android")) return true
+        if (p.contains("google")) return true
+        if (p.contains("chrome")) return true
+        if (p.contains("samsung")) return true
+        if (p.contains("microsoft")) return true
+        if (p.contains("whatsapp")) return true
+        if (p.contains("telegram")) return true
+        if (p.contains("facebook")) return true
+        if (p.contains("messenger")) return true
+        if (p.contains("instagram")) return true
         return false
     }
 
@@ -320,12 +405,13 @@ class MainActivity : FlutterFragmentActivity() {
             pendingEposResult = null
 
             val payload = hashMapOf<String, Any?>(
-                "resultCode" to resultCode,
-                "rspCode" to data?.getStringExtra("rspCode"),
-                "rspMsg" to data?.getStringExtra("rspMsg"),
-                "result" to data?.getStringExtra("result"),
-                "error" to data?.getStringExtra("error"),
+                "resultCode" to resultCode
             )
+            data?.extras?.let { extras ->
+                for (key in extras.keySet()) {
+                    payload[key] = extras.get(key)
+                }
+            }
             if (resultCode == Activity.RESULT_OK) {
                 pending.success(payload)
             } else {
@@ -340,6 +426,12 @@ class MainActivity : FlutterFragmentActivity() {
     private fun decodeBase64ToBitmap(base64Data: String): Bitmap? {
         val bytes = Base64.decode(base64Data, Base64.DEFAULT)
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    }
+
+    private fun bitmapToBase64(bitmap: Bitmap): String {
+        val stream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        return Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
     }
 
     private fun printBitmapOnPax(bitmap: Bitmap) {

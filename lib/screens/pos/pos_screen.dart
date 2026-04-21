@@ -213,6 +213,7 @@ class _POSScreenState extends State<POSScreen> {
       return content;
     }
 
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -220,7 +221,7 @@ class _POSScreenState extends State<POSScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Борлуулалтын цэг',
+              l10n.tr('pos'),
               style: TextStyle(
                 fontSize: context.responsiveFontSize(20),
               ),

@@ -8,11 +8,13 @@ class PrinterResult {
     required this.success,
     required this.backend,
     required this.message,
+    this.data,
   });
 
   final bool success;
   final String backend;
   final String message;
+  final Map<String, dynamic>? data;
 }
 
 class PrinterService {
@@ -40,10 +42,25 @@ class PrinterService {
     } catch (_) {
       try {
         final now = DateTime.now().toIso8601String();
-        final native = await _channel.invokeMethod<String>(
+        final native = await _channel.invokeMethod<dynamic>(
           'android.epos.tasks.testPrint',
           {'text': 'POSEASE TEST PRINT\n$now'},
         );
+        final eposOk = _isEposSuccess(native);
+        if (eposOk) {
+          return const PrinterResult(
+            success: true,
+            backend: 'epos',
+            message: 'Тест амжилттай хэвлэгдлээ (epos)',
+          );
+        }
+        if (native is Map) {
+          return PrinterResult(
+            success: false,
+            backend: 'epos',
+            message: 'EPOS тест хэвлэх амжилтгүй: ${_eposMessage(native)}',
+          );
+        }
         return PrinterResult(
           success: native == 'printed',
           backend: 'native',
@@ -58,6 +75,38 @@ class PrinterService {
           message: 'Тест хэвлэх алдаа: $e',
         );
       }
+    }
+  }
+
+  static Future<PrinterResult> performEposHealthCheck({
+    String? terminalPackage,
+  }) async {
+    try {
+      final args = <String, dynamic>{};
+      final pkg = terminalPackage?.trim();
+      if (pkg != null && pkg.isNotEmpty) {
+        args['packageName'] = pkg;
+      }
+      final epos = await _channel.invokeMethod<dynamic>(
+        'android.epos.payment.healthCheck',
+        args,
+      );
+      final ok = _isEposSuccess(epos);
+      final resData = epos is Map ? Map<String, dynamic>.from(epos) : null;
+      return PrinterResult(
+        success: ok,
+        backend: 'epos',
+        data: resData,
+        message: ok
+            ? 'EPOS холболт амжилттай'
+            : 'EPOS холболт амжилтгүй: ${_eposMessage(epos)}',
+      );
+    } catch (e) {
+      return PrinterResult(
+        success: false,
+        backend: 'epos',
+        message: 'EPOS алдаа: $e',
+      );
     }
   }
 
@@ -103,9 +152,11 @@ class PrinterService {
           args,
         );
         final ok = _isEposSuccess(epos);
+        final resData = epos is Map ? Map<String, dynamic>.from(epos) : null;
         return PrinterResult(
           success: ok,
           backend: 'epos',
+          data: resData,
           message: ok
               ? 'Терминал дээр амжилттай хэвлэлээ (epos)'
               : 'EPOS хэвлэх хүсэлт илгээгдсэн боловч амжилтгүй: ${_eposMessage(epos)}',

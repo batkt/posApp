@@ -50,6 +50,15 @@ class AuthService {
             response.data!['baiguullagiinJagsaalt'] as List<dynamic>?;
 
         if (token != null) {
+          final requires2fa = response.data!['requires2FA'] == true;
+          // When 2FA is pending, `result` may be omitted until verification — enforce
+          // permission map there; otherwise check on this response.
+          final skipPermissionCheck = requires2fa && userData == null;
+          if (!skipPermissionCheck &&
+              StaffScreenAccess.isPermissionConfigurationMissing(userData)) {
+            return AuthResult.error('Эрхийн тохиргоо хийгдээгүй байна.');
+          }
+
           // Set token for future requests
           _apiService.setToken(token);
           posApiService.setToken(token);
@@ -111,10 +120,14 @@ class AuthService {
         final token = response.data!['token'] as String?;
 
         if (token != null) {
+          final userData = response.data!['result'] as Map<String, dynamic>?;
+          if (StaffScreenAccess.isPermissionConfigurationMissing(userData)) {
+            return AuthResult.error('Эрхийн тохиргоо хийгдээгүй байна.');
+          }
+
           _apiService.setToken(token);
           posApiService.setToken(token);
 
-          final userData = response.data!['result'] as Map<String, dynamic>?;
           final staffAccess = StaffScreenAccess.fromAjiltan(userData);
           final user = userData != null
               ? User(

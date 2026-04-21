@@ -283,7 +283,7 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
                               ),
                             ),
                     ),
-                    if (auth.staffAccess.allowsSalesHistory)
+                    if (auth.staffAccess.allowsBarimtiinJagsaalt)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                         child: OutlinedButton.icon(

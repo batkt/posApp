@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../models/inventory_model.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
@@ -51,59 +50,7 @@ class BaraaDetailScreen extends StatelessWidget {
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
               ),
             ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8, top: 8),
-                child: PopupMenuButton<String>(
-                  icon: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surface.withValues(alpha: 0.92),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.more_vert_rounded,
-                      color: colorScheme.onSurface,
-                    ),
-                  ),
-                onSelected: (value) {
-                  if (value == 'restock') {
-                    _showRestockDialog(context, item);
-                  } else if (value == 'edit') {
-                    _showEditDialog(context, item);
-                  } else if (value == 'delete') {
-                    _showDeleteDialog(context, item);
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'restock',
-                    child: Row(children: [
-                      Icon(Icons.add_box_outlined, size: 18),
-                      SizedBox(width: 8),
-                      Text('Нөхөн дүүргэх'),
-                    ]),
-                  ),
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(children: [
-                      Icon(Icons.edit_outlined, size: 18),
-                      SizedBox(width: 8),
-                      Text('Засах'),
-                    ]),
-                  ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Row(children: [
-                      Icon(Icons.delete_outline, size: 18, color: AppColors.error),
-                      const SizedBox(width: 8),
-                      Text('Устгах', style: TextStyle(color: AppColors.error)),
-                    ]),
-                  ),
-                ],
-              ),
-              ),
-            ],
+            actions: const [],
             flexibleSpace: FlexibleSpaceBar(
               stretchModes: const [StretchMode.zoomBackground],
               background: Stack(
@@ -147,10 +94,15 @@ class BaraaDetailScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Expanded(
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.sizeOf(context).width - 88,
+                        ),
                         child: Text(
                           product.name,
                           style: textTheme.headlineMedium?.copyWith(
@@ -160,7 +112,6 @@ class BaraaDetailScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -177,6 +128,32 @@ class BaraaDetailScreen extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      if (product.code != null && product.code!.isNotEmpty)
+                        _MetaPill(
+                          icon: Icons.qr_code_2_rounded,
+                          label: 'Код',
+                          value: product.code!,
+                        ),
+                      if (product.barCode != null && product.barCode!.isNotEmpty)
+                        _MetaPill(
+                          icon: Icons.barcode_reader,
+                          label: 'Баркод',
+                          value: product.barCode!,
+                        ),
+                      _MetaPill(
+                        icon: Icons.straighten_rounded,
+                        label: 'Нэгж',
+                        value: product.khemjikhNegj ?? product.unitLabel,
                       ),
                     ],
                   ),
@@ -314,34 +291,6 @@ class BaraaDetailScreen extends StatelessWidget {
                       ),
                   ]),
 
-                  const SizedBox(height: 24),
-
-                  // Action buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _showRestockDialog(context, item),
-                          icon: const Icon(Icons.add_box_outlined),
-                          label: const Text('Нөхөн дүүргэх'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () => _showEditDialog(context, item),
-                          icon: const Icon(Icons.edit_outlined),
-                          label: const Text('Засах'),
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 40),
                 ],
               ),
@@ -356,87 +305,49 @@ class BaraaDetailScreen extends StatelessWidget {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
-  void _showRestockDialog(BuildContext context, InventoryItem item) {
-    final quantityController = TextEditingController(text: '10');
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('${item.product.name} нөхөн дүүргэх'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Одоогийн үлдэгдэл: ${item.currentStock}'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: quantityController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Нэмэх тоо хэмжээ',
-                border: OutlineInputBorder(),
-              ),
+}
+
+class _MetaPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _MetaPill({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 40),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: colorScheme.primary),
+          const SizedBox(width: 8),
+          Text(
+            '$label: ',
+            style: textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Болих'),
           ),
-          FilledButton(
-            onPressed: () {
-              final qty = int.tryParse(quantityController.text) ?? 0;
-              if (qty > 0) {
-                context.read<InventoryModel>().restock(item.product.id, qty);
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('Нөхөн дүүргэх'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showEditDialog(BuildContext context, InventoryItem item) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('${item.product.name} засварлах'),
-        content: const Text('Бүтээгдэхүүн засварлах маягт энд байна'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Болих'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Өөрчлөлт хадгалах'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDeleteDialog(BuildContext context, InventoryItem item) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Бүтээгдэхүүн устгах уу?'),
-        content: Text(
-            '"${item.product.name}" бүтээгдэхүүнийг устгахдаа итгэлтэй байна уу?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Болих'),
-          ),
-          FilledButton(
-            onPressed: () {
-              context.read<InventoryModel>().deleteProduct(item.product.id);
-              Navigator.pop(context); // close dialog
-              Navigator.pop(context); // go back to list
-            },
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Устгах'),
+          Text(
+            value,
+            style: textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),

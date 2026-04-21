@@ -1,19 +1,25 @@
 /// Screen/feature flags derived from `ajiltan.tsonkhniiTokhirgoo` and `AdminEsekh`
 /// (parity with web `khereglegchiinErkhiinTokhirgoo.js`).
+///
+/// Non-admin staff only get features whose web routes are explicitly set to true in
+/// `tsonkhniiTokhirgoo` — no implicit “full” access when the map is missing or empty.
 class StaffScreenAccess {
   const StaffScreenAccess({
     required this.hasFullAccess,
     required this.allowsKiosk,
     required this.allowsMobile,
     required this.allowsPosSystem,
-    required this.allowsAguulakh,
+    required this.allowsAnyAguulakhRoute,
+    required this.allowsBaraaMatrial,
+    required this.allowsBaraaOrlogokh,
+    required this.allowsToollogo,
+    required this.allowsBarimtiinJagsaalt,
     required this.allowsKhariltsagch,
     required this.allowsDashboard,
-    required this.allowsSalesHistory,
     required this.allowsEbarimt,
   });
 
-  /// Admin or no explicit permission map → treat as unrestricted (legacy / safe default).
+  /// Only `AdminEsekh` — used for unrestricted UI (e.g. CAdmin) and legacy “see all”.
   final bool hasFullAccess;
 
   final bool allowsKiosk;
@@ -21,17 +27,51 @@ class StaffScreenAccess {
   /// Web route `/khyanalt/mobile` — phone/tablet POS without kiosk drawer or split cart.
   final bool allowsMobile;
   final bool allowsPosSystem;
-  final bool allowsAguulakh;
+
+  /// Any granted path under `/khyanalt/aguulakh/` (role hints, future screens).
+  final bool allowsAnyAguulakhRoute;
+
+  /// `/khyanalt/aguulakh/baraaMatrial` — baraa list + out-of-stock in the app.
+  final bool allowsBaraaMatrial;
+
+  /// `/khyanalt/aguulakh/baraaOrlogokh` — inventory / “бараа материал”.
+  final bool allowsBaraaOrlogokh;
+
+  /// `/khyanalt/aguulakh/toollogo` — тооллого.
+  final bool allowsToollogo;
+
+  /// `/khyanalt/aguulakh/barimtiinJagsaalt` — sales / receipt list.
+  final bool allowsBarimtiinJagsaalt;
+
+  /// `/khyanalt/khariltsagch` — customers.
   final bool allowsKhariltsagch;
+
+  /// No dedicated web key in staff data yet; only admins get the dashboard tile.
   final bool allowsDashboard;
-  final bool allowsSalesHistory;
 
   /// Web route `/khyanalt/eBarimt` and similar (per-employee `tsonkhniiTokhirgoo`).
   final bool allowsEbarimt;
 
+  /// Same as [allowsBarimtiinJagsaalt] — barcode/receipt history screen guard.
+  bool get allowsSalesHistory => allowsBarimtiinJagsaalt;
+
+  /// Cashier vs manager heuristic ([AuthService]): any warehouse module permission.
+  bool get allowsAguulakh =>
+      hasFullAccess || allowsAnyAguulakhRoute;
+
   /// Kiosk / full POS: poll for mobile-initiated UniPOS card requests at this branch.
   bool get canPollTerminalPaySignals =>
       hasFullAccess || allowsKiosk || allowsPosSystem;
+
+  /// Non-admins must have a non-empty `tsonkhniiTokhirgoo` (login is denied otherwise).
+  static bool isPermissionConfigurationMissing(Map<String, dynamic>? data) {
+    if (data == null) return true;
+    if (data['AdminEsekh'] == true) return false;
+    final raw = data['tsonkhniiTokhirgoo'];
+    if (raw == null) return true;
+    if (raw is! Map || raw.isEmpty) return true;
+    return false;
+  }
 
   static StaffScreenAccess fromAjiltan(Map<String, dynamic>? data) {
     if (data == null) {
@@ -46,8 +86,12 @@ class StaffScreenAccess {
         map![k.toString()] = v;
       });
     }
-    final hasExplicit = map != null && map.isNotEmpty;
-    final full = admin || !hasExplicit;
+
+    if (!admin && (map == null || map.isEmpty)) {
+      return denied;
+    }
+
+    final full = admin;
 
     final paths = <String>{};
     map?.forEach((key, value) {
@@ -72,15 +116,14 @@ class StaffScreenAccess {
         match('pos-system') ||
         match('/khyanalt/possystem') ||
         match('khyanalt/possystem');
-    final aguulakh = full || match('aguulakh');
+    final anyAguulakh =
+        full || paths.any((p) => p.contains('/aguulakh/'));
+    final baraaMatrial = full || match('baraaMatrial');
+    final baraaOrlogokh = full || match('baraaOrlogokh');
+    final toollogo = full || match('toollogo');
+    final barimtiinJagsaalt = full || match('barimtiinJagsaalt');
     final khariltsagch = full || match('khariltsagch');
     final dashboard = full;
-    final history = full ||
-        pos ||
-        match('jagsaalt') ||
-        match('jurnal') ||
-        match('guilgee') ||
-        match('borluulalt');
     final ebarimt = full || match('ebarimt');
 
     return StaffScreenAccess(
@@ -88,10 +131,13 @@ class StaffScreenAccess {
       allowsKiosk: kiosk,
       allowsMobile: mobile,
       allowsPosSystem: pos,
-      allowsAguulakh: aguulakh,
+      allowsAnyAguulakhRoute: anyAguulakh,
+      allowsBaraaMatrial: baraaMatrial,
+      allowsBaraaOrlogokh: baraaOrlogokh,
+      allowsToollogo: toollogo,
+      allowsBarimtiinJagsaalt: barimtiinJagsaalt,
       allowsKhariltsagch: khariltsagch,
       allowsDashboard: dashboard,
-      allowsSalesHistory: history,
       allowsEbarimt: ebarimt,
     );
   }
@@ -101,10 +147,13 @@ class StaffScreenAccess {
     allowsKiosk: false,
     allowsMobile: false,
     allowsPosSystem: false,
-    allowsAguulakh: false,
+    allowsAnyAguulakhRoute: false,
+    allowsBaraaMatrial: false,
+    allowsBaraaOrlogokh: false,
+    allowsToollogo: false,
+    allowsBarimtiinJagsaalt: false,
     allowsKhariltsagch: false,
     allowsDashboard: false,
-    allowsSalesHistory: false,
     allowsEbarimt: false,
   );
 

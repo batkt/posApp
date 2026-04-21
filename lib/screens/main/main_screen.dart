@@ -5,13 +5,11 @@ import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../theme/app_theme.dart';
 import 'dashboard_screen.dart';
-import '../pos/pos_screen.dart';
 import 'inventory_screen.dart';
 import 'baraa_catalog_screen.dart';
 import 'toololt_screen.dart';
 import 'customers_screen.dart';
 import 'sales_history_screen.dart';
-import 'profile_screen.dart';
 import 'login_screen.dart';
 import 'out_of_stock_baraa_screen.dart';
 import 'ebarimt_menu_screen.dart';
@@ -19,8 +17,8 @@ import 'ebarimt_menu_screen.dart';
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key, this.initialSection});
 
-  /// Optional drawer section id: `dashboard`, `pos`, `baraa_catalog`, `inventory`,
-  /// `out_of_stock`, `toololt`, `ebarimt`, `customers`, `history`, `profile`.
+  /// Optional drawer section id: `dashboard`, `baraa_catalog`, `inventory`,
+  /// `out_of_stock`, `toololt`, `ebarimt`, `customers`, `history`.
   final String? initialSection;
 
   @override
@@ -66,19 +64,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
       );
     }
-    if (access.allowsPosSystem) {
-      push(
-        const POSScreen(),
-        _MenuItem(
-          icon: Icons.point_of_sale_outlined,
-          selectedIcon: Icons.point_of_sale,
-          label: 'pos',
-          section: 'pos',
-          index: 0,
-        ),
-      );
-    }
-    if (access.allowsAguulakh) {
+    if (access.allowsBaraaMatrial) {
       push(
         const BaraaCatalogScreen(),
         _MenuItem(
@@ -86,16 +72,6 @@ class _MainScreenState extends State<MainScreen> {
           selectedIcon: Icons.list_alt_rounded,
           label: 'menu_baraa_list',
           section: 'baraa_catalog',
-          index: 0,
-        ),
-      );
-      push(
-        const InventoryScreen(),
-        _MenuItem(
-          icon: Icons.inventory_2_outlined,
-          selectedIcon: Icons.inventory_2,
-          label: 'inventory',
-          section: 'inventory',
           index: 0,
         ),
       );
@@ -109,6 +85,20 @@ class _MainScreenState extends State<MainScreen> {
           index: 0,
         ),
       );
+    }
+    if (access.allowsBaraaOrlogokh) {
+      push(
+        const InventoryScreen(),
+        _MenuItem(
+          icon: Icons.inventory_2_outlined,
+          selectedIcon: Icons.inventory_2,
+          label: 'inventory',
+          section: 'inventory',
+          index: 0,
+        ),
+      );
+    }
+    if (access.allowsToollogo) {
       push(
         const ToololtScreen(),
         _MenuItem(
@@ -144,7 +134,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
       );
     }
-    if (access.allowsSalesHistory) {
+    if (access.allowsBarimtiinJagsaalt) {
       push(
         const SalesHistoryScreen(),
         _MenuItem(
@@ -156,16 +146,6 @@ class _MainScreenState extends State<MainScreen> {
         ),
       );
     }
-    push(
-      const ProfileScreen(),
-      _MenuItem(
-        icon: Icons.person_outline,
-        selectedIcon: Icons.person,
-        label: 'profile',
-        section: 'profile',
-        index: 0,
-      ),
-    );
     return list;
   }
 
@@ -518,19 +498,21 @@ class _MainScreenState extends State<MainScreen> {
                 color: Colors.transparent,
                 child: InkWell(
                   onTap: () async {
-                    Navigator.pop(context); // Close drawer
+                    final nav = Navigator.of(context);
                     final confirm = await showDialog<bool>(
                       context: context,
-                      builder: (context) => AlertDialog(
+                      builder: (dialogContext) => AlertDialog(
                         title: Text(l10n.tr('logout')),
                         content: Text(l10n.tr('logout_confirm_message')),
                         actions: [
                           TextButton(
-                            onPressed: () => Navigator.pop(context, false),
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, false),
                             child: Text(l10n.tr('cancel')),
                           ),
                           FilledButton(
-                            onPressed: () => Navigator.pop(context, true),
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, true),
                             style: FilledButton.styleFrom(
                               backgroundColor: colorScheme.error,
                             ),
@@ -540,16 +522,16 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                     );
 
-                    if (confirm == true) {
-                      await auth.logout();
-                      if (!mounted) return;
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(
-                          builder: (_) => const LoginScreen(),
-                        ),
-                        (_) => false,
-                      );
-                    }
+                    if (confirm != true) return;
+                    nav.pop();
+                    await auth.logout();
+                    if (!mounted) return;
+                    nav.pushAndRemoveUntil(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const LoginScreen(),
+                      ),
+                      (_) => false,
+                    );
                   },
                   borderRadius: BorderRadius.circular(14),
                   splashColor: colorScheme.errorContainer.withOpacity(0.2),

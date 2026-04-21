@@ -99,9 +99,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } else {
       final l10n = AppLocalizations.of(context);
+      final err = auth.lastAuthError;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(l10n.tr('invalid_username_or_password')),
+          content: Text(err ?? l10n.tr('invalid_username_or_password')),
           backgroundColor: AppColors.error,
         ),
       );
@@ -150,10 +151,12 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (_) => const PostLoginHome()),
       );
     } else {
+      final auth = context.read<AuthModel>();
       final l10n = AppLocalizations.of(context);
+      final msg = auth.lastAuthError ?? l10n.tr('biometric_failed');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(l10n.tr('biometric_failed')),
+          content: Text(msg),
           backgroundColor: AppColors.error,
         ),
       );

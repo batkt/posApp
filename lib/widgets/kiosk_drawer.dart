@@ -6,10 +6,13 @@ import '../models/locale_model.dart';
 import '../screens/main/ebarimt_menu_screen.dart';
 import '../screens/main/login_screen.dart';
 import '../screens/main/baraa_catalog_screen.dart';
+import '../screens/main/customers_screen.dart';
+import '../screens/main/inventory_screen.dart';
 import '../screens/main/out_of_stock_baraa_screen.dart';
 import '../screens/main/sales_history_screen.dart';
 import '../screens/main/toololt_screen.dart';
 import '../theme/app_theme.dart';
+import '../services/printer_service.dart';
 
 /// Side menu for kiosk / mobile POS — same visual design as [MainScreen] drawer.
 class KioskDrawer extends StatelessWidget {
@@ -28,7 +31,7 @@ class KioskDrawer extends StatelessWidget {
     final user = auth.currentUser;
 
     final menuActions = <_KioskMenuAction>[
-      if (access.allowsAguulakh)
+      if (access.allowsBaraaMatrial)
         _KioskMenuAction(
           icon: Icons.list_alt_rounded,
           labelKey: 'menu_baraa_list',
@@ -42,7 +45,7 @@ class KioskDrawer extends StatelessWidget {
             );
           },
         ),
-      if (access.allowsAguulakh)
+      if (access.allowsToollogo)
         _KioskMenuAction(
           icon: Icons.calculate_outlined,
           labelKey: 'menu_toololt',
@@ -56,7 +59,7 @@ class KioskDrawer extends StatelessWidget {
             );
           },
         ),
-      if (access.allowsAguulakh)
+      if (access.allowsBaraaMatrial)
         _KioskMenuAction(
           icon: Icons.remove_shopping_cart_outlined,
           labelKey: 'menu_out_of_stock_baraa',
@@ -84,7 +87,7 @@ class KioskDrawer extends StatelessWidget {
             );
           },
         ),
-      if (access.allowsSalesHistory)
+      if (access.allowsBarimtiinJagsaalt)
         _KioskMenuAction(
           icon: Icons.history_rounded,
           labelKey: 'sales_history',
@@ -96,6 +99,87 @@ class KioskDrawer extends StatelessWidget {
                 builder: (_) => const SalesHistoryScreen(),
               ),
             );
+          },
+        ),
+      if (access.allowsBaraaOrlogokh)
+        _KioskMenuAction(
+          icon: Icons.inventory_2_outlined,
+          labelKey: 'inventory',
+          onTap: (ctx) {
+            Navigator.pop(ctx);
+            Navigator.push<void>(
+              ctx,
+              MaterialPageRoute<void>(
+                builder: (_) => const InventoryScreen(),
+              ),
+            );
+          },
+        ),
+      if (access.allowsKhariltsagch)
+        _KioskMenuAction(
+          icon: Icons.people_outline,
+          labelKey: 'customers',
+          onTap: (ctx) {
+            Navigator.pop(ctx);
+            Navigator.push<void>(
+              ctx,
+              MaterialPageRoute<void>(
+                builder: (_) => const CustomersScreen(),
+              ),
+            );
+          },
+        ),
+      if (access.allowsEbarimt)
+        _KioskMenuAction(
+          icon: Icons.sync_problem_rounded,
+          labelKey: 'epos_sync',
+          onTap: (ctx) async {
+            final l10n = AppLocalizations.of(ctx);
+            // Close drawer
+            Navigator.pop(ctx);
+
+            ScaffoldMessenger.of(ctx).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(l10n.tr('epos_sync_hint'))),
+                  ],
+                ),
+              ),
+            );
+
+            final res = await PrinterService.performEposHealthCheck();
+
+            if (ctx.mounted) {
+              ScaffoldMessenger.of(ctx).hideCurrentSnackBar();
+
+              String finalMessage = res.message;
+              if (res.success && res.data != null) {
+                final mid = res.data?['merchantId'] ?? res.data?['merchantName'];
+                final tid = res.data?['terminalId'];
+                if (mid != null || tid != null) {
+                  finalMessage += '\nMID: $mid | TID: $tid';
+                }
+              }
+
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                SnackBar(
+                  content: Text(finalMessage),
+                  backgroundColor:
+                      res.success ? AppColors.success : AppColors.error,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
           },
         ),
     ];
@@ -344,19 +428,21 @@ class KioskDrawer extends StatelessWidget {
                 color: Colors.transparent,
                 child: InkWell(
                   onTap: () async {
-                    Navigator.pop(context);
+                    final nav = Navigator.of(context);
                     final confirm = await showDialog<bool>(
                       context: context,
-                      builder: (ctx) => AlertDialog(
+                      builder: (dialogContext) => AlertDialog(
                         title: Text(l10n.tr('logout')),
                         content: Text(l10n.tr('logout_confirm_message')),
                         actions: [
                           TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, false),
                             child: Text(l10n.tr('cancel')),
                           ),
                           FilledButton(
-                            onPressed: () => Navigator.pop(ctx, true),
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, true),
                             style: FilledButton.styleFrom(
                               backgroundColor: colorScheme.error,
                             ),
@@ -365,18 +451,15 @@ class KioskDrawer extends StatelessWidget {
                         ],
                       ),
                     );
-                    if (confirm == true && context.mounted) {
-                      await auth.logout();
-                      if (context.mounted) {
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) => const LoginScreen(),
-                          ),
-                          (_) => false,
-                        );
-                      }
-                    }
+                    if (confirm != true) return;
+                    nav.pop();
+                    await auth.logout();
+                    nav.pushAndRemoveUntil(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const LoginScreen(),
+                      ),
+                      (_) => false,
+                    );
                   },
                   borderRadius: BorderRadius.circular(14),
                   splashColor: colorScheme.errorContainer.withOpacity(0.2),
