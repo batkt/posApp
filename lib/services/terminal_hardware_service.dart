@@ -35,7 +35,7 @@ class TerminalHardwareInfo {
   bool get usesEposOpenInApp =>
       kind == TerminalHardwareKind.eposOpenInApp && eposInAppReady;
 
-  static const MethodChannel _ch = MethodChannel('com.example.pos_app');
+  static const MethodChannel _ch = MethodChannel('mn.posease.mobile.terminal.pos');
 
   static TerminalHardwareInfo? _cached;
 
