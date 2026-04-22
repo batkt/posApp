@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../models/auth_model.dart';
 import '../models/locale_model.dart';
 import '../screens/main/ebarimt_menu_screen.dart';
-import '../screens/main/login_screen.dart';
 import '../screens/main/baraa_catalog_screen.dart';
 import '../screens/main/customers_screen.dart';
 import '../screens/main/inventory_screen.dart';
@@ -644,12 +643,7 @@ class KioskDrawer extends StatelessWidget {
                     if (confirm != true) return;
                     nav.pop();
                     await auth.logout();
-                    nav.pushAndRemoveUntil(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const LoginScreen(),
-                      ),
-                      (_) => false,
-                    );
+                    // [AuthWrapper] shows login after session clear (see main_screen logout).
                   },
                   borderRadius: BorderRadius.circular(14),
                   splashColor: colorScheme.errorContainer.withOpacity(0.2),

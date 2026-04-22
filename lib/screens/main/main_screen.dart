@@ -12,7 +12,6 @@ import 'customers_screen.dart';
 import 'sales_history_screen.dart';
 import 'income_overview_screen.dart';
 import 'purchase_list_screen.dart';
-import 'login_screen.dart';
 import 'out_of_stock_baraa_screen.dart';
 import 'ebarimt_menu_screen.dart';
 import 'staff_permissions_screen.dart';
@@ -592,13 +591,8 @@ class _MainScreenState extends State<MainScreen> {
                     if (confirm != true) return;
                     nav.pop();
                     await auth.logout();
-                    if (!mounted) return;
-                    nav.pushAndRemoveUntil(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const LoginScreen(),
-                      ),
-                      (_) => false,
-                    );
+                    // Do not push [LoginScreen] here: it removes [AuthWrapper] from the
+                    // navigator, so the next successful login never rebuilds into home.
                   },
                   borderRadius: BorderRadius.circular(14),
                   splashColor: colorScheme.errorContainer.withOpacity(0.2),

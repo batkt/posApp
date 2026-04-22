@@ -5,8 +5,6 @@ import '../../models/locale_model.dart';
 import '../../services/printer_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mongolian_date_formatter.dart';
-import 'login_screen.dart';
-
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -69,11 +67,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (confirmed == true && mounted) {
       await context.read<AuthModel>().logout();
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
     }
   }
 
