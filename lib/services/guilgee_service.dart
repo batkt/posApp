@@ -95,24 +95,36 @@ String _paymentMethodFromTulbur(List<dynamic>? tulbur) {
   if (tulbur == null || tulbur.isEmpty) return PosPaymentCore.methodCash;
   final first = tulbur.first;
   if (first is! Map) return PosPaymentCore.methodCash;
-  final turul = first['turul']?.toString().toLowerCase() ?? '';
-  if (turul.contains('kart') || turul == 'kart') {
+  final turul = first['turul']?.toString().toLowerCase().trim() ?? '';
+
+  // Order matters: match specific backend `turul` before generic / cash.
+  // Web/app save account as `khariltsakh` (see [PosTransactionService.paymentMethodToTurul]).
+  if (turul == 'kart' ||
+      turul == 'cart' ||
+      turul.contains('kart') ||
+      turul.contains('карт')) {
     return PosPaymentCore.methodCard;
   }
-  if (turul == 'belen' || turul.contains('бэлэн')) {
-    return PosPaymentCore.methodCash;
+  if (turul == 'qpay' || turul.contains('qpay')) {
+    return PosPaymentCore.methodQpay;
   }
-  if (turul.contains('danс') || turul.contains('account')) {
+  if (turul == 'khariltsakh' ||
+      turul.contains('khariltsakh') ||
+      turul.contains('dans') ||
+      turul.contains('account')) {
     return PosPaymentCore.methodAccount;
   }
-  if (turul.contains('credit') || turul.contains('зээл')) {
+  if (turul == 'zeel' ||
+      turul.contains('zeel') ||
+      turul.contains('credit') ||
+      turul.contains('зээл')) {
     return PosPaymentCore.methodCredit;
   }
   if (turul.contains('mobile') || turul.contains('утас')) {
     return PosPaymentCore.methodMobile;
   }
-  if (turul == 'qpay' || turul.contains('qpay')) {
-    return PosPaymentCore.methodQpay;
+  if (turul == 'belen' || turul.contains('бэлэн')) {
+    return PosPaymentCore.methodCash;
   }
   return PosPaymentCore.methodCash;
 }

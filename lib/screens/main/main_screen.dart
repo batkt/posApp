@@ -204,7 +204,7 @@ class _MainScreenState extends State<MainScreen> {
         _MenuItem(
           icon: Icons.receipt_long_outlined,
           selectedIcon: Icons.receipt_long,
-          label: 'history',
+          label: 'sales_history',
           section: 'history',
           index: 0,
         ),

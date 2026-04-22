@@ -45,6 +45,10 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   final GlobalKey _printKey = GlobalKey();
   Map<String, dynamic>? _ebarimt;
 
+  /// Matches typical grey counter behind a narrow thermal slip.
+  static const Color _receiptPageBg = Color(0xFFBDBDBD);
+  static const double _thermalPaperWidth = 380;
+
   @override
   void initState() {
     super.initState();
@@ -174,21 +178,6 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       height: 1.0,
     ),
   );
-
-  static List<Map<String, dynamic>> _extractEbarimtItems(
-      Map<String, dynamic>? e) {
-    if (e == null) return const [];
-    for (final key in const ['items', 'products', 'baraanuud', 'details']) {
-      final raw = e[key];
-      if (raw is List) {
-        return raw
-            .whereType<Map>()
-            .map((m) => Map<String, dynamic>.from(m))
-            .toList();
-      }
-    }
-    return const [];
-  }
 
   Future<void> _printOnPaxDevice(
     BuildContext context, {
@@ -353,16 +342,8 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final cashierName =
-        (context.watch<AuthModel>().currentUser?.name ?? '').trim();
-    final auth = context.watch<AuthModel>();
-    final canPosEbarimt = auth.canSubmitPosSales &&
-        widget.guilgeeniiMongoId != null &&
-        widget.guilgeeniiMongoId!.isNotEmpty;
+  /// Same layout as thermal print capture — white paper, black text, 380px.
+  Widget _thermalReceiptInner(TextTheme textTheme, String cashierName) {
     final e = _ebarimt;
     final totalAmount =
         _num(e?['amount']) > 0 ? _num(e?['amount']) : _num(e?['totalAmount']);
@@ -379,9 +360,6 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final ebarimtBillId =
         _str(e?['billId']).isNotEmpty ? _str(e?['billId']) : _str(e?['id']);
     final ebarimtRegister = _str(e?['register']);
-    final ebarimtCustomerTin = _str(e?['customerTin']);
-    final ebarimtLottery = _str(e?['lottery']);
-    final ebarimtItems = _extractEbarimtItems(e);
     final qrData = _qrDataFromEbarimt(e);
     final ebarimtCompanyNer = _companyNameFromEbarimt(e);
     final khungulE = _ebarimtKhungulukh(e);
@@ -400,625 +378,461 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final thermalTulukh = thermalPay;
     final thermalIb = thermalPay;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Column(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: Text(
+            'POSEASE БАРИМТ',
+            textAlign: TextAlign.center,
+            style: textTheme.titleSmall?.copyWith(
+              color: Colors.black,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+              fontSize: 16,
+            ),
+          ),
+        ),
+        if (cashierName.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            'Касс: $cashierName',
+            textAlign: TextAlign.start,
+            style: textTheme.labelMedium?.copyWith(
+              color: Colors.black,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ],
+        const SizedBox(height: 2),
+        Text(
+          'БД: ${widget.orderNumber}',
+          textAlign: TextAlign.start,
+          style: textTheme.labelLarge?.copyWith(
+            color: Colors.black,
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 2),
+        Text(
+          MongolianDateFormatter.formatReceiptNumericDateTime(DateTime.now()),
+          textAlign: TextAlign.start,
+          style: textTheme.bodySmall?.copyWith(
+            color: Colors.black,
+            fontSize: 13,
+            fontFeatures: const [
+              ui.FontFeature.tabularFigures(),
+            ],
+          ),
+        ),
+        if (e != null && ebarimtDate.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            'Огноо: $ebarimtDate',
+            textAlign: TextAlign.start,
+            style: textTheme.labelSmall?.copyWith(
+              color: Colors.black,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              fontFeatures: const [
+                ui.FontFeature.tabularFigures(),
+              ],
+            ),
+          ),
+        ],
+        if (ebarimtBillId.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            'ДДТД: $ebarimtBillId',
+            textAlign: TextAlign.start,
+            style: textTheme.labelSmall?.copyWith(
+              color: Colors.black,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              fontFeatures: const [
+                ui.FontFeature.tabularFigures(),
+              ],
+            ),
+          ),
+        ],
+        if (e != null && ebarimtRegister.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            'Регистр: $ebarimtRegister',
+            textAlign: TextAlign.start,
+            style: textTheme.labelSmall?.copyWith(
+              color: Colors.black,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ],
+        if (ebarimtType == 'ААН' && ebarimtCompanyNer.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            'Худалдан авагч: $ebarimtCompanyNer',
+            textAlign: TextAlign.start,
+            style: textTheme.labelSmall?.copyWith(
+              color: Colors.black,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+        const SizedBox(height: 1),
+        _thermalDashLine,
+        SizedBox(
+          width: double.infinity,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  'Бараа',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 76,
+                height: 12,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: Text(
+                    'Тоо ширхэг',
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: textTheme.labelSmall?.copyWith(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 84,
+                child: Text(
+                  'Үнэ',
+                  textAlign: TextAlign.right,
+                  style: textTheme.labelSmall?.copyWith(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 1),
+        ...widget.items.take(8).map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: colorScheme.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: colorScheme.outlineVariant),
-                      ),
-                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.receipt_long_rounded,
-                                color: colorScheme.primary,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  e != null
-                                      ? 'И-Баримт бэлэн'
-                                      : (canPosEbarimt
-                                          ? 'Баримт (И-Баримт сонгоно)'
-                                          : 'Баримт'),
-                                  style: textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                _fmtMnt(widget.total),
-                                style: textTheme.titleMedium?.copyWith(
-                                  color: colorScheme.primary,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'БД: ${widget.orderNumber}',
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          if (cashierName.isNotEmpty) ...[
-                            Text(
-                              'Касс: $cashierName',
-                              style: textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                          ],
-                          Text(
-                            MongolianDateFormatter.formatReceiptNumericDateTime(
-                              DateTime.now(),
-                            ),
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontFeatures: const [
-                                ui.FontFeature.tabularFigures(),
-                              ],
-                            ),
-                          ),
-                          if (e != null) ...[
-                            const SizedBox(height: 10),
-                            const Divider(height: 1),
-                            const SizedBox(height: 10),
-                            if (ebarimtDate.isNotEmpty)
-                              _detailRow(context, 'Огноо', ebarimtDate),
-                            if (ebarimtBillId.isNotEmpty)
-                              _detailRow(context, 'ДДТД', ebarimtBillId),
-                            if (ebarimtRegister.isNotEmpty)
-                              _detailRow(context, 'Регистр', ebarimtRegister),
-                            if (ebarimtType == 'ААН' && ebarimtCompanyNer.isNotEmpty)
-                              _detailRow(
-                                context,
-                                'Байгууллагын нэр',
-                                ebarimtCompanyNer,
-                              ),
-                            if (ebarimtCustomerTin.isNotEmpty)
-                              _detailRow(
-                                  context, 'Харилцагч ТТД', ebarimtCustomerTin),
-                            if (ebarimtLottery.isNotEmpty)
-                              _detailRow(context, 'Сугалаа', ebarimtLottery),
-                            if (totalAmount > 0)
-                              _detailRow(context, 'Нийт дүн', _fmtMnt(totalAmount)),
-                            if (totalVat > 0)
-                              _detailRow(context, 'НӨАТ', _fmtMnt(totalVat)),
-                            if (totalCityTax > 0)
-                              _detailRow(context, 'НХАТ', _fmtMnt(totalCityTax)),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Бараа',
-                              style: textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            ...(ebarimtItems.isNotEmpty
-                                    ? ebarimtItems
-                                    : widget.items
-                                        .map((i) => {
-                                              'name': i.product.name,
-                                              'qty': i.quantity,
-                                              'amount': i.total,
-                                            })
-                                        .toList())
-                                .take(12)
-                                .map((item) => _ebarimtItemRow(context, item)),
-                            if ((ebarimtItems.isNotEmpty
-                                        ? ebarimtItems.length
-                                        : widget.items.length) >
-                                    12)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  '+${(ebarimtItems.isNotEmpty ? ebarimtItems.length : widget.items.length) - 12} мөр...',
-                                  style: textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                          ],
-                          if (qrData.isNotEmpty) ...[
-                            const SizedBox(height: 10),
-                            Center(
-                              child: QrImageView(
-                                data: qrData,
-                                version: QrVersions.auto,
-                                size: 220,
-                                backgroundColor: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ],
+                    Expanded(
+                      child: Text(
+                        item.product.name,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    SizedOverflowBox(
-                      size: Size.zero,
-                      alignment: Alignment.topLeft,
-                      child: Transform.translate(
-                        offset: const Offset(-5000, 0),
-                        child: RepaintBoundary(
-                          key: _printKey,
-                          child: Container(
-                        color: Colors.white,
-                        width: 380,
-                        padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: double.infinity,
-                              child: Text(
-                                'POSEASE БАРИМТ',
-                                textAlign: TextAlign.center,
-                                style: textTheme.titleSmall?.copyWith(
-                                  color: Colors.black,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.6,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
-                            if (cashierName.isNotEmpty) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                'Касс: $cashierName',
-                                textAlign: TextAlign.start,
-                                style: textTheme.labelMedium?.copyWith(
-                                  color: Colors.black,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 2),
-                            Text(
-                              'БД: ${widget.orderNumber}',
-                              textAlign: TextAlign.start,
-                              style: textTheme.labelLarge?.copyWith(
-                                color: Colors.black,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              MongolianDateFormatter.formatReceiptNumericDateTime(
-                                DateTime.now(),
-                              ),
-                              textAlign: TextAlign.start,
-                              style: textTheme.bodySmall?.copyWith(
-                                color: Colors.black,
-                                fontSize: 13,
-                                fontFeatures: const [
-                                  ui.FontFeature.tabularFigures(),
-                                ],
-                              ),
-                            ),
-                            if (ebarimtBillId.isNotEmpty) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                'ДДТД: $ebarimtBillId',
-                                textAlign: TextAlign.start,
-                                style: textTheme.labelSmall?.copyWith(
-                                  color: Colors.black,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                  fontFeatures: const [
-                                    ui.FontFeature.tabularFigures(),
-                                  ],
-                                ),
-                              ),
-                            ],
-                            if (ebarimtType == 'ААН' &&
-                                ebarimtCompanyNer.isNotEmpty) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                'Худалдан авагч: $ebarimtCompanyNer',
-                                textAlign: TextAlign.start,
-                                style: textTheme.labelSmall?.copyWith(
-                                  color: Colors.black,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                ),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                            const SizedBox(height: 1),
-                            _thermalDashLine,
-                            SizedBox(
-                              width: double.infinity,
-                              child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Бараа',
-                                    style: textTheme.labelSmall?.copyWith(
-                                      color: Colors.black,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(
-                                  width: 76,
-                                  height: 12,
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      'Тоо ширхэг',
-                                      maxLines: 1,
-                                      textAlign: TextAlign.center,
-                                      style: textTheme.labelSmall?.copyWith(
-                                        color: Colors.black,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 12,
-                                        height: 1.0,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(
-                                  width: 84,
-                                  child: Text(
-                                    'Үнэ',
-                                    textAlign: TextAlign.right,
-                                    style: textTheme.labelSmall?.copyWith(
-                                      color: Colors.black,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            ),
-                            const SizedBox(height: 1),
-                            ...widget.items.take(8).map(
-                              (item) => Padding(
-                                padding: const EdgeInsets.only(bottom: 2),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        item.product.name,
-                                        style: textTheme.bodySmall?.copyWith(
-                                          color: Colors.black,
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 13,
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width: 76,
-                                      child: Text(
-                                        '${item.quantity}',
-                                        textAlign: TextAlign.center,
-                                        style: textTheme.bodySmall?.copyWith(
-                                          color: Colors.black,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 13,
-                                          fontFeatures: const [
-                                            ui.FontFeature.tabularFigures(),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width: 84,
-                                      child: Text(
-                                        _fmtMnt(item.product.price),
-                                        textAlign: TextAlign.right,
-                                        style: textTheme.bodySmall?.copyWith(
-                                          color: Colors.black,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13,
-                                          fontFeatures: const [
-                                            ui.FontFeature.tabularFigures(),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            if (widget.items.length > 8)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2, bottom: 2),
-                                child: Text(
-                                  '+${widget.items.length - 8} бараа...',
-                                  style: textTheme.labelSmall?.copyWith(
-                                    color: Colors.black,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            _thermalDashLine,
-                            SizedBox(
-                              width: double.infinity,
-                              child: Row(
-                                children: [
-                                  Text(
-                                    'Төлбөр',
-                                    style: textTheme.bodyMedium?.copyWith(
-                                      color: Colors.black,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 17,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    _paymentMethodName,
-                                    style: textTheme.bodyMedium?.copyWith(
-                                      color: Colors.black,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 17,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            _thermalPaymentMoneyRow(
-                              textTheme,
-                              label: 'Нийт дүн',
-                              value: _fmtMnt(thermalNiitDun),
-                              topPad: 6,
-                              fontSize: 15,
-                            ),
-                            _thermalPaymentMoneyRow(
-                              textTheme,
-                              label: 'НӨАТ-гүй дүн',
-                              value: _fmtMnt(thermalNoatgui),
-                              fontSize: 14,
-                            ),
-                            _thermalPaymentMoneyRow(
-                              textTheme,
-                              label: 'НӨАТ',
-                              value: _fmtMnt(thermalVat),
-                              fontSize: 14,
-                            ),
-                            _thermalPaymentMoneyRow(
-                              textTheme,
-                              label: 'НХАТ',
-                              value: _fmtMnt(thermalCt),
-                              fontSize: 14,
-                            ),
-                            _thermalPaymentMoneyRow(
-                              textTheme,
-                              label: 'Төлөх дүн',
-                              value: _fmtMnt(thermalTulukh),
-                              fontSize: 16,
-                              lw: FontWeight.w800,
-                              vw: FontWeight.w900,
-                              topPad: 4,
-                            ),
-                            _thermalPaymentMoneyRow(
-                              textTheme,
-                              label: 'И-Баримт дүн',
-                              value: _fmtMnt(thermalIb),
-                              fontSize: 16,
-                              lw: FontWeight.w800,
-                              vw: FontWeight.w900,
-                            ),
-                            if (e != null) ...[
-                              const SizedBox(height: 4),
-                              _thermalDashLine,
-                              const SizedBox(height: 2),
-                              if (_str(e['lottery']).isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Text(
-                                    'Сугалаа: ${_str(e['lottery'])}',
-                                    textAlign: TextAlign.center,
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: Colors.black,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 15,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                            ],
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (qrData.isNotEmpty)
-                                    QrImageView(
-                                      data: qrData,
-                                      version: QrVersions.auto,
-                                      size: 280,
-                                      backgroundColor: Colors.white,
-                                      padding: EdgeInsets.zero,
-                                      eyeStyle: const QrEyeStyle(
-                                        eyeShape: QrEyeShape.square,
-                                        color: Colors.black,
-                                      ),
-                                      dataModuleStyle: const QrDataModuleStyle(
-                                        dataModuleShape: QrDataModuleShape.square,
-                                        color: Colors.black,
-                                      ),
-                                    )
-                                  else
-                                    const Icon(
-                                      Icons.qr_code_2_rounded,
-                                      size: 96,
-                                      color: Colors.black,
-                                    ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    qrData.isNotEmpty
-                                        ? 'QR уншуулаад баримтаа шалгана уу'
-                                        : (e != null
-                                            ? 'ebarimt.mn эсвэл ДДТД-аар шалгана уу'
-                                            : 'QR мэдээлэл олдсонгүй'),
-                                    textAlign: TextAlign.center,
-                                    style: textTheme.labelMedium?.copyWith(
-                                      color: Colors.black,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Баярлалаа',
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: Colors.black,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                    SizedBox(
+                      width: 76,
+                      child: Text(
+                        '${item.quantity}',
+                        textAlign: TextAlign.center,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          fontFeatures: const [
+                            ui.FontFeature.tabularFigures(),
                           ],
-                          ),
                         ),
                       ),
                     ),
+                    SizedBox(
+                      width: 84,
+                      child: Text(
+                        _fmtMnt(item.product.price),
+                        textAlign: TextAlign.right,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          fontFeatures: const [
+                            ui.FontFeature.tabularFigures(),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-
-            // Bottom Buttons
+        if (widget.items.length > 8)
+          Padding(
+            padding: const EdgeInsets.only(top: 2, bottom: 2),
+            child: Text(
+              '+${widget.items.length - 8} бараа...',
+              style: textTheme.labelSmall?.copyWith(
+                color: Colors.black,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        _thermalDashLine,
+        SizedBox(
+          width: double.infinity,
+          child: Row(
+            children: [
+              Text(
+                'Төлбөр',
+                style: textTheme.bodyMedium?.copyWith(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 17,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _paymentMethodName,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 17,
+                ),
+              ),
+            ],
+          ),
+        ),
+        _thermalPaymentMoneyRow(
+          textTheme,
+          label: 'Нийт дүн',
+          value: _fmtMnt(thermalNiitDun),
+          topPad: 6,
+          fontSize: 15,
+        ),
+        _thermalPaymentMoneyRow(
+          textTheme,
+          label: 'НӨАТ-гүй дүн',
+          value: _fmtMnt(thermalNoatgui),
+          fontSize: 14,
+        ),
+        _thermalPaymentMoneyRow(
+          textTheme,
+          label: 'НӨАТ',
+          value: _fmtMnt(thermalVat),
+          fontSize: 14,
+        ),
+        _thermalPaymentMoneyRow(
+          textTheme,
+          label: 'НХАТ',
+          value: _fmtMnt(thermalCt),
+          fontSize: 14,
+        ),
+        _thermalPaymentMoneyRow(
+          textTheme,
+          label: 'Төлөх дүн',
+          value: _fmtMnt(thermalTulukh),
+          fontSize: 16,
+          lw: FontWeight.w800,
+          vw: FontWeight.w900,
+          topPad: 4,
+        ),
+        _thermalPaymentMoneyRow(
+          textTheme,
+          label: 'И-Баримт дүн',
+          value: _fmtMnt(thermalIb),
+          fontSize: 16,
+          lw: FontWeight.w800,
+          vw: FontWeight.w900,
+        ),
+        if (e != null) ...[
+          const SizedBox(height: 4),
+          _thermalDashLine,
+          const SizedBox(height: 2),
+          if (_str(e['lottery']).isNotEmpty)
             Padding(
-              padding: const EdgeInsets.all(16),
-              child: SafeArea(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: () => _startNewOrder(context),
-                        icon: const Icon(Icons.add_shopping_cart),
-                        label: const Text('Шинэ захиалга эхлүүлэх'),
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Сугалаа: ${_str(e['lottery'])}',
+                textAlign: TextAlign.center,
+                style: textTheme.bodySmall?.copyWith(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (qrData.isNotEmpty)
+                QrImageView(
+                  data: qrData,
+                  version: QrVersions.auto,
+                  size: 280,
+                  backgroundColor: Colors.white,
+                  padding: EdgeInsets.zero,
+                  eyeStyle: const QrEyeStyle(
+                    eyeShape: QrEyeShape.square,
+                    color: Colors.black,
+                  ),
+                  dataModuleStyle: const QrDataModuleStyle(
+                    dataModuleShape: QrDataModuleShape.square,
+                    color: Colors.black,
+                  ),
+                )
+              else
+                const Icon(
+                  Icons.qr_code_2_rounded,
+                  size: 96,
+                  color: Colors.black,
+                ),
+              const SizedBox(height: 4),
+              Text(
+                qrData.isNotEmpty
+                    ? 'QR уншуулаад баримтаа шалгана уу'
+                    : (e != null
+                        ? 'ebarimt.mn эсвэл ДДТД-аар шалгана уу'
+                        : 'QR мэдээлэл олдсонгүй'),
+                textAlign: TextAlign.center,
+                style: textTheme.labelMedium?.copyWith(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+              Text(
+                'Баярлалаа',
+                style: textTheme.bodySmall?.copyWith(
+                  color: Colors.black,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final cashierName =
+        (context.watch<AuthModel>().currentUser?.name ?? '').trim();
+    final auth = context.watch<AuthModel>();
+    final canPosEbarimt = auth.canSubmitPosSales &&
+        widget.guilgeeniiMongoId != null &&
+        widget.guilgeeniiMongoId!.isNotEmpty;
+
+    return Scaffold(
+      backgroundColor: _receiptPageBg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: ColoredBox(
+                color: _receiptPageBg,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: RepaintBoundary(
+                        key: _printKey,
+                        child: Container(
+                          width: _thermalPaperWidth,
+                          color: Colors.white,
+                          padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+                          child: _thermalReceiptInner(textTheme, cashierName),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    if (canPosEbarimt) ...[
+                  ),
+                ),
+              ),
+            ),
+
+            Material(
+              color: Theme.of(context).colorScheme.surface,
+              elevation: 6,
+              shadowColor: Colors.black26,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       SizedBox(
                         width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () => _onEbarimtPrintPressed(context),
-                          icon: const Icon(Icons.print_outlined),
-                          label: Text(
-                            _ebarimt == null
-                                ? 'И-Баримт сонгоод хэвлэх'
-                                : 'И-Баримт хэвлэх',
-                          ),
+                        child: FilledButton.icon(
+                          onPressed: () => _startNewOrder(context),
+                          icon: const Icon(Icons.add_shopping_cart),
+                          label: const Text('Шинэ захиалга эхлүүлэх'),
                         ),
                       ),
                       const SizedBox(height: 8),
+                      if (canPosEbarimt) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _onEbarimtPrintPressed(context),
+                            icon: const Icon(Icons.print_outlined),
+                            label: Text(
+                              _ebarimt == null
+                                  ? 'И-Баримт сонгоод хэвлэх'
+                                  : 'И-Баримт хэвлэх',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _detailRow(BuildContext context, String label, String value) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                fontFeatures: const [ui.FontFeature.tabularFigures()],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _ebarimtItemRow(BuildContext context, Map<String, dynamic> item) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final name = _str(item['name']).isNotEmpty
-        ? _str(item['name'])
-        : (_str(item['ner']).isNotEmpty ? _str(item['ner']) : 'Бараа');
-    final qty = _num(item['qty']) > 0 ? _num(item['qty']) : _num(item['too']);
-    final amount = _num(item['amount']) > 0
-        ? _num(item['amount'])
-        : (_num(item['totalAmount']) > 0
-            ? _num(item['totalAmount'])
-            : _num(item['niitUne']));
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              qty > 0 ? '${qty.toStringAsFixed(qty % 1 == 0 ? 0 : 2)}x $name' : name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurface,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            _fmtMnt(amount),
-            style: textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              fontFeatures: const [ui.FontFeature.tabularFigures()],
-            ),
-          ),
-        ],
       ),
     );
   }

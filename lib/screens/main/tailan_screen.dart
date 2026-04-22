@@ -5,11 +5,11 @@ import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../services/tailan_service.dart';
-import 'tailan/baraa_tailan_tab.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 
-/// Web parity: `/khyanalt/tailan/*` — tabbed reports matching Next.js tailan hooks.
+/// Single consolidated “closing” report: totals by payment method for the period.
+/// Uses `POST /borluulaltiinTailanKhelbereerAvya` (same as web POS).
 class TailanScreen extends StatefulWidget {
   const TailanScreen({super.key, this.showAppBar = true});
 
@@ -19,42 +19,33 @@ class TailanScreen extends StatefulWidget {
   State<TailanScreen> createState() => _TailanScreenState();
 }
 
-class _TailanScreenState extends State<TailanScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _TailanScreenState extends State<TailanScreen> {
   final TailanService _tailan = TailanService();
-
   late DateTimeRange _range;
-
-  static const _tabKeys = <String>[
-    'tailan_tab_summary',
-    'tailan_tab_baraa',
-    'tailan_tab_salesperson',
-    'tailan_tab_sales',
-    'tailan_tab_refund',
-    'tailan_tab_receivable',
-    'tailan_tab_payable',
-    'tailan_tab_promo_summary',
-    'tailan_tab_promo_detail',
-    'tailan_tab_purchase',
-    'tailan_tab_other_expense',
-  ];
+  Future<TailanPostResult>? _future;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _tabKeys.length, vsync: this);
     final now = DateTime.now();
     _range = DateTimeRange(
       start: DateTime(now.year, now.month, 1),
       end: DateTime(now.year, now.month + 1, 0, 23, 59, 59),
     );
+    _future = _load();
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+  Future<TailanPostResult> _load() async {
+    final session = context.read<AuthModel>().posSession;
+    if (session == null) {
+      return TailanPostResult.fail('no_session');
+    }
+    return _tailan.borluulaltiinTailanKhelbereerAvya(
+      baiguullagiinId: session.baiguullagiinId,
+      salbariinId: session.salbariinId,
+      ekhlekh: _range.start,
+      duusakh: _range.end,
+    );
   }
 
   Future<void> _pickRange() async {
@@ -81,137 +72,8 @@ class _TailanScreenState extends State<TailanScreen>
           59,
         ),
       );
+      _future = _load();
     });
-  }
-
-  Future<TailanPostResult> _loadTab(int tabIndex) async {
-    final session = context.read<AuthModel>().posSession;
-    if (session == null) {
-      return TailanPostResult.fail('no_session');
-    }
-    final bid = session.baiguullagiinId;
-    final sid = session.salbariinId;
-    final e = _range.start;
-    final d = _range.end;
-
-    switch (tabIndex) {
-      case 0:
-        return _tailan.borluulaltToim(
-          baiguullagiinId: bid,
-          salbariinId: sid,
-          ekhlekh: e,
-          duusakh: d,
-          nariivchlal: 'month',
-        );
-      case 2:
-        return _tailan.post(
-          path: '/delgerenguiTailanAvya',
-          body: _tailan.pagedQueryBody(
-            baiguullagiinId: bid,
-            salbariinId: sid,
-            ekhlekh: e,
-            duusakh: d,
-            searchKeys: const [
-              'baraanuud.baraa.code',
-              'baraanuud.baraa.ner',
-              'baraanuud.baraa.barCode',
-            ],
-          ),
-        );
-      case 3:
-        return _tailan.post(
-          path: '/borluulaltiinTailanAvya',
-          body: _tailan.pagedQueryBody(
-            baiguullagiinId: bid,
-            salbariinId: sid,
-            ekhlekh: e,
-            duusakh: d,
-            salbariinIdForIn: true,
-            searchKeys: const [
-              'baraanuud.baraa.angilal',
-              'baraanuud.baraa.code',
-            ],
-          ),
-        );
-      case 4:
-        return _tailan.post(
-          path: '/butsaaltiinTailanAvya',
-          body: _tailan.pagedQueryBody(
-            baiguullagiinId: bid,
-            salbariinId: sid,
-            ekhlekh: e,
-            duusakh: d,
-            searchKeys: const [
-              'baraanuud.baraa.code',
-              'baraanuud.baraa.ner',
-              'baraanuud.baraa.barCode',
-            ],
-          ),
-        );
-      case 5:
-        return _tailan.post(
-          path: '/avlagaTovchooTailanAvya',
-          body: _tailan.avlagaUglugBody(
-            baiguullagiinId: bid,
-            salbariinId: sid,
-            ekhlekh: e,
-            duusakh: d,
-          ),
-        );
-      case 6:
-        return _tailan.post(
-          path: '/uglugTovchooTailanAvya',
-          body: _tailan.avlagaUglugBody(
-            baiguullagiinId: bid,
-            salbariinId: sid,
-            ekhlekh: e,
-            duusakh: d,
-          ),
-        );
-      case 7:
-        return _tailan.post(
-          path: '/uramshuulliinTovchooTailanAvya',
-          body: _tailan.uramshuulalTovchooBody(
-            baiguullagiinId: bid,
-            salbariinId: sid,
-            ekhlekh: e,
-            duusakh: d,
-          ),
-        );
-      case 8:
-        return _tailan.post(
-          path: '/uramshuulliinDelgerenguiTailanAvya',
-          body: _tailan.uramshuulalDelgerenguiBody(
-            baiguullagiinId: bid,
-            salbariinId: sid,
-            ekhlekh: e,
-            duusakh: d,
-          ),
-        );
-      case 9:
-        return _tailan.post(
-          path: '/khariltsagchaarKHudaldanAvalt',
-          body: _tailan.hudaldanAvaltTailanBody(
-            baiguullagiinId: bid,
-            salbariinId: sid,
-            ekhlekh: e,
-            duusakh: d,
-          ),
-        );
-      case 10:
-        return _tailan.post(
-          path: '/zarlagaAktBaraaniiTailan',
-          body: <String, dynamic>{
-            'ekhlekhOgnoo': TailanService.formatDateTime(e),
-            'duusakhOgnoo': TailanService.formatDateTime(d),
-            'baiguullagiinId': bid,
-            'salbariinId': [sid],
-            'turul': 'busadZarlaga',
-          },
-        );
-      default:
-        return TailanPostResult.fail('unknown');
-    }
   }
 
   @override
@@ -223,69 +85,69 @@ class _TailanScreenState extends State<TailanScreen>
 
     return Scaffold(
       appBar: widget.showAppBar
-          ? AppBar(
-              title: Text(l10n.tr('tailan_menu')),
-              bottom: TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                tabs: [
-                  for (final k in _tabKeys) Tab(text: l10n.tr(k)),
-                ],
-              ),
-            )
+          ? AppBar(title: Text(l10n.tr('tailan_menu')))
           : null,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (!widget.showAppBar)
-            Material(
-              color: colorScheme.surfaceContainerHighest,
-              child: TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                tabs: [
-                  for (final k in _tabKeys) Tab(text: l10n.tr(k)),
-                ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text(
+              l10n.tr('tailan_consolidated_subtitle'),
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
+          ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _pickRange,
-                    icon: const Icon(Icons.date_range_rounded),
-                    label: Text(
-                      '${df.format(_range.start)} – ${df.format(_range.end)}',
-                      style: textTheme.bodySmall,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ],
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: OutlinedButton.icon(
+              onPressed: _pickRange,
+              icon: const Icon(Icons.date_range_rounded),
+              label: Text(
+                '${df.format(_range.start)} – ${df.format(_range.end)}',
+                style: textTheme.bodySmall,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                for (var i = 0; i < _tabKeys.length; i++)
-                  i == 1
-                      ? BaraaTailanTab(
-                          key: ValueKey<Object>(
-                            'tailan_baraa_${_range.start}_${_range.end}',
-                          ),
-                          range: _range,
-                        )
-                      : _TailanTabBody(
-                          key: ValueKey<Object>(
-                            'tailan_$i${_range.start}_${_range.end}',
-                          ),
-                          load: () => _loadTab(i),
+            child: FutureBuilder<TailanPostResult>(
+              key: ValueKey<Object>('${_range.start}_${_range.end}'),
+              future: _future,
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting &&
+                    !snap.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final r = snap.data;
+                if (r == null || !r.ok) {
+                  final msg = r?.error == 'no_session'
+                      ? l10n.tr('toololt_no_session')
+                      : (r?.error ?? '—');
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        msg,
+                        textAlign: TextAlign.center,
+                        style: textTheme.bodyLarge?.copyWith(
+                          color: AppColors.error,
                         ),
-              ],
+                      ),
+                    ),
+                  );
+                }
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    final f = _load();
+                    setState(() => _future = f);
+                    await f;
+                  },
+                  child: _NegtgelPaymentList(data: r.data),
+                );
+              },
             ),
           ),
         ],
@@ -294,295 +156,167 @@ class _TailanScreenState extends State<TailanScreen>
   }
 }
 
-class _TailanTabBody extends StatefulWidget {
-  const _TailanTabBody({super.key, required this.load});
+class _NegtgelPaymentList extends StatelessWidget {
+  const _NegtgelPaymentList({required this.data});
 
-  final Future<TailanPostResult> Function() load;
+  final dynamic data;
 
-  @override
-  State<_TailanTabBody> createState() => _TailanTabBodyState();
-}
-
-class _TailanTabBodyState extends State<_TailanTabBody> {
-  Future<TailanPostResult>? _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = widget.load();
+  static double _asDouble(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0;
   }
 
-  @override
-  void didUpdateWidget(covariant _TailanTabBody oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.load != widget.load) {
-      _future = widget.load();
-    }
-  }
+  static String _turulKey(dynamic raw) => raw?.toString() ?? '';
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final textTheme = Theme.of(context).textTheme;
-
-    return FutureBuilder<TailanPostResult>(
-      future: _future,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final r = snap.data;
-        if (r == null || !r.ok) {
-          final msg = r?.error == 'no_session'
-              ? l10n.tr('toololt_no_session')
-              : (r?.error ?? '—');
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                msg,
-                textAlign: TextAlign.center,
-                style: textTheme.bodyLarge?.copyWith(color: AppColors.error),
-              ),
-            ),
-          );
-        }
-        return RefreshIndicator(
-          onRefresh: () async {
-            setState(() => _future = widget.load());
-            await _future;
-          },
-          child: _TailanDataView(data: r.data),
-        );
-      },
-    );
-  }
-}
-
-class _TailanDataView extends StatelessWidget {
-  const _TailanDataView({required this.data});
-
-  final dynamic data;
-
-  @override
-  Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    if (data == null) {
+    if (data is! List) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 120),
-          Center(child: Text('—')),
+        children: [
+          const SizedBox(height: 80),
+          Center(child: Text(l10n.tr('tailan_empty'))),
         ],
       );
     }
 
-    if (data is Map && data['labels'] != null && data['datasets'] != null) {
-      final m = data as Map;
-      final labels = m['labels'] as List?;
-      final datasets = m['datasets'] as List?;
-      if (labels != null && datasets != null && datasets.isNotEmpty) {
-        final bor = datasets.isNotEmpty ? (datasets[0]['data'] as List?) : null;
-        final ash =
-            datasets.length > 1 ? (datasets[1]['data'] as List?) : null;
-        return ListView.builder(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          itemCount: labels.length,
-          itemBuilder: (_, i) {
-            final label = '${labels[i]}';
-            final b = bor != null && i < bor.length ? bor[i] : '';
-            final a = ash != null && i < ash.length ? ash[i] : '';
-            final ds0 = datasets.isNotEmpty ? datasets[0] as Map? : null;
-            final ds1 =
-                datasets.length > 1 ? datasets[1] as Map? : null;
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                title: Text(label, style: textTheme.titleSmall),
-                subtitle: Text(
-                  '${ds0?['label'] ?? 'Борлуулалт'}: $b\n'
-                  '${datasets.length > 1 ? (ds1?['label'] ?? 'Ашиг') : ''}: $a',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      }
-    }
+    final raw = (data as List<dynamic>)
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
 
-    List<dynamic>? rows;
-    if (data is List) {
-      rows = data as List<dynamic>;
-    } else if (data is Map && data['jagsaalt'] is List) {
-      rows = data['jagsaalt'] as List<dynamic>;
-    }
-
-    if (rows != null) {
-      final list = rows;
-      if (list.isEmpty) {
-        return ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Center(
-                child: Text(
-                  AppLocalizations.of(context).tr('tailan_empty'),
-                  style: textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      }
-      return ListView.separated(
-        padding: const EdgeInsets.all(12),
-        itemCount: list.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (context, i) {
-          final item = list[i];
-          return _TailanJsonCard(item: item);
-        },
-      );
-    }
-
-    if (data is Map) {
-      final m = Map<String, dynamic>.from(data as Map);
-      m.remove('jagsaalt');
-      if (m.isEmpty) {
-        return Center(
-          child: Text(
-            AppLocalizations.of(context).tr('tailan_empty'),
-            style: textTheme.bodyLarge?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        );
-      }
+    if (raw.isEmpty) {
       return ListView(
-        padding: const EdgeInsets.all(16),
-        children: m.entries.map((e) {
-          return ListTile(
-            title: Text(
-              e.key,
-              style: textTheme.labelSmall?.copyWith(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 80),
+          Center(
+            child: Text(
+              l10n.tr('tailan_empty'),
+              style: textTheme.bodyLarge?.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
             ),
-            subtitle: Text(
-              tailanFmt(e.value),
-              style: textTheme.bodyMedium,
-            ),
-          );
-        }).toList(),
-      );
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: SelectableText(tailanFmt(data)),
-    );
-  }
-}
-
-String tailanFmt(dynamic v) {
-  if (v == null) return '—';
-  if (v is num) {
-    if (v.abs() >= 1000 || v != v.roundToDouble()) {
-      return MntAmountFormatter.formatTugrik(v.toDouble());
-    }
-    return v.toString();
-  }
-  if (v is Map || v is List) return v.toString();
-  return v.toString();
-}
-
-class _TailanJsonCard extends StatelessWidget {
-  const _TailanJsonCard({required this.item});
-
-  final dynamic item;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    if (item is! Map) {
-      return Card(
-        child: ListTile(
-          title: Text(tailanFmt(item)),
-        ),
-      );
-    }
-    final m = Map<String, dynamic>.from(item as Map);
-    final preview = m.entries
-        .take(4)
-        .map((e) => '${e.key}: ${tailanFmt(e.value)}')
-        .join('\n');
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: colorScheme.outlineVariant),
-      ),
-      child: ExpansionTile(
-        title: Text(
-          m['_id']?.toString() ?? m['ner']?.toString() ?? 'Мөр',
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Text(
-          preview,
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          style: textTheme.bodySmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: m.entries.map((e) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 120,
-                        child: Text(
-                          e.key,
-                          style: textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: SelectableText(
-                          tailanFmt(e.value),
-                          style: textTheme.bodySmall,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
           ),
         ],
-      ),
+      );
+    }
+
+    String labelFor(String turul) {
+      switch (turul) {
+        case 'belen':
+          return l10n.tr('tailan_pay_belen');
+        case 'cart':
+          return l10n.tr('tailan_pay_cart');
+        case 'qpay':
+          return l10n.tr('tailan_pay_qpay');
+        case 'khariltsakh':
+          return l10n.tr('tailan_pay_khariltsakh');
+        case 'zeel':
+          return l10n.tr('tailan_pay_zeel');
+        case 'hunglult':
+          return l10n.tr('tailan_pay_hunglult');
+        default:
+          return turul.isEmpty ? l10n.tr('tailan_pay_other') : turul;
+      }
+    }
+
+    final paymentRows = <Map<String, dynamic>>[];
+    Map<String, dynamic>? hunglultRow;
+    for (final m in raw) {
+      final k = _turulKey(m['_id']);
+      if (k == 'hunglult') {
+        hunglultRow = m;
+      } else {
+        paymentRows.add(m);
+      }
+    }
+    paymentRows.sort(
+      (a, b) => _asDouble(b['niitDun']).compareTo(_asDouble(a['niitDun'])),
+    );
+
+    double paymentTotal = 0;
+    for (final m in paymentRows) {
+      paymentTotal += _asDouble(m['niitDun']);
+    }
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        Text(
+          l10n.tr('tailan_payment_by_method'),
+          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: colorScheme.outlineVariant),
+          ),
+          child: Column(
+            children: [
+              for (var i = 0; i < paymentRows.length; i++) ...[
+                if (i > 0)
+                  Divider(height: 1, color: colorScheme.outlineVariant),
+                ListTile(
+                  title: Text(
+                    labelFor(_turulKey(paymentRows[i]['_id'])),
+                    style: textTheme.titleSmall,
+                  ),
+                  trailing: Text(
+                    MntAmountFormatter.formatTugrikSpaced(
+                      _asDouble(paymentRows[i]['niitDun']),
+                    ),
+                    style: textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+              if (hunglultRow != null) ...[
+                Divider(height: 1, color: colorScheme.outlineVariant),
+                ListTile(
+                  title: Text(
+                    labelFor('hunglult'),
+                    style: textTheme.titleSmall,
+                  ),
+                  trailing: Text(
+                    MntAmountFormatter.formatTugrikSpaced(
+                      _asDouble(hunglultRow['niitDun']),
+                    ),
+                    style: textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.tertiary,
+                    ),
+                  ),
+                ),
+              ],
+              Divider(height: 1, thickness: 1, color: colorScheme.outline),
+              ListTile(
+                title: Text(
+                  l10n.tr('tailan_total_received'),
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                trailing: Text(
+                  MntAmountFormatter.formatTugrikSpaced(paymentTotal),
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

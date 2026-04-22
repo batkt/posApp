@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../widgets/authenticated_image.dart';
+import '../../widgets/sale_year_month_filter_bar.dart';
 
 String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 
@@ -369,6 +370,49 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   Future<GuilgeeListResult>? _remoteFuture;
   String? _lastSessionKey;
   int _refreshGen = 0;
+  int? _filterYear;
+  int? _filterMonth;
+
+  void _onDateFilter(int? year, int? month) {
+    setState(() {
+      _filterYear = year;
+      _filterMonth = year == null ? null : month;
+    });
+  }
+
+  List<CompletedSale> _applyDateFilter(List<CompletedSale> list) {
+    return list
+        .where(
+          (s) => saleMatchesYearMonthFilter(
+            s.timestamp,
+            _filterYear,
+            _filterMonth,
+          ),
+        )
+        .toList();
+  }
+
+  Widget _dateFilterBar(AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      child: SaleYearMonthFilterBar(
+        l10n: l10n,
+        selectedYear: _filterYear,
+        selectedMonth: _filterMonth,
+        onFilterChanged: _onDateFilter,
+      ),
+    );
+  }
+
+  Widget _bodyWithDateFilter(AppLocalizations l10n, Widget inner) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _dateFilterBar(l10n),
+        Expanded(child: inner),
+      ],
+    );
+  }
 
   static String? _resolveAjiltanId(AuthModel auth) {
     final u = auth.currentUser?.id.trim();
@@ -504,149 +548,173 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     bool canRemote,
   ) {
     if (!auth.staffAccess.allowsSalesHistory) {
-      return _salesScrollable(
-        context,
-        sales.salesHistory,
-        colorScheme,
-        textTheme,
+      final raw = sales.salesHistory;
+      final filtered = _applyDateFilter(raw);
+      return _bodyWithDateFilter(
         l10n,
-        canRemote: false,
-        onRefresh: null,
+        _salesScrollable(
+          context,
+          filtered,
+          colorScheme,
+          textTheme,
+          l10n,
+          canRemote: false,
+          onRefresh: null,
+          sourceCountBeforeFilter: raw.length,
+        ),
       );
     }
     if (auth.posSession == null || _remoteFuture == null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-            child: Material(
-              color: colorScheme.primaryContainer.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline_rounded,
-                        color: colorScheme.primary, size: 22),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        l10n.tr('sales_history_offline_hint'),
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurface,
-                          height: 1.35,
+      final raw = sales.salesHistory;
+      final filtered = _applyDateFilter(raw);
+      return _bodyWithDateFilter(
+        l10n,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: Material(
+                color: colorScheme.primaryContainer.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded,
+                          color: colorScheme.primary, size: 22),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          l10n.tr('sales_history_offline_hint'),
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurface,
+                            height: 1.35,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          Expanded(
-            child: _salesScrollable(
-              context,
-              sales.salesHistory,
-              colorScheme,
-              textTheme,
-              l10n,
-              canRemote: false,
-              onRefresh: null,
+            Expanded(
+              child: _salesScrollable(
+                context,
+                filtered,
+                colorScheme,
+                textTheme,
+                l10n,
+                canRemote: false,
+                onRefresh: null,
+                sourceCountBeforeFilter: raw.length,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
 
-    return FutureBuilder<GuilgeeListResult>(
-      future: _remoteFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+    return _bodyWithDateFilter(
+      l10n,
+      FutureBuilder<GuilgeeListResult>(
+        future: _remoteFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.tr('sales_history_loading'),
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+          final result = snapshot.data;
+          if (result != null && result.success) {
+            final merged = _mergeRemoteAndLocal(result.sales, sales.salesHistory);
+            final filtered = _applyDateFilter(merged);
+            return _salesScrollable(
+              context,
+              filtered,
+              colorScheme,
+              textTheme,
+              l10n,
+              canRemote: canRemote,
+              onRefresh: canRemote ? () => _onRefresh(auth, true) : null,
+              sourceCountBeforeFilter: merged.length,
+            );
+          }
+          if (result != null && !result.success) {
+            final raw = sales.salesHistory;
+            final filtered = _applyDateFilter(raw);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                Text(
-                  l10n.tr('sales_history_loading'),
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  child: Material(
+                    color: colorScheme.errorContainer.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline_rounded,
+                              color: colorScheme.error, size: 22),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              result.error ??
+                                  l10n.tr('sales_history_load_error'),
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onErrorContainer,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _salesScrollable(
+                    context,
+                    filtered,
+                    colorScheme,
+                    textTheme,
+                    l10n,
+                    canRemote: canRemote,
+                    onRefresh: canRemote ? () => _onRefresh(auth, true) : null,
+                    sourceCountBeforeFilter: raw.length,
                   ),
                 ),
               ],
-            ),
-          );
-        }
-        final result = snapshot.data;
-        if (result != null && result.success) {
-          final merged = _mergeRemoteAndLocal(result.sales, sales.salesHistory);
+            );
+          }
+          final raw = sales.salesHistory;
+          final filtered = _applyDateFilter(raw);
           return _salesScrollable(
             context,
-            merged,
+            filtered,
             colorScheme,
             textTheme,
             l10n,
             canRemote: canRemote,
             onRefresh: canRemote ? () => _onRefresh(auth, true) : null,
+            sourceCountBeforeFilter: raw.length,
           );
-        }
-        if (result != null && !result.success) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                child: Material(
-                  color: colorScheme.errorContainer.withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Row(
-                      children: [
-                        Icon(Icons.error_outline_rounded,
-                            color: colorScheme.error, size: 22),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            result.error ?? l10n.tr('sales_history_load_error'),
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onErrorContainer,
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: _salesScrollable(
-                  context,
-                  sales.salesHistory,
-                  colorScheme,
-                  textTheme,
-                  l10n,
-                  canRemote: canRemote,
-                  onRefresh: canRemote ? () => _onRefresh(auth, true) : null,
-                ),
-              ),
-            ],
-          );
-        }
-        return _salesScrollable(
-          context,
-          sales.salesHistory,
-          colorScheme,
-          textTheme,
-          l10n,
-          canRemote: canRemote,
-          onRefresh: canRemote ? () => _onRefresh(auth, true) : null,
-        );
-      },
+        },
+      ),
     );
   }
 
@@ -658,9 +726,18 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     AppLocalizations l10n, {
     required bool canRemote,
     required Future<void> Function()? onRefresh,
+    required int sourceCountBeforeFilter,
   }) {
+    final filteredEmpty = list.isEmpty &&
+        sourceCountBeforeFilter > 0 &&
+        (_filterYear != null);
     if (list.isEmpty) {
-      final empty = _emptyState(colorScheme, textTheme, l10n);
+      final empty = _emptyState(
+        colorScheme,
+        textTheme,
+        l10n,
+        filteredEmpty: filteredEmpty,
+      );
       if (onRefresh == null) return empty;
       return RefreshIndicator(
         onRefresh: onRefresh,
@@ -718,8 +795,9 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   Widget _emptyState(
     ColorScheme colorScheme,
     TextTheme textTheme,
-    AppLocalizations l10n,
-  ) {
+    AppLocalizations l10n, {
+    bool filteredEmpty = false,
+  }) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -729,33 +807,44 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withValues(alpha: 0.4),
+                color: filteredEmpty
+                    ? colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.8)
+                    : colorScheme.primaryContainer.withValues(alpha: 0.4),
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                Icons.receipt_long_rounded,
+                filteredEmpty
+                    ? Icons.filter_alt_outlined
+                    : Icons.receipt_long_rounded,
                 size: 56,
-                color: colorScheme.primary,
+                color: filteredEmpty
+                    ? colorScheme.onSurfaceVariant
+                    : colorScheme.primary,
               ),
             ),
             const SizedBox(height: 24),
             Text(
-              l10n.tr('no_sales_history'),
+              filteredEmpty
+                  ? l10n.tr('sales_filter_no_matches')
+                  : l10n.tr('no_sales_history'),
               textAlign: TextAlign.center,
               style: textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: colorScheme.onSurface,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.tr('complete_sale_to_see'),
-              textAlign: TextAlign.center,
-              style: textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                height: 1.4,
+            if (!filteredEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                l10n.tr('complete_sale_to_see'),
+                textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -859,7 +948,10 @@ class _SaleCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final paymentIcon = PaymentDisplayConfig.iconForMethod(sale.paymentMethod);
-    final paymentLabel = PaymentDisplayConfig.labelMn(sale.paymentMethod);
+    final lang = Localizations.localeOf(context).languageCode;
+    final paymentLabel = lang == 'mn'
+        ? PaymentDisplayConfig.labelMn(sale.paymentMethod)
+        : PaymentDisplayConfig.labelEn(sale.paymentMethod);
     final linesLabel = l10n
         .tr('sales_history_lines_count')
         .replaceAll('{n}', '${sale.items.length}');

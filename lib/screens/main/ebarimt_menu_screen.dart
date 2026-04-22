@@ -7,6 +7,7 @@ import '../../services/guilgee_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
+import '../../widgets/sale_year_month_filter_bar.dart';
 import 'sales_history_screen.dart';
 
 String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
@@ -25,6 +26,15 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
   Future<GuilgeeListResult>? _future;
   String? _sessionKey;
   int _refreshGen = 0;
+  int? _filterYear;
+  int? _filterMonth;
+
+  void _onDateFilter(int? year, int? month) {
+    setState(() {
+      _filterYear = year;
+      _filterMonth = year == null ? null : month;
+    });
+  }
 
   static String? _resolveAjiltanId(AuthModel auth) {
     final u = auth.currentUser?.id.trim();
@@ -109,6 +119,15 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
                 }
                 final withEbarimt =
                     result.sales.where((s) => s.ebarimtAvsan).toList();
+                final filtered = withEbarimt
+                    .where(
+                      (s) => saleMatchesYearMonthFilter(
+                        s.timestamp,
+                        _filterYear,
+                        _filterMonth,
+                      ),
+                    )
+                    .toList();
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -119,6 +138,15 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
                         style: textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                      child: SaleYearMonthFilterBar(
+                        l10n: l10n,
+                        selectedYear: _filterYear,
+                        selectedMonth: _filterMonth,
+                        onFilterChanged: _onDateFilter,
                       ),
                     ),
                     Expanded(
@@ -146,7 +174,31 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
                                 ),
                               ),
                             )
-                          : RefreshIndicator(
+                          : filtered.isEmpty
+                              ? Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(24),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.filter_alt_outlined,
+                                          size: 56,
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          l10n.tr('ebarimt_filter_no_matches'),
+                                          textAlign: TextAlign.center,
+                                          style: textTheme.bodyLarge?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                              : RefreshIndicator(
                               onRefresh: () => _reload(auth),
                               child: ListView.separated(
                                 padding: const EdgeInsets.fromLTRB(
@@ -155,11 +207,11 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
                                   12,
                                   24,
                                 ),
-                                itemCount: withEbarimt.length,
+                                itemCount: filtered.length,
                                 separatorBuilder: (_, __) =>
                                     const SizedBox(height: 8),
                                 itemBuilder: (context, i) {
-                                  final sale = withEbarimt[i];
+                                  final sale = filtered[i];
                                   return Material(
                                     color: colorScheme.surface,
                                     elevation: 0,
@@ -284,25 +336,6 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
               },
             );
 
-    Widget? topDescription;
-    if (pos != null) {
-      topDescription = Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          widget.showAppBar ? 12 : 4,
-          20,
-          8,
-        ),
-        child: Text(
-          l10n.tr('ebarimt_menu_hint'),
-          style: textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-            height: 1.35,
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       appBar: widget.showAppBar
           ? AppBar(
@@ -344,7 +377,6 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
                 ],
               ),
             ),
-          if (topDescription != null) topDescription,
           Expanded(child: bodyCore),
         ],
       ),

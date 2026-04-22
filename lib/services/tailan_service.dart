@@ -156,6 +156,37 @@ class TailanService {
         },
         salbariinIdForIn: true,
       );
+
+  /// Борлуулалтын нэгтгэл — `borluulaltiinTailanKhelbereerAvya` (төлбөрийн төрлөөр).
+  Map<String, dynamic> borluulaltKhelbereerBody({
+    required String baiguullagiinId,
+    required String salbariinId,
+    required DateTime ekhlekh,
+    required DateTime duusakh,
+  }) =>
+      <String, dynamic>{
+        ..._dates(ekhlekh, duusakh),
+        'baiguullagiinId': baiguullagiinId,
+        'salbariinId': salbariinId,
+        'order': const {'niitDun': -1},
+      };
+
+  Future<TailanPostResult> borluulaltiinTailanKhelbereerAvya({
+    required String baiguullagiinId,
+    required String salbariinId,
+    required DateTime ekhlekh,
+    required DateTime duusakh,
+  }) {
+    return post(
+      path: '/borluulaltiinTailanKhelbereerAvya',
+      body: borluulaltKhelbereerBody(
+        baiguullagiinId: baiguullagiinId,
+        salbariinId: salbariinId,
+        ekhlekh: ekhlekh,
+        duusakh: duusakh,
+      ),
+    );
+  }
 }
 
 class TailanPostResult {

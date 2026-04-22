@@ -213,6 +213,7 @@ class _ToololtScreenState extends State<ToololtScreen> {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (ctx) {
+        final rowL10n = AppLocalizations.of(ctx);
         final colorScheme = Theme.of(ctx).colorScheme;
         final textTheme = Theme.of(ctx).textTheme;
         final bottomInset = MediaQuery.viewInsetsOf(ctx).bottom;
@@ -239,7 +240,7 @@ class _ToololtScreenState extends State<ToololtScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Барааны мэдээлэл',
+                  rowL10n.tr('toololt_line_info_title'),
                   style: textTheme.labelLarge?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
@@ -492,6 +493,9 @@ class _ToololtScreenState extends State<ToololtScreen> {
           }
           final data = snap.data!;
           final session = data.active.session;
+          final hideHistorySection = data.active.success &&
+              data.active.hasActive &&
+              session != null;
 
           return RefreshIndicator(
             onRefresh: _refreshAndWait,
@@ -523,7 +527,7 @@ class _ToololtScreenState extends State<ToololtScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              tooltip: 'Баркод унших',
+                              tooltip: l10n.tr('toololt_scan_barcode'),
                               icon: const Icon(Icons.qr_code_scanner_rounded),
                               onPressed: () => _scanBarcodeToSearch(context),
                             ),
@@ -614,152 +618,156 @@ class _ToololtScreenState extends State<ToololtScreen> {
                           : null,
                     ),
                   ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                    child: Text(
-                      l10n.tr('toololt_section_history'),
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-                if (!data.history.success)
+                if (!hideHistorySection) ...[
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
                       child: Text(
-                        data.history.error ?? l10n.tr('toololt_load_error'),
-                        textAlign: TextAlign.center,
+                        l10n.tr('toololt_section_history'),
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                  )
-                else if (data.history.rows.isEmpty)
-                  SliverToBoxAdapter(
-                    child: Center(child: Text(l10n.tr('toololt_empty'))),
-                  )
-                else
-                  SliverList.separated(
-                    itemCount: data.history.rows.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, i) {
-                      final row = data.history.rows[i];
-                      final active =
-                          row.tuluv.toLowerCase().contains('ekhelsen');
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Material(
-                          color: colorScheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(14),
-                          child: Padding(
-                            padding: const EdgeInsets.all(14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      active
-                                          ? Icons.play_circle_outline_rounded
-                                          : Icons.check_circle_outline_rounded,
-                                      color: active
-                                          ? AppColors.warning
-                                          : AppColors.success,
-                                      size: 22,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        row.ner.isNotEmpty
-                                            ? row.ner
-                                            : row.turul.isNotEmpty
-                                                ? row.turul
-                                                : row.id,
-                                        style: textTheme.titleSmall?.copyWith(
-                                          fontWeight: FontWeight.w800,
+                  ),
+                  if (!data.history.success)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          data.history.error ?? l10n.tr('toololt_load_error'),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  else if (data.history.rows.isEmpty)
+                    SliverToBoxAdapter(
+                      child: Center(child: Text(l10n.tr('toololt_empty'))),
+                    )
+                  else
+                    SliverList.separated(
+                      itemCount: data.history.rows.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, i) {
+                        final row = data.history.rows[i];
+                        final active =
+                            row.tuluv.toLowerCase().contains('ekhelsen');
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Material(
+                            color: colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(14),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        active
+                                            ? Icons.play_circle_outline_rounded
+                                            : Icons.check_circle_outline_rounded,
+                                        color: active
+                                            ? AppColors.warning
+                                            : AppColors.success,
+                                        size: 22,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          row.ner.isNotEmpty
+                                              ? row.ner
+                                              : row.turul.isNotEmpty
+                                                  ? row.turul
+                                                  : row.id,
+                                          style: textTheme.titleSmall?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: (active
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: (active
+                                                  ? AppColors.warning
+                                                  : AppColors.success)
+                                              .withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          _tuluvLabel(row.tuluv, l10n),
+                                          style: textTheme.labelSmall?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                            color: active
                                                 ? AppColors.warning
-                                                : AppColors.success)
-                                            .withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        _tuluvLabel(row.tuluv, l10n),
-                                        style: textTheme.labelSmall?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                          color: active
-                                              ? AppColors.warning
-                                              : AppColors.success,
+                                                : AppColors.success,
+                                          ),
                                         ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (row.turul.isNotEmpty && row.ner.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      row.turul,
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
                                       ),
                                     ),
                                   ],
-                                ),
-                                if (row.turul.isNotEmpty && row.ner.isNotEmpty) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    row.turul,
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 12,
-                                  runSpacing: 4,
-                                  children: [
-                                    if (row.niitBaraa != null)
-                                      Text(
-                                        '${l10n.tr('toololt_total_lines')}: ${row.niitBaraa}',
-                                        style: textTheme.labelMedium,
-                                      ),
-                                    if (row.toologdoogui != null)
-                                      Text(
-                                        '${l10n.tr('toololt_remaining')}: ${row.toologdoogui}',
-                                        style: textTheme.labelMedium?.copyWith(
-                                          color: colorScheme.primary,
-                                          fontWeight: FontWeight.w600,
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 12,
+                                    runSpacing: 4,
+                                    children: [
+                                      if (row.niitBaraa != null)
+                                        Text(
+                                          '${l10n.tr('toololt_total_lines')}: ${row.niitBaraa}',
+                                          style: textTheme.labelMedium,
                                         ),
+                                      if (row.toologdoogui != null)
+                                        Text(
+                                          '${l10n.tr('toololt_remaining')}: ${row.toologdoogui}',
+                                          style: textTheme.labelMedium?.copyWith(
+                                            color: colorScheme.primary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  if (row.ekhelsenOgnoo != null) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '${l10n.tr('toololt_started')}: ${MongolianDateFormatter.formatDateTime(row.ekhelsenOgnoo!)}',
+                                      style: textTheme.labelSmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
                                       ),
+                                    ),
                                   ],
-                                ),
-                                if (row.ekhelsenOgnoo != null) ...[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    '${l10n.tr('toololt_started')}: ${MongolianDateFormatter.formatDateTime(row.ekhelsenOgnoo!)}',
-                                    style: textTheme.labelSmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
+                                  if (row.duussanOgnoo != null)
+                                    Text(
+                                      '${l10n.tr('toololt_finished')}: ${MongolianDateFormatter.formatDateTime(row.duussanOgnoo!)}',
+                                      style: textTheme.labelSmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
                                     ),
-                                  ),
                                 ],
-                                if (row.duussanOgnoo != null)
-                                  Text(
-                                    '${l10n.tr('toololt_finished')}: ${MongolianDateFormatter.formatDateTime(row.duussanOgnoo!)}',
-                                    style: textTheme.labelSmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                        );
+                      },
+                    ),
+                ],
+                SliverToBoxAdapter(
+                  child: SizedBox(height: hideHistorySection ? 32 : 120),
+                ),
               ],
             ),
           );
@@ -910,17 +918,20 @@ class _ActiveCountCard extends StatelessWidget {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
-                  _ToololtMetricTile(label: 'Нийт бараа', value: '${session.niitMur}'),
                   _ToololtMetricTile(
-                    label: 'Үлдсэн',
+                    label: l10n.tr('toololt_metric_total_lines'),
+                    value: '${session.niitMur}',
+                  ),
+                  _ToololtMetricTile(
+                    label: l10n.tr('toololt_metric_uncounted_products'),
                     value: '${session.toologdooguiBaraaniiToo}',
                   ),
                   _ToololtMetricTile(
-                    label: 'Худалдах үнэ',
+                    label: l10n.tr('toololt_metric_retail_sum'),
                     value: MntAmountFormatter.formatTugrik(session.niitMungunDun),
                   ),
                   _ToololtMetricTile(
-                    label: 'Нэгж өртөг',
+                    label: l10n.tr('toololt_metric_cost_sum'),
                     value: MntAmountFormatter.formatTugrik(_totalCostAmount()),
                   ),
                 ],
@@ -956,7 +967,7 @@ class _ActiveCountCard extends StatelessWidget {
                             SizedBox(
                               width: m.indexWidth,
                               child: Text(
-                                '№',
+                                l10n.tr('toololt_table_no'),
                                 textAlign: TextAlign.start,
                                 style: textTheme.labelMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
@@ -966,7 +977,7 @@ class _ActiveCountCard extends StatelessWidget {
                             Expanded(
                               flex: m.nameFlex,
                               child: Text(
-                                'Нэр',
+                                l10n.tr('toololt_table_name'),
                                 textAlign: TextAlign.start,
                                 style: textTheme.labelMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
@@ -976,7 +987,7 @@ class _ActiveCountCard extends StatelessWidget {
                             Expanded(
                               flex: m.stockFlex,
                               child: Text(
-                                'Үлдэгдэл',
+                                l10n.tr('toololt_table_stock'),
                                 textAlign: TextAlign.center,
                                 style: textTheme.labelMedium?.copyWith(
                                   fontWeight: FontWeight.w700,
@@ -986,7 +997,7 @@ class _ActiveCountCard extends StatelessWidget {
                             Expanded(
                               flex: m.countFlex,
                               child: Text(
-                                'Тоолсон',
+                                l10n.tr('toololt_table_counted'),
                                 textAlign: TextAlign.center,
                                 style: textTheme.labelMedium?.copyWith(
                                   fontWeight: FontWeight.w700,

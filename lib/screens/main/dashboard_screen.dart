@@ -297,7 +297,6 @@ class DashboardScreen extends StatelessWidget {
                                 icon: Icons.error,
                                 title:
                                     '${outOfStock.length} бүтээгдэхүүн дууссан',
-                                subtitle: 'Шууд нөхөн дүүргэх шаардлагатай',
                                 color: AppColors.error,
                                 onTap: () {
                                   Navigator.of(context).push<void>(
@@ -315,7 +314,6 @@ class DashboardScreen extends StatelessWidget {
                                 icon: Icons.warning,
                                 title:
                                     '${lowStock.length} бүтээгдэхүүн цөөн үлдсэн',
-                                subtitle: 'Тун удахгүй нөхөн дүүргэхийг хүү',
                                 color: AppColors.warning,
                                 onTap: () {
                                   Navigator.of(context).push<void>(
@@ -451,14 +449,12 @@ class _StatCard extends StatelessWidget {
 class _AlertCard extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String subtitle;
   final Color color;
   final VoidCallback onTap;
 
   const _AlertCard({
     required this.icon,
     required this.title,
-    required this.subtitle,
     required this.color,
     required this.onTap,
   });
@@ -479,24 +475,12 @@ class _AlertCard extends StatelessWidget {
               Icon(icon, color: color),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: color,
-                      ),
-                    ),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
                 ),
               ),
               Icon(
