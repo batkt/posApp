@@ -218,7 +218,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           builder: (_) => BaraaDetailScreen(item: item),
                         ),
                       ),
-                      onRestock: () => _showRestockDialog(context, item),
                       onEdit: () => _showEditProductDialog(context, item),
                       onDelete: () => _showDeleteConfirmation(context, item),
                     );
@@ -246,51 +245,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
           FilledButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Нэмэх'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showRestockDialog(BuildContext context, InventoryItem item) {
-    final quantityController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('${item.product.name} нөхөн дүүргэх'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Одоогийн үлдэгдэл: ${item.currentStock}'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: quantityController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Нэмэх тоо хэмжээ',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Болих'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final quantity =
-                  int.tryParse(quantityController.text) ?? 0;
-              if (quantity > 0) {
-                context
-                    .read<InventoryModel>()
-                    .restock(item.product.id, quantity);
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('Нөхөн дүүргэх'),
           ),
         ],
       ),
@@ -413,7 +367,6 @@ class _InventoryItemTile extends StatelessWidget {
   /// `AdminEsekh` / [StaffScreenAccess.hasFullAccess] — add, edit, delete бараа.
   final bool allowProductCrud;
   final VoidCallback onTap;
-  final VoidCallback onRestock;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
@@ -421,7 +374,6 @@ class _InventoryItemTile extends StatelessWidget {
     required this.item,
     required this.allowProductCrud,
     required this.onTap,
-    required this.onRestock,
     required this.onEdit,
     required this.onDelete,
   });
@@ -513,66 +465,46 @@ class _InventoryItemTile extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(width: 8),
-
-              // Actions menu (no separate stock chip — merged above)
-              PopupMenuButton<String>(
-                icon: Icon(
-                  Icons.more_vert,
-                  color: colorScheme.onSurfaceVariant,
-                  size: 20,
-                ),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'restock':
-                      onRestock();
-                      break;
-                    case 'edit':
-                      onEdit();
-                      break;
-                    case 'delete':
-                      onDelete();
-                      break;
-                  }
-                },
-                itemBuilder: (context) {
-                  final items = <PopupMenuEntry<String>>[
-                    const PopupMenuItem(
-                      value: 'restock',
+              if (allowProductCrud) ...[
+                const SizedBox(width: 8),
+                PopupMenuButton<String>(
+                  icon: Icon(
+                    Icons.more_vert,
+                    color: colorScheme.onSurfaceVariant,
+                    size: 20,
+                  ),
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'edit':
+                        onEdit();
+                        break;
+                      case 'delete':
+                        onDelete();
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'edit',
                       child: Row(children: [
-                        Icon(Icons.add_box_outlined, size: 18),
+                        Icon(Icons.edit_outlined, size: 18),
                         SizedBox(width: 8),
-                        Text('Нөхөн дүүргэх'),
+                        Text('Засах'),
                       ]),
                     ),
-                  ];
-                  if (allowProductCrud) {
-                    items.addAll(const [
-                      PopupMenuItem(
-                        value: 'edit',
-                        child: Row(children: [
-                          Icon(Icons.edit_outlined, size: 18),
-                          SizedBox(width: 8),
-                          Text('Засах'),
-                        ]),
-                      ),
-                    ]);
-                    items.add(
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Row(children: [
-                          Icon(Icons.delete_outline,
-                              size: 18, color: AppColors.error),
-                          SizedBox(width: 8),
-                          Text('Устгах',
-                              style: TextStyle(color: AppColors.error)),
-                        ]),
-                      ),
-                    );
-                  }
-                  return items;
-                },
-              ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(children: [
+                        Icon(Icons.delete_outline,
+                            size: 18, color: AppColors.error),
+                        SizedBox(width: 8),
+                        Text('Устгах',
+                            style: TextStyle(color: AppColors.error)),
+                      ]),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

@@ -6,12 +6,14 @@ import '../pos/cashier_main_screen.dart';
 import '../mobile_pos/mobile_pos_main_screen.dart';
 import 'main_screen.dart';
 
-/// Picks kiosk vs mobile shell from `tsonkhniiTokhirgoo`. If both are allowed, phone
-/// uses mobile POS (QPay) and larger surfaces use kiosk (card terminal).
+/// Picks kiosk vs mobile shell from `tsonkhniiTokhirgoo` and [StaffScreenAccess].
+/// `AdminEsekh` → [StaffScreenAccess.hasFullAccess] sets all route flags, so admins
+/// get the same kiosk / mobile POS shell as other staff (not [MainScreen] only).
+/// If both kiosk and mobile are allowed, phone uses [MobilePosMainScreen] and
+/// larger surfaces use [CashierMainScreen].
 ///
-/// Web `/khyanalt/possystem` maps to [StaffScreenAccess.allowsPosSystem]. Managers
-/// often have Pos System but not the separate kiosk/mobile route keys — they must
-/// still land on the sale terminal (same as admin-level POS staff).
+/// Web `/khyanalt/possystem` maps to [StaffScreenAccess.allowsPosSystem] for
+/// staff who only have Pos System in `tsonkhniiTokhirgoo`.
 class PostLoginHome extends StatelessWidget {
   const PostLoginHome({super.key});
 
@@ -22,9 +24,6 @@ class PostLoginHome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final access = context.watch<AuthModel>().staffAccess;
-    if (access.hasFullAccess) {
-      return const MainScreen();
-    }
     final kiosk = access.allowsKiosk;
     final mobile = access.allowsMobile;
     final posSystem = access.allowsPosSystem;

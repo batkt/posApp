@@ -10,7 +10,6 @@ import '../../models/pos_session.dart';
 import '../../services/category_service.dart';
 import '../../services/product_service.dart';
 import '../../services/toololt_service.dart';
-import '../../theme/app_theme.dart';
 import '../../utils/app_date_range_picker.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
@@ -22,17 +21,7 @@ class _SearchHolder {
   String value;
 }
 
-class _ToololtScreenData {
-  const _ToololtScreenData({
-    required this.history,
-    required this.active,
-  });
-
-  final ToololtListResult history;
-  final ToololtActiveFetchResult active;
-}
-
-/// Тооллогын түүх + идэвхтэй тооллого (вэб `khyanalt/aguulakh/toollogo`).
+/// Идэвхтэй тооллого (вэб `khyanalt/aguulakh/toollogo`).
 class ToololtScreen extends StatefulWidget {
   const ToololtScreen({super.key, this.showAppBar = true});
 
@@ -46,7 +35,7 @@ class ToololtScreen extends StatefulWidget {
 class _ToololtScreenState extends State<ToololtScreen> {
   static const int _pageSize = 50;
 
-  Future<_ToololtScreenData>? _future;
+  Future<ToololtActiveFetchResult>? _future;
   final TextEditingController _searchController = TextEditingController();
   String _lineSearch = '';
   int _activePage = 1;
@@ -85,25 +74,19 @@ class _ToololtScreenState extends State<ToololtScreen> {
     await _refreshAndWait();
   }
 
-  Future<_ToololtScreenData> _load() async {
+  Future<ToololtActiveFetchResult> _load() async {
     final auth = context.read<AuthModel>();
     final pos = auth.posSession;
     if (pos == null) {
       throw StateError('no_session');
     }
-    final history = await toololtService.listToollogs(
-      baiguullagiinId: pos.baiguullagiinId,
-      salbariinId: pos.salbariinId,
-      search: _lineSearch.isEmpty ? null : _lineSearch,
-    );
-    final active = await toololtService.fetchActiveToollogo(
+    return toololtService.fetchActiveToollogo(
       baiguullagiinId: pos.baiguullagiinId,
       salbariinId: pos.salbariinId,
       page: _activePage,
       pageSize: _pageSize,
       khaikhUtga: _lineSearch.isEmpty ? null : _lineSearch,
     );
-    return _ToololtScreenData(history: history, active: active);
   }
 
   void _refresh() {
@@ -134,17 +117,6 @@ class _ToololtScreenState extends State<ToololtScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
-  }
-
-  String _tuluvLabel(String tuluv, AppLocalizations l10n) {
-    final t = tuluv.toLowerCase();
-    if (t.contains('ekhelsen') || t == 'ekhelsen') {
-      return l10n.tr('toololt_status_active');
-    }
-    if (t.contains('duussan') || t == 'duussan') {
-      return l10n.tr('toololt_status_done');
-    }
-    return tuluv.isEmpty ? '—' : tuluv;
   }
 
   Future<void> _openStartSheet() async {
@@ -303,7 +275,8 @@ class _ToololtScreenState extends State<ToololtScreen> {
                     ),
                     _ToololtMetricTile(
                       label: 'Худалдах үнэ',
-                      value: MntAmountFormatter.formatTugrik(line.negjKhudaldakhUne),
+                      value: MntAmountFormatter.formatTugrik(
+                          line.negjKhudaldakhUne),
                     ),
                     _ToololtMetricTile(
                       label: 'Нэгж өртөг',
@@ -454,12 +427,11 @@ class _ToololtScreenState extends State<ToololtScreen> {
               title: Text(l10n.tr('menu_toololt')),
             )
           : null,
-      bottomNavigationBar: FutureBuilder<_ToololtScreenData>(
+      bottomNavigationBar: FutureBuilder<ToololtActiveFetchResult>(
         future: _future,
         builder: (context, snap) {
           final d = snap.data;
-          final hasActive =
-              d != null && d.active.success && d.active.hasActive;
+          final hasActive = d != null && d.success && d.hasActive;
           if (hasActive) return const SizedBox.shrink();
           return SafeArea(
             child: Padding(
@@ -473,7 +445,7 @@ class _ToololtScreenState extends State<ToololtScreen> {
           );
         },
       ),
-      body: FutureBuilder<_ToololtScreenData>(
+      body: FutureBuilder<ToololtActiveFetchResult>(
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting &&
@@ -492,10 +464,7 @@ class _ToololtScreenState extends State<ToololtScreen> {
             );
           }
           final data = snap.data!;
-          final session = data.active.session;
-          final hideHistorySection = data.active.success &&
-              data.active.hasActive &&
-              session != null;
+          final session = data.session;
 
           return RefreshIndicator(
             onRefresh: _refreshAndWait,
@@ -553,30 +522,19 @@ class _ToololtScreenState extends State<ToololtScreen> {
                     ),
                   ),
                 ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: Text(
-                      l10n.tr('toololt_section_active'),
-                      style: textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-                if (!data.active.success)
+                if (!data.success)
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
-                        data.active.error ?? l10n.tr('toololt_load_error'),
+                        data.error ?? l10n.tr('toololt_load_error'),
                         style: textTheme.bodyMedium?.copyWith(
                           color: colorScheme.error,
                         ),
                       ),
                     ),
                   )
-                else if (!data.active.hasActive || session == null)
+                else if (!data.hasActive || session == null)
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -608,165 +566,19 @@ class _ToololtScreenState extends State<ToololtScreen> {
                               _refresh();
                             }
                           : null,
-                      onNextPage: session.khuudasniiDugaar < session.totalPageCount
-                          ? () {
-                              setState(() {
-                                _activePage = session.khuudasniiDugaar + 1;
-                              });
-                              _refresh();
-                            }
-                          : null,
+                      onNextPage:
+                          session.khuudasniiDugaar < session.totalPageCount
+                              ? () {
+                                  setState(() {
+                                    _activePage = session.khuudasniiDugaar + 1;
+                                  });
+                                  _refresh();
+                                }
+                              : null,
                     ),
                   ),
-                if (!hideHistorySection) ...[
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                      child: Text(
-                        l10n.tr('toololt_section_history'),
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (!data.history.success)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                          data.history.error ?? l10n.tr('toololt_load_error'),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    )
-                  else if (data.history.rows.isEmpty)
-                    SliverToBoxAdapter(
-                      child: Center(child: Text(l10n.tr('toololt_empty'))),
-                    )
-                  else
-                    SliverList.separated(
-                      itemCount: data.history.rows.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (context, i) {
-                        final row = data.history.rows[i];
-                        final active =
-                            row.tuluv.toLowerCase().contains('ekhelsen');
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Material(
-                            color: colorScheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(14),
-                            child: Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        active
-                                            ? Icons.play_circle_outline_rounded
-                                            : Icons.check_circle_outline_rounded,
-                                        color: active
-                                            ? AppColors.warning
-                                            : AppColors.success,
-                                        size: 22,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          row.ner.isNotEmpty
-                                              ? row.ner
-                                              : row.turul.isNotEmpty
-                                                  ? row.turul
-                                                  : row.id,
-                                          style: textTheme.titleSmall?.copyWith(
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: (active
-                                                  ? AppColors.warning
-                                                  : AppColors.success)
-                                              .withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          _tuluvLabel(row.tuluv, l10n),
-                                          style: textTheme.labelSmall?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                            color: active
-                                                ? AppColors.warning
-                                                : AppColors.success,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (row.turul.isNotEmpty && row.ner.isNotEmpty) ...[
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      row.turul,
-                                      style: textTheme.bodySmall?.copyWith(
-                                        color: colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 12,
-                                    runSpacing: 4,
-                                    children: [
-                                      if (row.niitBaraa != null)
-                                        Text(
-                                          '${l10n.tr('toololt_total_lines')}: ${row.niitBaraa}',
-                                          style: textTheme.labelMedium,
-                                        ),
-                                      if (row.toologdoogui != null)
-                                        Text(
-                                          '${l10n.tr('toololt_remaining')}: ${row.toologdoogui}',
-                                          style: textTheme.labelMedium?.copyWith(
-                                            color: colorScheme.primary,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  if (row.ekhelsenOgnoo != null) ...[
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      '${l10n.tr('toololt_started')}: ${MongolianDateFormatter.formatDateTime(row.ekhelsenOgnoo!)}',
-                                      style: textTheme.labelSmall?.copyWith(
-                                        color: colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ],
-                                  if (row.duussanOgnoo != null)
-                                    Text(
-                                      '${l10n.tr('toololt_finished')}: ${MongolianDateFormatter.formatDateTime(row.duussanOgnoo!)}',
-                                      style: textTheme.labelSmall?.copyWith(
-                                        color: colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                ],
-                SliverToBoxAdapter(
-                  child: SizedBox(height: hideHistorySection ? 32 : 120),
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 32),
                 ),
               ],
             ),
@@ -867,8 +679,8 @@ class _ActiveCountCard extends StatelessWidget {
       unitCost = _asNum(z['urtugUne']) > 0
           ? _asNum(z['urtugUne'])
           : _asNum(z['negjUrtug']) > 0
-          ? _asNum(z['negjUrtug'])
-          : _asNum(z['costPrice']);
+              ? _asNum(z['negjUrtug'])
+              : _asNum(z['costPrice']);
     }
     if (unitCost <= 0) return 0;
     return unitCost * qty;
@@ -928,7 +740,8 @@ class _ActiveCountCard extends StatelessWidget {
                   ),
                   _ToololtMetricTile(
                     label: l10n.tr('toololt_metric_retail_sum'),
-                    value: MntAmountFormatter.formatTugrik(session.niitMungunDun),
+                    value:
+                        MntAmountFormatter.formatTugrik(session.niitMungunDun),
                   ),
                   _ToololtMetricTile(
                     label: l10n.tr('toololt_metric_cost_sum'),
@@ -1011,7 +824,8 @@ class _ActiveCountCard extends StatelessWidget {
                         height: tableHeight,
                         child: Container(
                           decoration: BoxDecoration(
-                            border: Border.all(color: colorScheme.outlineVariant),
+                            border:
+                                Border.all(color: colorScheme.outlineVariant),
                             borderRadius: const BorderRadius.vertical(
                               bottom: Radius.circular(10),
                             ),
@@ -1034,7 +848,8 @@ class _ActiveCountCard extends StatelessWidget {
                                         child: Text(
                                           '${i + 1}',
                                           textAlign: TextAlign.start,
-                                          style: textTheme.labelMedium?.copyWith(
+                                          style:
+                                              textTheme.labelMedium?.copyWith(
                                             fontWeight: FontWeight.w700,
                                             color: colorScheme.onSurfaceVariant,
                                           ),
@@ -1068,12 +883,13 @@ class _ActiveCountCard extends StatelessWidget {
                                           key: ValueKey(
                                             '${line.code}_${line.toolsonToo}',
                                           ),
-                                          initialValue: MntAmountFormatter.format(
+                                          initialValue:
+                                              MntAmountFormatter.format(
                                             line.toolsonToo,
                                           ),
                                           style: textTheme.bodySmall,
-                                          keyboardType:
-                                              const TextInputType.numberWithOptions(
+                                          keyboardType: const TextInputType
+                                              .numberWithOptions(
                                             decimal: true,
                                           ),
                                           inputFormatters: [
@@ -1084,7 +900,8 @@ class _ActiveCountCard extends StatelessWidget {
                                           textAlign: TextAlign.center,
                                           decoration: InputDecoration(
                                             isDense: true,
-                                            contentPadding: EdgeInsets.symmetric(
+                                            contentPadding:
+                                                EdgeInsets.symmetric(
                                               horizontal: fieldHPad,
                                               vertical: fieldVPad,
                                             ),
@@ -1124,7 +941,8 @@ class _ActiveCountCard extends StatelessWidget {
                     child: Text(
                       l10n
                           .tr('toololt_page')
-                          .replaceAll('{current}', '${session.khuudasniiDugaar}')
+                          .replaceAll(
+                              '{current}', '${session.khuudasniiDugaar}')
                           .replaceAll('{total}', '$totalPages'),
                       textAlign: TextAlign.center,
                       style: textTheme.labelMedium,
@@ -1300,7 +1118,8 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
                         child: TextField(
                           controller: searchCtrl,
                           decoration: InputDecoration(
-                            hintText: widget.l10n.tr('baraa_catalog_search_hint'),
+                            hintText:
+                                widget.l10n.tr('baraa_catalog_search_hint'),
                             prefixIcon: const Icon(Icons.search_rounded),
                           ),
                           onSubmitted: (v) {
@@ -1332,11 +1151,14 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
                       ),
                       builder: (c, snap) {
                         if (!snap.hasData) {
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(
+                              child: CircularProgressIndicator());
                         }
                         final r = snap.data!;
                         if (!r.success || r.products.isEmpty) {
-                          return Center(child: Text(widget.l10n.tr('baraa_catalog_empty')));
+                          return Center(
+                              child:
+                                  Text(widget.l10n.tr('baraa_catalog_empty')));
                         }
                         return ListView(
                           children: r.products.map((p) {
@@ -1353,7 +1175,8 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
                                   }
                                 });
                               },
-                              title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                              title: Text(p.name,
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
                               subtitle: Text(code),
                             );
                           }).toList(),
@@ -1397,7 +1220,8 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
     if (!mounted) return;
     if (!res.success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res.error ?? widget.l10n.tr('toololt_action_error'))),
+        SnackBar(
+            content: Text(res.error ?? widget.l10n.tr('toololt_action_error'))),
       );
       return;
     }
