@@ -1,4 +1,4 @@
-package com.posease.app
+package mn.posease.mobile.terminal.pos
 
 import android.app.Activity
 import android.content.Intent
@@ -22,7 +22,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
-    private val channelName = "com.posease.app"
+    private val channelName = "mn.posease.mobile.terminal.pos"
     private val eposLogTag = "PosEaseEpos"
     /**
      * Known UniPOS package ids; [resolveUniPosTargetPackage] also scans SEND text/plain handlers

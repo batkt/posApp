@@ -12,7 +12,7 @@ repositories {
 }
 
 android {
-    namespace = "com.posease.app"
+    namespace = "mn.posease.mobile.terminal.pos"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -34,7 +34,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.posease.app"
+        applicationId = "mn.posease.mobile.terminal.pos"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
