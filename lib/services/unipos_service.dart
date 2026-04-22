@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 class UniPosService {
   UniPosService._();
 
-  static const MethodChannel _channel = MethodChannel('com.example.pos_app');
+  static const MethodChannel _channel = MethodChannel('com.example.posease');
 
   static Future<Map<String, dynamic>?> purchase({
     required double amount,

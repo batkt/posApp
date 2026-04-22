@@ -22,7 +22,7 @@ class PrinterResult {
 }
 
 class PrinterService {
-  static const MethodChannel _channel = MethodChannel('com.example.pos_app');
+  static const MethodChannel _channel = MethodChannel('com.example.posease');
   static const MethodChannel _paxChannel = MethodChannel('pax_sdk');
 
   /// Must match [MainActivity.kt] health-check JSON sent as [Intent.EXTRA_TEXT].

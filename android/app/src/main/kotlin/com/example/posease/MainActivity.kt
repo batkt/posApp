@@ -8,7 +8,9 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import kotlin.math.max
 import android.util.Base64
+import android.util.Log
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.lang.ClassNotFoundException
@@ -21,6 +23,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
     private val channelName = "com.example.posease"
+    private val eposLogTag = "PosEaseEpos"
     /**
      * Known UniPOS package ids; [resolveUniPosTargetPackage] also scans SEND text/plain handlers
      * so other bank/PAX-shipped terminal apps can be found without hardcoding every id.
@@ -62,6 +65,7 @@ class MainActivity : FlutterFragmentActivity() {
                             val text = call.argument<String>("text")
                             val bitmap = buildTestBitmap(text)
                             val preferred = call.argument<String>("packageName")
+                            // EPOS/Databank SEND first — same interoperable path as most POS terminals.
                             val targetEposPackage = resolveEposTargetPackage(preferred)
                             if (targetEposPackage != null) {
                                 if (pendingEposResult != null) {
@@ -89,7 +93,7 @@ class MainActivity : FlutterFragmentActivity() {
                                 }
                             }
 
-                            // Fallback for terminals where EPOS app is not installed.
+                            // No EPOS handler (or intent not resolvable): built-in PAX Neptune.
                             printBitmapOnPax(bitmap)
                             result.success("printed")
                         } catch (e: Throwable) {
@@ -172,11 +176,10 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "android.epos.payment.healthCheck" -> {
                         try {
+                            // Match epossdk.md §1.6.1: Java sets only CATEGORY_HEALTH_CHECK + empty Bundle.
+                            // SEND JSON: category only (no commandType/dbRefNo/request-type — EPOS may reject extras).
                             val payload = JSONObject().apply {
                                 put("category", "android.epos.payment.healthCheck")
-                                put("commandType", "1")
-                                put("request-type", "healthCheck")
-                                put("dbRefNo", System.currentTimeMillis().toString())
                             }
                             val preferred = call.argument<String>("packageName")
                             launchEpos(payload.toString(), result, preferred)
@@ -274,6 +277,7 @@ class MainActivity : FlutterFragmentActivity() {
             return
         }
         pendingEposResult = result
+        Log.d(eposLogTag, "launchEpos package=$targetPackage EXTRA_TEXT=$request")
         @Suppress("DEPRECATION")
         startActivityForResult(intent, eposRequestCode)
     }
@@ -407,15 +411,41 @@ class MainActivity : FlutterFragmentActivity() {
             val payload = hashMapOf<String, Any?>(
                 "resultCode" to resultCode
             )
-            data?.extras?.let { extras ->
-                for (key in extras.keySet()) {
-                    payload[key] = extras.get(key)
+            fun mergeEposJsonString(raw: String?) {
+                if (raw.isNullOrBlank()) return
+                try {
+                    val jo = JSONObject(raw)
+                    val it = jo.keys()
+                    while (it.hasNext()) {
+                        val k = it.next()
+                        val v = jo.get(k)
+                        payload[k] = when (v) {
+                            is JSONObject -> v.toString()
+                            is org.json.JSONArray -> v.toString()
+                            org.json.JSONObject.NULL -> null
+                            else -> v
+                        }
+                    }
+                } catch (_: Exception) {
                 }
             }
+            // EPOS often returns BaseResponse / jsonRet as JSON in a string extra, not only flat extras.
+            mergeEposJsonString(data?.getStringExtra(Intent.EXTRA_TEXT))
+            mergeEposJsonString(data?.getStringExtra("jsonRet"))
+            mergeEposJsonString(data?.getStringExtra("result"))
+            data?.extras?.let { extras ->
+                for (key in extras.keySet()) {
+                    if (!payload.containsKey(key)) {
+                        payload[key] = extras.get(key)
+                    }
+                }
+            }
+            Log.d(eposLogTag, "onActivityResult epos activityResultCode=$resultCode payload=$payload")
             if (resultCode == Activity.RESULT_OK) {
                 pending.success(payload)
             } else {
-                val errorMessage = data?.getStringExtra("rspMsg")
+                val errorMessage = (payload["rspMsg"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: data?.getStringExtra("rspMsg")
                     ?: data?.getStringExtra("error")
                     ?: "EPOS request canceled/failed"
                 pending.error("EPOS_FAILED", errorMessage, payload)
@@ -428,6 +458,41 @@ class MainActivity : FlutterFragmentActivity() {
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
     }
 
+    /**
+     * Thermal printers need 1-bit contrast: resize to ~384px width (58mm head) and
+     * threshold to pure black/white so anti-aliased grays do not print as fuzzy dots.
+     */
+    private fun prepareReceiptBitmapForPrinter(src: Bitmap): Bitmap {
+        val targetW = 384
+        val toProcess = if (src.width > targetW) {
+            val ratio = targetW.toFloat() / src.width
+            val nh = max(1, (src.height * ratio).toInt())
+            Bitmap.createScaledBitmap(src, targetW, nh, true)
+        } else {
+            src
+        }
+        val w = toProcess.width
+        val h = toProcess.height
+        val pixels = IntArray(w * h)
+        toProcess.getPixels(pixels, 0, w, 0, 0, w, h)
+        for (i in pixels.indices) {
+            val c = pixels[i]
+            val a = Color.alpha(c)
+            pixels[i] = if (a < 28) {
+                Color.WHITE
+            } else {
+                val lum = Color.red(c) * 0.299 + Color.green(c) * 0.587 + Color.blue(c) * 0.114
+                if (lum < 172.0) Color.BLACK else Color.WHITE
+            }
+        }
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        out.setPixels(pixels, 0, w, 0, 0, w, h)
+        if (toProcess !== src && !toProcess.isRecycled) {
+            toProcess.recycle()
+        }
+        return out
+    }
+
     private fun bitmapToBase64(bitmap: Bitmap): String {
         val stream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
@@ -435,6 +500,10 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun printBitmapOnPax(bitmap: Bitmap) {
+        val toPrint = prepareReceiptBitmapForPrinter(bitmap)
+        if (toPrint !== bitmap) {
+            bitmap.recycle()
+        }
         try {
             val neptuneClass = Class.forName("com.pax.neptunelite.api.NeptuneLiteUser")
             val neptune = neptuneClass.getMethod("getInstance").invoke(null)
@@ -452,14 +521,14 @@ class MainActivity : FlutterFragmentActivity() {
             } catch (_: Throwable) {}
 
             try {
-                printerClass.getMethod("printBitmap", Bitmap::class.java).invoke(printer, bitmap)
+                printerClass.getMethod("printBitmap", Bitmap::class.java).invoke(printer, toPrint)
             } catch (_: Throwable) {
                 // Some firmware exposes a second alignment arg.
                 printerClass.getMethod(
                     "printBitmap",
                     Bitmap::class.java,
                     Int::class.javaPrimitiveType
-                ).invoke(printer, bitmap, 0)
+                ).invoke(printer, toPrint, 0)
             }
 
             try {
@@ -483,6 +552,10 @@ class MainActivity : FlutterFragmentActivity() {
                 e.message
             }
             throw IllegalStateException("PAX printer error: $details", e)
+        } finally {
+            if (!toPrint.isRecycled) {
+                toPrint.recycle()
+            }
         }
     }
 
