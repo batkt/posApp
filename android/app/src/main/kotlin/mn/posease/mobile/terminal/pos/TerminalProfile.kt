@@ -1,4 +1,4 @@
-package com.example.pos_app
+package mn.posease.mobile.terminal.pos
 
 import android.os.Build
 import java.util.Locale

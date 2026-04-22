@@ -1,4 +1,4 @@
-package com.example.pos_app
+package mn.posease.mobile.terminal.pos
 
 import android.app.Activity
 import android.content.Intent
@@ -19,7 +19,7 @@ import kotlin.math.roundToLong
 
 /**
  * Data Bank EPOS Open API running **inside** PosEase (same pattern as parkeasev1).
- * Used on PAX A930 / A8900 per [TerminalProfile.EPOS_OPEN_IN_APP].
+ * Used on PAX A930 / A8900 per [TerminalHardwareProfile.EPOS_OPEN_IN_APP].
  */
 class EposOpenInAppHelper(
     private val activity: Activity,
