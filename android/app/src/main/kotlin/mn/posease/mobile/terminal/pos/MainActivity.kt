@@ -23,7 +23,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
     private val channelName = "mn.posease.mobile.terminal.pos"
-    private val eposLogTag = "PosEaseEpos"
+    private val eposLogTag = "PosEase POSEpos"
     /**
      * Known UniPOS package ids; [resolveUniPosTargetPackage] also scans SEND text/plain handlers
      * so other bank/PAX-shipped terminal apps can be found without hardcoding every id.
