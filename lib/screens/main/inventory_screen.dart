@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/auth_model.dart';
 import '../../models/inventory_model.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
@@ -41,6 +42,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final canManageProducts =
+        context.watch<AuthModel>().staffAccess.hasFullAccess;
 
     return Scaffold(
       appBar: widget.showAppBar
@@ -48,16 +51,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
               title: const Text('Барааны менежмент'),
               centerTitle: true,
               actions: [
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: () => _showAddProductDialog(context),
-                ),
+                if (canManageProducts)
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: () => _showAddProductDialog(context),
+                  ),
               ],
             )
           : null,
       body: Column(
         children: [
-          if (!widget.showAppBar)
+          if (!widget.showAppBar && canManageProducts)
             Align(
               alignment: Alignment.centerRight,
               child: IconButton(
@@ -207,6 +211,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     final item = items[index];
                     return _InventoryItemTile(
                       item: item,
+                      allowProductCrud: canManageProducts,
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -405,6 +410,8 @@ class _StatChip extends StatelessWidget {
 
 class _InventoryItemTile extends StatelessWidget {
   final InventoryItem item;
+  /// `AdminEsekh` / [StaffScreenAccess.hasFullAccess] — add, edit, delete бараа.
+  final bool allowProductCrud;
   final VoidCallback onTap;
   final VoidCallback onRestock;
   final VoidCallback onEdit;
@@ -412,6 +419,7 @@ class _InventoryItemTile extends StatelessWidget {
 
   const _InventoryItemTile({
     required this.item,
+    required this.allowProductCrud,
     required this.onTap,
     required this.onRestock,
     required this.onEdit,
@@ -527,34 +535,43 @@ class _InventoryItemTile extends StatelessWidget {
                       break;
                   }
                 },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'restock',
-                    child: Row(children: [
-                      Icon(Icons.add_box_outlined, size: 18),
-                      SizedBox(width: 8),
-                      Text('Нөхөн дүүргэх'),
-                    ]),
-                  ),
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(children: [
-                      Icon(Icons.edit_outlined, size: 18),
-                      SizedBox(width: 8),
-                      Text('Засах'),
-                    ]),
-                  ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Row(children: [
-                      Icon(Icons.delete_outline,
-                          size: 18, color: AppColors.error),
-                      const SizedBox(width: 8),
-                      Text('Устгах',
-                          style: TextStyle(color: AppColors.error)),
-                    ]),
-                  ),
-                ],
+                itemBuilder: (context) {
+                  final items = <PopupMenuEntry<String>>[
+                    const PopupMenuItem(
+                      value: 'restock',
+                      child: Row(children: [
+                        Icon(Icons.add_box_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Text('Нөхөн дүүргэх'),
+                      ]),
+                    ),
+                  ];
+                  if (allowProductCrud) {
+                    items.addAll(const [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Row(children: [
+                          Icon(Icons.edit_outlined, size: 18),
+                          SizedBox(width: 8),
+                          Text('Засах'),
+                        ]),
+                      ),
+                    ]);
+                    items.add(
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(children: [
+                          Icon(Icons.delete_outline,
+                              size: 18, color: AppColors.error),
+                          SizedBox(width: 8),
+                          Text('Устгах',
+                              style: TextStyle(color: AppColors.error)),
+                        ]),
+                      ),
+                    );
+                  }
+                  return items;
+                },
               ),
             ],
           ),

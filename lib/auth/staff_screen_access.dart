@@ -18,6 +18,7 @@ class StaffScreenAccess {
     required this.allowsDashboard,
     required this.allowsEbarimt,
     required this.allowsHynalt,
+    required this.allowsTailan,
   });
 
   /// Only `AdminEsekh` — used for unrestricted UI (e.g. CAdmin) and legacy “see all”.
@@ -55,6 +56,9 @@ class StaffScreenAccess {
 
   /// Web `/khyanalt/hynalt` — Хяналт dashboard (Орлого summary + top-selling table).
   final bool allowsHynalt;
+
+  /// Web `/khyanalt/tailan/*` — Тайлан (reports).
+  final bool allowsTailan;
 
   /// Same as [allowsBarimtiinJagsaalt] — barcode/receipt history screen guard.
   bool get allowsSalesHistory => allowsBarimtiinJagsaalt;
@@ -139,6 +143,7 @@ class StaffScreenAccess {
     final hynalt = full ||
         match('/khyanalt/hynalt') ||
         match('khyanalt/hynalt');
+    final tailan = full || match('khyanalt/tailan');
 
     return StaffScreenAccess(
       hasFullAccess: full,
@@ -154,6 +159,7 @@ class StaffScreenAccess {
       allowsDashboard: dashboard,
       allowsEbarimt: ebarimt,
       allowsHynalt: hynalt,
+      allowsTailan: tailan,
     );
   }
 
@@ -171,6 +177,7 @@ class StaffScreenAccess {
     allowsDashboard: false,
     allowsEbarimt: false,
     allowsHynalt: false,
+    allowsTailan: false,
   );
 
   static bool _truthy(dynamic v) {

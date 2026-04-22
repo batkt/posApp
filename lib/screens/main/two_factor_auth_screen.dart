@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_snackbar.dart';
-import 'post_login_home.dart';
 
 class TwoFactorAuthScreen extends StatefulWidget {
   const TwoFactorAuthScreen({super.key});
@@ -79,10 +78,7 @@ class _TwoFactorAuthScreenState extends State<TwoFactorAuthScreen> {
     if (!mounted) return;
 
     if (success) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const PostLoginHome()),
-      );
+      // [AuthWrapper] shows [BranchSelectScreen] or [PostLoginHome].
     } else {
       final err = context.read<AuthModel>().lastAuthError;
       setState(() => _errorMessage = err ?? 'Invalid verification code');
@@ -266,9 +262,8 @@ class _TwoFactorAuthScreenState extends State<TwoFactorAuthScreen> {
 
                 // Back to Login
                 TextButton(
-                  onPressed: () {
-                    auth.logout();
-                    Navigator.pop(context);
+                  onPressed: () async {
+                    await context.read<AuthModel>().logout();
                   },
                   child: const Text('Нэвтрэх рүү буцах'),
                 ),

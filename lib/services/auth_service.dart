@@ -1,6 +1,7 @@
 import 'api_service.dart';
 import '../auth/staff_screen_access.dart';
 import '../models/auth_model.dart';
+import '../models/branch_option.dart';
 import '../models/pos_session.dart';
 import 'baiguullaga_service.dart';
 
@@ -106,6 +107,9 @@ class AuthService {
           );
 
           final posSession = await _resolvePosSession(userData);
+          final branches = BranchOption.parseList(userData?['salbaruud']);
+          final branchOptions =
+              branches.length > 1 ? List<BranchOption>.from(branches) : null;
 
           return AuthResult.success(
             user: user,
@@ -114,6 +118,7 @@ class AuthService {
             organizations: organizations?.cast<Map<String, dynamic>>(),
             posSession: posSession,
             staffAccess: staffAccess,
+            branchOptions: branchOptions,
           );
         }
       }
@@ -175,12 +180,16 @@ class AuthService {
                 )
               : null;
           final posSession = await _resolvePosSession(userData);
+          final branches = BranchOption.parseList(userData?['salbaruud']);
+          final branchOptions =
+              branches.length > 1 ? List<BranchOption>.from(branches) : null;
 
           return AuthResult.success(
             user: user,
             token: token,
             posSession: posSession,
             staffAccess: staffAccess,
+            branchOptions: branchOptions,
           );
         }
       }
@@ -326,6 +335,8 @@ class AuthResult {
   final List<Map<String, dynamic>>? organizations;
   final PosSession? posSession;
   final StaffScreenAccess? staffAccess;
+  /// When the staff has more than one салбар in `salbaruud`, client must pick before POS.
+  final List<BranchOption>? branchOptions;
 
   const AuthResult._({
     required this.success,
@@ -336,6 +347,7 @@ class AuthResult {
     this.organizations,
     this.posSession,
     this.staffAccess,
+    this.branchOptions,
   });
 
   factory AuthResult.success({
@@ -345,6 +357,7 @@ class AuthResult {
     List<Map<String, dynamic>>? organizations,
     PosSession? posSession,
     StaffScreenAccess? staffAccess,
+    List<BranchOption>? branchOptions,
   }) =>
       AuthResult._(
         success: true,
@@ -354,6 +367,7 @@ class AuthResult {
         organizations: organizations,
         posSession: posSession,
         staffAccess: staffAccess,
+        branchOptions: branchOptions,
       );
 
   factory AuthResult.error(String error) => AuthResult._(

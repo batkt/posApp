@@ -5,8 +5,6 @@ import '../../models/locale_model.dart';
 import '../../utils/app_snackbar.dart';
 import '../../utils/connectivity.dart';
 import 'forgot_password_screen.dart';
-import 'two_factor_auth_screen.dart';
-import 'post_login_home.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -84,17 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (success) {
-      if (auth.requiresTwoFactor) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const TwoFactorAuthScreen()),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const PostLoginHome()),
-        );
-      }
+      // [AuthWrapper] shows [TwoFactorAuthScreen], [BranchSelectScreen], or [PostLoginHome].
     } else {
       final l10n = AppLocalizations.of(context);
       final err = auth.lastAuthError;
@@ -141,10 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (success) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const PostLoginHome()),
-      );
+      // [AuthWrapper] switches to home / branch / 2FA.
     } else {
       final auth = context.read<AuthModel>();
       final l10n = AppLocalizations.of(context);
@@ -210,6 +195,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       );
                     },
                   ),
+                ),
+                const SizedBox(height: 12),
+                Consumer<LocaleModel>(
+                  builder: (context, localeModel, child) {
+                    final l10n = AppLocalizations(localeModel.locale);
+                    return Text(
+                      l10n.tr('login_brand_subtitle'),
+                      textAlign: TextAlign.center,
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.primary,
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 24),
 

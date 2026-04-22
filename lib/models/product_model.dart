@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'cart_model.dart';
 import '../services/product_service.dart';
+import '../services/socket_service.dart';
 import 'pos_session.dart';
 
 class ProductModel extends ChangeNotifier {
@@ -12,6 +15,8 @@ class ProductModel extends ChangeNotifier {
   String? _error;
   String? _baiguullagiinId;
   String? _salbariinId;
+  StreamSubscription<void>? _uldegdelSub;
+  String? _socketBranchKey;
 
   ProductModel({
     ProductService? productService,
@@ -20,6 +25,25 @@ class ProductModel extends ChangeNotifier {
   void syncSession(PosSession? session) {
     final org = session?.baiguullagiinId;
     final branch = session?.salbariinId;
+
+    SocketService.instance.syncPosSession(session);
+
+    final branchKey =
+        (org != null && branch != null && org.isNotEmpty && branch.isNotEmpty)
+            ? '$org|$branch'
+            : null;
+    if (branchKey != _socketBranchKey) {
+      _socketBranchKey = branchKey;
+      _uldegdelSub?.cancel();
+      _uldegdelSub = null;
+      if (branchKey != null) {
+        _uldegdelSub =
+            SocketService.instance.uldegdelChanged.listen((_) {
+          unawaited(_loadProductsFromAPI());
+        });
+      }
+    }
+
     if (org == _baiguullagiinId && branch == _salbariinId) {
       return;
     }

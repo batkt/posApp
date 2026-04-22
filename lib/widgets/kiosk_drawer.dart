@@ -12,9 +12,12 @@ import '../screens/main/out_of_stock_baraa_screen.dart';
 import '../screens/main/sales_history_screen.dart';
 import '../screens/main/income_overview_screen.dart';
 import '../screens/main/purchase_list_screen.dart';
+import '../screens/main/pos_settings_hub_screen.dart';
+import '../screens/main/tailan_screen.dart';
 import '../screens/main/toololt_screen.dart';
 import '../theme/app_theme.dart';
 import '../services/printer_service.dart';
+import 'drawer_branch_switch.dart';
 
 /// Side menu for kiosk / mobile POS — same visual design as [MainScreen] drawer.
 class KioskDrawer extends StatelessWidget {
@@ -103,6 +106,20 @@ class KioskDrawer extends StatelessWidget {
             );
           },
         ),
+      if (access.allowsTailan)
+        _KioskMenuAction(
+          icon: Icons.insert_chart_outlined,
+          labelKey: 'tailan_menu',
+          onTap: (ctx) {
+            Navigator.pop(ctx);
+            Navigator.push<void>(
+              ctx,
+              MaterialPageRoute<void>(
+                builder: (_) => const TailanScreen(),
+              ),
+            );
+          },
+        ),
       if (access.allowsBarimtiinJagsaalt)
         _KioskMenuAction(
           icon: Icons.shopping_cart_outlined,
@@ -155,6 +172,20 @@ class KioskDrawer extends StatelessWidget {
               ctx,
               MaterialPageRoute<void>(
                 builder: (_) => const CustomersScreen(),
+              ),
+            );
+          },
+        ),
+      if (auth.posSession != null)
+        _KioskMenuAction(
+          icon: Icons.tune_rounded,
+          labelKey: 'menu_pos_settings',
+          onTap: (ctx) {
+            Navigator.pop(ctx);
+            Navigator.push<void>(
+              ctx,
+              MaterialPageRoute<void>(
+                builder: (_) => const PosSettingsHubScreen(showAppBar: true),
               ),
             );
           },
@@ -485,6 +516,7 @@ class KioskDrawer extends StatelessWidget {
                 ],
               ),
             ),
+            const DrawerBranchSwitchSection(),
             const SizedBox(height: 8),
             Expanded(
               child: menuActions.isEmpty

@@ -12,6 +12,8 @@ import 'models/customer_model.dart';
 import 'models/transaction_model.dart';
 import 'screens/main/post_login_home.dart';
 import 'screens/main/login_screen.dart';
+import 'screens/main/two_factor_auth_screen.dart';
+import 'screens/main/branch_select_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() {
@@ -115,7 +117,13 @@ class _AuthWrapperState extends State<AuthWrapper> {
   Widget build(BuildContext context) {
     return Consumer<AuthModel>(
       builder: (context, auth, child) {
+        if (auth.requiresTwoFactor && !auth.isLoggedIn) {
+          return const TwoFactorAuthScreen();
+        }
         if (auth.isLoggedIn) {
+          if (auth.needsBranchSelection) {
+            return const BranchSelectScreen();
+          }
           return const PostLoginHome();
         }
         return const LoginScreen();

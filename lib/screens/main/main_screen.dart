@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../auth/staff_screen_access.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/drawer_branch_switch.dart';
 import 'dashboard_screen.dart';
 import 'inventory_screen.dart';
 import 'baraa_catalog_screen.dart';
@@ -15,13 +15,16 @@ import 'purchase_list_screen.dart';
 import 'login_screen.dart';
 import 'out_of_stock_baraa_screen.dart';
 import 'ebarimt_menu_screen.dart';
+import 'staff_permissions_screen.dart';
+import 'pos_settings_hub_screen.dart';
+import 'tailan_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key, this.initialSection});
 
-  /// Optional drawer section id: `dashboard`, `baraa_catalog`, `inventory`,
-  /// `out_of_stock`, `toololt`, `ebarimt`, `customers`, `income_overview`,
-  /// `purchase_list`, `history`.
+  /// Optional drawer section id: `dashboard`, `staff_permissions`, `pos_settings`,
+  /// `baraa_catalog`, `inventory`, `out_of_stock`, `toololt`, `ebarimt`, `customers`,
+  /// `income_overview`, `purchase_list`, `tailan`, `history`.
   final String? initialSection;
 
   @override
@@ -39,7 +42,8 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   bool _appliedInitialSection = false;
 
-  List<_NavEntry> _entriesFor(StaffScreenAccess access) {
+  List<_NavEntry> _entriesFor(AuthModel auth) {
+    final access = auth.staffAccess;
     final list = <_NavEntry>[];
     void push(Widget screen, _MenuItem menu) {
       final idx = list.length;
@@ -63,6 +67,42 @@ class _MainScreenState extends State<MainScreen> {
           selectedIcon: Icons.dashboard,
           label: 'dashboard',
           section: 'dashboard',
+          index: 0,
+        ),
+      );
+    }
+    if (access.allowsTailan) {
+      push(
+        const TailanScreen(showAppBar: false),
+        _MenuItem(
+          icon: Icons.insert_chart_outlined,
+          selectedIcon: Icons.insert_chart_rounded,
+          label: 'tailan_menu',
+          section: 'tailan',
+          index: 0,
+        ),
+      );
+    }
+    if (access.hasFullAccess) {
+      push(
+        const StaffPermissionsScreen(showAppBar: false),
+        _MenuItem(
+          icon: Icons.badge_outlined,
+          selectedIcon: Icons.badge_rounded,
+          label: 'menu_staff',
+          section: 'staff_permissions',
+          index: 0,
+        ),
+      );
+    }
+    if (auth.posSession != null) {
+      push(
+        const PosSettingsHubScreen(showAppBar: false),
+        _MenuItem(
+          icon: Icons.tune_rounded,
+          selectedIcon: Icons.tune_rounded,
+          label: 'menu_pos_settings',
+          section: 'pos_settings',
           index: 0,
         ),
       );
@@ -198,7 +238,7 @@ class _MainScreenState extends State<MainScreen> {
       return;
     }
     final auth = context.read<AuthModel>();
-    final entries = _entriesFor(auth.staffAccess);
+    final entries = _entriesFor(auth);
     final i = entries.indexWhere((e) => e.menu.section == widget.initialSection);
     if (i >= 0) {
       setState(() => _currentIndex = i);
@@ -213,7 +253,7 @@ class _MainScreenState extends State<MainScreen> {
     final l10n = AppLocalizations.of(context);
     final auth = context.watch<AuthModel>();
     final user = auth.currentUser;
-    final entries = _entriesFor(auth.staffAccess);
+    final entries = _entriesFor(auth);
     final safeIndex =
         entries.isEmpty ? 0 : _currentIndex.clamp(0, entries.length - 1);
     if (safeIndex != _currentIndex && entries.isNotEmpty) {
@@ -380,6 +420,8 @@ class _MainScreenState extends State<MainScreen> {
                 ],
               ),
             ),
+
+            const DrawerBranchSwitchSection(),
 
             const SizedBox(height: 8),
 

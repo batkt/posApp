@@ -1,66 +1,124 @@
 // ignore_for_file: avoid_print
 
+import 'dart:async';
+
+import 'package:socket_io_client/socket_io_client.dart';
+
 import 'api_service.dart';
+import '../models/pos_session.dart';
 
-/// Stub SocketService for when socket_io_client is not available
-/// To enable real-time features, add socket_io_client to pubspec.yaml:
-///   socket_io_client: ^2.0.0
+/// Real-time branch stock sync — listens for `uldegdelChanged` from posBack Socket.IO.
+/// Pair with server `joinBranch` + emits from `models/aguulakh.js`.
 class SocketService {
-  static final SocketService _instance = SocketService._internal();
-  factory SocketService() => _instance;
   SocketService._internal();
+  static final SocketService instance = SocketService._internal();
 
-  String? _token;
-  bool _isConnected = false;
+  Socket? _socket;
+  PosSession? _attachedSession;
+  String? _attachedTokenPreview;
+  Timer? _debounce;
 
-  bool get isConnected => _isConnected;
-  bool get isAvailable =>
-      false; // Socket not available without socket_io_client
+  final StreamController<void> _uldegdelController =
+      StreamController<void>.broadcast();
 
-  void initSocket(String? token) {
-    _token = token;
-    print('Socket initialization requested but socket_io_client not available');
-    print('Token would be: $token');
-    print('Socket URL: ${ApiConfig.socketUrl}');
+  /// Debounced pulses when warehouse stock (`uldegdel`) changed for this branch.
+  Stream<void> get uldegdelChanged => _uldegdelController.stream;
 
-    // Simulate connection for demo purposes
-    _isConnected = false;
+  bool get isConnected => _socket?.connected == true;
+
+  /// Connect (or reconnect) when [session] and `posApiService.token` are set.
+  void syncPosSession(PosSession? session) {
+    final token = posApiService.token;
+    if (session == null ||
+        token == null ||
+        token.isEmpty ||
+        session.baiguullagiinId.isEmpty ||
+        session.salbariinId.isEmpty) {
+      _disconnect();
+      return;
+    }
+
+    final tokenPreview =
+        token.length > 12 ? token.substring(token.length - 12) : token;
+    final sameSession = _attachedSession?.baiguullagiinId ==
+            session.baiguullagiinId &&
+        _attachedSession?.salbariinId == session.salbariinId;
+    final sameToken = _attachedTokenPreview == tokenPreview;
+
+    if (_socket?.connected == true && sameSession && sameToken) {
+      return;
+    }
+
+    _disconnect();
+    _attachedSession = session;
+    _attachedTokenPreview = tokenPreview;
+
+    try {
+      _socket = io(
+        ApiConfig.socketIoHttpRoot,
+        OptionBuilder()
+            .enableForceNew()
+            .setPath('/api/socket.io')
+            .setTransports(['websocket'])
+            .enableAutoConnect()
+            .setExtraHeaders({'Authorization': 'bearer $token'})
+            .build(),
+      );
+
+      void joinRoom() {
+        _socket!.emit('joinBranch', {
+          'baiguullagiinId': session.baiguullagiinId,
+          'salbariinId': session.salbariinId,
+        });
+      }
+
+      _socket!.onConnect((_) => joinRoom());
+
+      _socket!.on('uldegdelChanged', (_) => _pulseDebounced());
+
+      _socket!.onDisconnect((_) {});
+
+      _socket!.onConnectError((dynamic e) {
+        if (e != null) print('Socket connect_error: $e');
+      });
+    } catch (e, st) {
+      print('Socket init failed: $e\n$st');
+      _socket = null;
+    }
   }
 
-  // POS Events - stub implementations
-  void joinBranch(String branchId) {
-    print('Would join branch: $branchId');
+  void _pulseDebounced() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () {
+      if (!_uldegdelController.isClosed) {
+        _uldegdelController.add(null);
+      }
+    });
   }
 
-  void leaveBranch(String branchId) {
-    print('Would leave branch: $branchId');
+  void _disconnect() {
+    _debounce?.cancel();
+    _debounce = null;
+    final old = _attachedSession;
+    final s = _socket;
+    _socket = null;
+    _attachedSession = null;
+    _attachedTokenPreview = null;
+    if (s != null) {
+      try {
+        if (old != null && s.connected) {
+          s.emit('leaveBranch', {
+            'baiguullagiinId': old.baiguullagiinId,
+            'salbariinId': old.salbariinId,
+          });
+        }
+        s.dispose();
+      } catch (e) {
+        print('Socket dispose: $e');
+      }
+    }
   }
 
-  void emitSale(Map<String, dynamic> saleData) {
-    print('Would emit sale: $saleData');
-  }
-
-  void onSaleCreated(Function(Map<String, dynamic>) callback) {
-    print('Sale listener registered (stub)');
-  }
-
-  void onInventoryUpdate(Function(Map<String, dynamic>) callback) {
-    print('Inventory listener registered (stub)');
-  }
-
-  void onNotification(Function(Map<String, dynamic>) callback) {
-    print('Notification listener registered (stub)');
-  }
-
-  void disconnect() {
-    _isConnected = false;
-    _token = null;
-    print('Socket disconnected (stub)');
-  }
-
-  void reconnect() {
-    print('Socket reconnect requested (stub)');
-  }
+  /// Clear connection (logout).
+  void disconnect() => _disconnect();
 }
-
-final socketService = SocketService();

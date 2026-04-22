@@ -8,6 +8,16 @@ class ApiConfig {
   static const String posBaseUrl = 'https://pos.zevtabs.mn/api';
   static const String socketUrl = 'wss://pos.zevtabs.mn/';
 
+  /// Socket.IO uses http(s) origin; path is `/api/socket.io` (see [SocketService]).
+  static String get socketIoHttpRoot {
+    var u = socketUrl.trim();
+    if (u.endsWith('/')) u = u.substring(0, u.length - 1);
+    if (u.startsWith('wss://')) return u.replaceFirst('wss://', 'https://');
+    if (u.startsWith('ws://')) return u.replaceFirst('ws://', 'http://');
+    if (u.startsWith('http')) return u;
+    return 'https://$u';
+  }
+
   // Local Development (uncomment for local testing)
   // static const String baseUrl = 'http://192.168.1.241:8080';
   // static const String posBaseUrl = 'http://192.168.1.241:8083';
@@ -179,14 +189,37 @@ class ApiService {
     }
   }
 
+  /// posBack [aldaaBarigch] uses `{ success: false, aldaa: "…" }` even with HTTP 500.
+  static String? _messageFromErrorBody(String raw) {
+    if (raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        final m = Map<String, dynamic>.from(decoded);
+        for (final k in ['aldaa', 'aldaaniiMsg', 'message', 'error', 'msg']) {
+          final v = m[k];
+          if (v != null) {
+            final s = v.toString().trim();
+            if (s.isNotEmpty) return s;
+          }
+        }
+      } else if (decoded is String) {
+        final s = decoded.trim();
+        if (s.isNotEmpty) return s;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   ApiResponse<T> _handleResponse<T>(
     http.Response response,
     T Function(dynamic)? parser,
   ) {
     final statusCode = response.statusCode;
+    final raw = response.body;
+    final errMsg = _messageFromErrorBody(raw);
 
     if (statusCode >= 200 && statusCode < 300) {
-      final raw = response.body;
       if (raw.isEmpty) {
         return ApiResponse<T>(
           success: true,
@@ -200,6 +233,13 @@ class ApiService {
       } catch (_) {
         decoded = raw;
       }
+      if (decoded is Map && decoded['success'] == false) {
+        throw ApiException(
+          errMsg ?? 'Request failed',
+          statusCode: statusCode,
+          code: 'API_ERROR',
+        );
+      }
       return ApiResponse<T>(
         success: true,
         data: parser != null && decoded != null
@@ -208,21 +248,32 @@ class ApiService {
         statusCode: statusCode,
       );
     } else if (statusCode == 401) {
-      throw ApiException('Unauthorized',
-          statusCode: statusCode, code: 'UNAUTHORIZED');
-    } else if (statusCode == 403) {
-      throw ApiException('Forbidden',
-          statusCode: statusCode, code: 'FORBIDDEN');
-    } else if (statusCode == 404) {
-      throw ApiException('Not found',
-          statusCode: statusCode, code: 'NOT_FOUND');
-    } else if (statusCode >= 500) {
-      throw ApiException('Server error',
-          statusCode: statusCode, code: 'SERVER_ERROR');
-    } else {
-      final json = jsonDecode(response.body);
       throw ApiException(
-        json['message'] ?? json['error'] ?? 'Request failed',
+        errMsg ?? 'Unauthorized',
+        statusCode: statusCode,
+        code: 'UNAUTHORIZED',
+      );
+    } else if (statusCode == 403) {
+      throw ApiException(
+        errMsg ?? 'Forbidden',
+        statusCode: statusCode,
+        code: 'FORBIDDEN',
+      );
+    } else if (statusCode == 404) {
+      throw ApiException(
+        errMsg ?? 'Not found',
+        statusCode: statusCode,
+        code: 'NOT_FOUND',
+      );
+    } else if (statusCode >= 500) {
+      throw ApiException(
+        errMsg ?? 'Server error',
+        statusCode: statusCode,
+        code: 'SERVER_ERROR',
+      );
+    } else {
+      throw ApiException(
+        errMsg ?? 'Request failed',
         statusCode: statusCode,
         code: 'REQUEST_FAILED',
       );
