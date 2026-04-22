@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/auth_model.dart';
 import '../models/locale_model.dart';
 import '../screens/main/ebarimt_menu_screen.dart';
+import '../screens/main/dashboard_screen.dart';
 import '../screens/main/baraa_catalog_screen.dart';
 import '../screens/main/customers_screen.dart';
 import '../screens/main/inventory_screen.dart';
@@ -39,6 +40,13 @@ class KioskDrawer extends StatelessWidget {
     final user = auth.currentUser;
 
     final menuActions = <_KioskMenuAction>[
+      if (access.allowsDashboard)
+        _KioskMenuAction(
+          icon: Icons.dashboard_outlined,
+          labelKey: 'dashboard',
+          onTap: (ctx) =>
+              kioskDrawerLeavePosForPage(ctx, const DashboardScreen()),
+        ),
       if (access.allowsBaraaMatrial)
         _KioskMenuAction(
           icon: Icons.list_alt_rounded,

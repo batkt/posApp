@@ -534,19 +534,7 @@ class _ToololtScreenState extends State<ToololtScreen> {
                       ),
                     ),
                   )
-                else if (!data.hasActive || session == null)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        l10n.tr('toololt_no_active_hint'),
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  )
-                else
+                else if (session != null)
                   SliverToBoxAdapter(
                     child: _ActiveCountCard(
                       l10n: l10n,
