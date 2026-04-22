@@ -30,6 +30,7 @@ class AppLocalizations {
       'forgot_password': 'Forgot Password?',
       'invalid_username': 'Please enter username',
       'invalid_username_or_password': 'Invalid username or password',
+      'login_try_again': 'Something went wrong. Please try again.',
       'biometric_unavailable': 'Biometric not available',
       'biometric_failed': 'Biometric authentication failed',
 
@@ -471,6 +472,7 @@ class AppLocalizations {
       'forgot_password': 'Нууц үг сэргээх',
       'invalid_username': 'Хэрэглэгчийн нэр оруулна уу',
       'invalid_username_or_password': 'Хэрэглэгчийн нэр эсвэл нууц үг буруу',
+      'login_try_again': 'Алдаа гарлаа. Дахин оролдоно уу.',
       'biometric_unavailable': 'Хурууны хээ ашиглах боломжгүй',
       'biometric_failed': 'Хурууны хээ таарахгүй байна',
 

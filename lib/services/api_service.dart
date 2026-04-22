@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -108,11 +109,18 @@ class ApiService {
           .timeout(ApiConfig.timeout);
 
       return _handleResponse(response, parser);
+    } on ApiException {
+      rethrow;
     } on SocketException catch (e) {
       throw ApiException('Network error: ${e.message}', code: 'NETWORK_ERROR');
     } on FormatException catch (e) {
       throw ApiException('Invalid response format: ${e.message}',
           code: 'FORMAT_ERROR');
+    } on TimeoutException catch (_) {
+      throw ApiException(
+        'Request timed out. Please try again.',
+        code: 'TIMEOUT',
+      );
     } catch (e) {
       throw ApiException('Unexpected error: $e', code: 'UNKNOWN_ERROR');
     }
@@ -136,11 +144,18 @@ class ApiService {
           .timeout(timeout ?? ApiConfig.timeout);
 
       return _handleResponse(response, parser);
+    } on ApiException {
+      rethrow;
     } on SocketException catch (e) {
       throw ApiException('Network error: ${e.message}', code: 'NETWORK_ERROR');
     } on FormatException catch (e) {
       throw ApiException('Invalid response format: ${e.message}',
           code: 'FORMAT_ERROR');
+    } on TimeoutException catch (_) {
+      throw ApiException(
+        'Request timed out. Please try again.',
+        code: 'TIMEOUT',
+      );
     } catch (e) {
       throw ApiException('Unexpected error: $e', code: 'UNKNOWN_ERROR');
     }
@@ -163,8 +178,18 @@ class ApiService {
           .timeout(ApiConfig.timeout);
 
       return _handleResponse(response, parser);
+    } on ApiException {
+      rethrow;
     } on SocketException catch (e) {
       throw ApiException('Network error: ${e.message}', code: 'NETWORK_ERROR');
+    } on FormatException catch (e) {
+      throw ApiException('Invalid response format: ${e.message}',
+          code: 'FORMAT_ERROR');
+    } on TimeoutException catch (_) {
+      throw ApiException(
+        'Request timed out. Please try again.',
+        code: 'TIMEOUT',
+      );
     } catch (e) {
       throw ApiException('Unexpected error: $e', code: 'UNKNOWN_ERROR');
     }
@@ -182,8 +207,18 @@ class ApiService {
           .timeout(ApiConfig.timeout);
 
       return _handleResponse(response, parser);
+    } on ApiException {
+      rethrow;
     } on SocketException catch (e) {
       throw ApiException('Network error: ${e.message}', code: 'NETWORK_ERROR');
+    } on FormatException catch (e) {
+      throw ApiException('Invalid response format: ${e.message}',
+          code: 'FORMAT_ERROR');
+    } on TimeoutException catch (_) {
+      throw ApiException(
+        'Request timed out. Please try again.',
+        code: 'TIMEOUT',
+      );
     } catch (e) {
       throw ApiException('Unexpected error: $e', code: 'UNKNOWN_ERROR');
     }

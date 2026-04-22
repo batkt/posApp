@@ -67,11 +67,12 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthModel>();
     try {
       success = await auth.login(username, password);
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         showAppSnackBar(
           context,
-          'Нэвтрэхэд алдаа: $e',
+          l10n.tr('login_try_again'),
           variant: AppSnackVariant.error,
         );
       }
@@ -114,11 +115,12 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       success = await auth.loginWithBiometric();
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         showAppSnackBar(
           context,
-          'Биометр нэвтрэхэд алдаа: $e',
+          l10n.tr('login_try_again'),
           variant: AppSnackVariant.error,
         );
       }

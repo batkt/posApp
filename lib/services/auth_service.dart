@@ -126,8 +126,8 @@ class AuthService {
       return AuthResult.error(response.message ?? 'Login failed');
     } on ApiException catch (e) {
       return AuthResult.error(e.message);
-    } catch (e) {
-      return AuthResult.error('Unexpected error: $e');
+    } catch (_) {
+      return AuthResult.error('Алдаа гарлаа. Дахин оролдоно уу.');
     }
   }
 
@@ -197,8 +197,8 @@ class AuthService {
       return AuthResult.error(response.message ?? '2FA verification failed');
     } on ApiException catch (e) {
       return AuthResult.error(e.message);
-    } catch (e) {
-      return AuthResult.error('Unexpected error: $e');
+    } catch (_) {
+      return AuthResult.error('Алдаа гарлаа. Дахин оролдоно уу.');
     }
   }
 
