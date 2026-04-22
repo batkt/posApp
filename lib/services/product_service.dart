@@ -50,11 +50,14 @@ class ProductService {
             [];
 
         final d = response.data!;
-        final totalPages = d['niitKhuudas'] is int
-            ? d['niitKhuudas'] as int
-            : (d['niitKhuudas'] is num
-                ? (d['niitKhuudas'] as num).toInt()
-                : 1);
+        final rawNiit = d['niitKhuudas'];
+        int totalPages = 1;
+        if (rawNiit is int) {
+          totalPages = rawNiit < 1 ? 1 : rawNiit;
+        } else if (rawNiit is num) {
+          final n = rawNiit.toInt();
+          totalPages = n < 1 ? 1 : n;
+        }
 
         return ProductResult.success(
           products: products,
@@ -73,6 +76,11 @@ class ProductService {
   }
 
   /// Loads every page from `/aguulakh` for this branch (POS catalog).
+  ///
+  /// Stops when the server returns an empty page, when `niitKhuudas` ([totalPages])
+  /// says the last page was reached, or when a page adds no new rows (duplicate /
+  /// capped responses). Does **not** stop on `jagsaalt.length < limit` alone, because
+  /// the API may cap below our requested [pageSize] while still having more pages.
   Future<ProductResult> getAllProductsForBranch({
     String search = '',
     required String baiguullagiinId,
@@ -83,6 +91,7 @@ class ProductService {
     final merged = <Product>[];
     final seen = <String>{};
     for (var page = 1; page <= maxPages; page++) {
+      final beforeCount = merged.length;
       final batch = await getProducts(
         search: search,
         baiguullagiinId: baiguullagiinId,
@@ -103,7 +112,10 @@ class ProductService {
       for (final p in batch.products) {
         if (seen.add(p.id)) merged.add(p);
       }
-      if (batch.products.length < pageSize) break;
+      if (batch.products.isEmpty) break;
+      final tp = batch.totalPages;
+      if (tp > 1 && page >= tp) break;
+      if (merged.length == beforeCount) break;
     }
     return ProductResult.success(
       products: merged,
@@ -121,6 +133,7 @@ class ProductService {
   }) async {
     const pageSize = 200;
     const maxPages = 100;
+    final seenIds = <String>{};
     for (var page = 1; page <= maxPages; page++) {
       final result = await getProducts(
         baiguullagiinId: baiguullagiinId,
@@ -129,10 +142,15 @@ class ProductService {
         limit: pageSize,
       );
       if (!result.success) return null;
+      var newRows = 0;
       for (final p in result.products) {
+        if (seenIds.add(p.id)) newRows++;
         if (p.id == id) return p;
       }
-      if (result.products.length < pageSize) break;
+      if (result.products.isEmpty) break;
+      final tp = result.totalPages;
+      if (tp > 1 && page >= tp) break;
+      if (newRows == 0) break;
     }
     return null;
   }

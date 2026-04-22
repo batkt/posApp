@@ -454,6 +454,10 @@ class AppLocalizations {
       'epos_sync_hint': 'Synchronize terminal keys and config',
       'pax_test_print': 'PAX test print',
       'pax_test_print_hint': 'Run Neptune/PAX test print and show diagnostics',
+      'menu_terminal_routing_debug': 'Terminal routing (read-only)',
+      'menu_terminal_routing_debug_title':
+          'Terminal routing — no EPOS opened',
+      'routing_debug_copied': 'Routing debug copied to clipboard',
     },
     'mn': {
       // Login
@@ -898,6 +902,10 @@ class AppLocalizations {
       'epos_sync_hint': 'Терминалын түлхүүр болон тохиргоо шинэчлэх',
       'pax_test_print': 'PAX тест хэвлэл',
       'pax_test_print_hint': 'Neptune/PAX тест хэвлэл, дэлгэрэнгүй мэдээлэл',
+      'menu_terminal_routing_debug': 'Терминал чиглүүлэлт (зөвхөн унших)',
+      'menu_terminal_routing_debug_title':
+          'Терминал чиглүүлэлт — EPOS нээгдэхгүй',
+      'routing_debug_copied': 'Чиглүүлэлтийн мэдээлэл clipboard-д хуулагдлаа',
     },
   };
 

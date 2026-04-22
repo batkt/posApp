@@ -17,3 +17,8 @@
 
 # Reflection used from MainActivity.printBitmapOnPax
 -keep class com.pax.neptunelite.api.NeptuneLiteUser { *; }
+
+# Data Bank EPOS Open API (in-process on PAX A930 / A8900)
+-keep class mn.databank.eposopenapi.** { *; }
+-keepclassmembers class mn.databank.eposopenapi.** { *; }
+-dontwarn mn.databank.eposopenapi.**

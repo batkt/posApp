@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pax_sdk/pax_sdk.dart';
 
+import '../utils/pos_native_debug_log.dart';
+
 class PrinterResult {
   const PrinterResult({
     required this.success,
@@ -260,6 +262,11 @@ class PrinterService {
       );
       final ok = _isEposSuccess(epos);
       final resData = epos is Map ? Map<String, dynamic>.from(epos) : null;
+      PosNativeDebugLog.record(
+        'EPOS',
+        'android.epos.payment.healthCheck',
+        resData ?? {'raw': epos.toString()},
+      );
       return PrinterResult(
         success: ok,
         backend: 'epos',
@@ -269,6 +276,7 @@ class PrinterService {
             : 'EPOS холболт амжилтгүй: ${_eposMessage(epos)}',
       );
     } catch (e) {
+      PosNativeDebugLog.record('EPOS', 'android.epos.payment.healthCheck error', e.toString());
       return PrinterResult(
         success: false,
         backend: 'epos',
@@ -321,6 +329,20 @@ class PrinterService {
         );
         final ok = _isEposSuccess(epos);
         final resData = epos is Map ? Map<String, dynamic>.from(epos) : null;
+        if (resData != null) {
+          final safe = Map<String, dynamic>.from(resData);
+          safe.removeWhere((k, _) =>
+              k.toLowerCase().contains('bitmap') ||
+              k.toLowerCase().contains('image'));
+          for (final e in safe.entries.toList()) {
+            if (e.value is String && (e.value as String).length > 240) {
+              safe[e.key] = '${(e.value as String).substring(0, 240)}…';
+            }
+          }
+          PosNativeDebugLog.record('EPOS', 'android.epos.payment.printBitmap', safe);
+        } else {
+          PosNativeDebugLog.record('EPOS', 'android.epos.payment.printBitmap', epos);
+        }
         return PrinterResult(
           success: ok,
           backend: 'epos',
@@ -355,6 +377,18 @@ class PrinterService {
 
   /// EPOS [BaseResponse] often puts business fields inside [jsonRet] (string or map).
   static Map<String, dynamic> _eposMergedMap(dynamic raw) {
+    if (raw is String) {
+      final t = raw.trim();
+      if (t.startsWith('{')) {
+        try {
+          final d = jsonDecode(t);
+          if (d is Map) {
+            return Map<String, dynamic>.from(d as Map);
+          }
+        } catch (_) {}
+      }
+      return <String, dynamic>{'raw': raw};
+    }
     if (raw is! Map) return {};
     final m = Map<String, dynamic>.from(raw);
     final jr = m['jsonRet'];

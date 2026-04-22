@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../utils/pos_native_debug_log.dart';
+
 class UniPosService {
   UniPosService._();
 
@@ -27,11 +29,39 @@ class UniPosService {
     if (pkg != null && pkg.isNotEmpty) {
       args['packageName'] = pkg;
     }
-    final raw = await _channel.invokeMethod<dynamic>(
-      'android.unipos.purchase',
-      args,
-    );
-    return _parseResult(raw);
+    try {
+      PosNativeDebugLog.record(
+        'UniPos',
+        'android.unipos.purchase request',
+        <String, Object?>{'amount': amount, 'code': code, 'package': pkg},
+      );
+      final raw = await _channel.invokeMethod<dynamic>(
+        'android.unipos.purchase',
+        args,
+      );
+      final parsed = _parseResult(raw);
+      PosNativeDebugLog.record('UniPos', 'android.unipos.purchase response', parsed);
+      return parsed;
+    } on PlatformException catch (e, st) {
+      PosNativeDebugLog.record(
+        'UniPos',
+        'android.unipos.purchase PlatformException',
+        <String, Object?>{
+          'code': e.code,
+          'message': e.message,
+          'details': e.details,
+          'stack': st.toString(),
+        },
+      );
+      rethrow;
+    } catch (e, st) {
+      PosNativeDebugLog.record(
+        'UniPos',
+        'android.unipos.purchase error',
+        '$e\n$st',
+      );
+      rethrow;
+    }
   }
 
   static Map<String, dynamic>? _parseResult(dynamic raw) {

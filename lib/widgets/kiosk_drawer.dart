@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/auth_model.dart';
@@ -15,7 +16,10 @@ import '../screens/main/pos_settings_hub_screen.dart';
 import '../screens/main/tailan_screen.dart';
 import '../screens/main/toololt_screen.dart';
 import '../theme/app_theme.dart';
+import '../utils/pos_native_debug_log.dart';
 import '../services/printer_service.dart';
+import '../services/terminal_hardware_service.dart';
+import '../utils/pos_shell_reset.dart';
 import 'drawer_branch_switch.dart';
 
 /// Side menu for kiosk / mobile POS — same visual design as [MainScreen] drawer.
@@ -39,155 +43,82 @@ class KioskDrawer extends StatelessWidget {
         _KioskMenuAction(
           icon: Icons.list_alt_rounded,
           labelKey: 'menu_baraa_list',
-          onTap: (ctx) {
-            Navigator.pop(ctx);
-            Navigator.push<void>(
-              ctx,
-              MaterialPageRoute<void>(
-                builder: (_) => const BaraaCatalogScreen(),
-              ),
-            );
-          },
+          onTap: (ctx) =>
+              kioskDrawerLeavePosForPage(ctx, const BaraaCatalogScreen()),
         ),
       if (access.allowsToollogo)
         _KioskMenuAction(
           icon: Icons.calculate_outlined,
           labelKey: 'menu_toololt',
-          onTap: (ctx) {
-            Navigator.pop(ctx);
-            Navigator.push<void>(
-              ctx,
-              MaterialPageRoute<void>(
-                builder: (_) => const ToololtScreen(),
-              ),
-            );
-          },
+          onTap: (ctx) => kioskDrawerLeavePosForPage(ctx, const ToololtScreen()),
         ),
       if (access.allowsBaraaMatrial)
         _KioskMenuAction(
           icon: Icons.remove_shopping_cart_outlined,
           labelKey: 'menu_out_of_stock_baraa',
-          onTap: (ctx) {
-            Navigator.pop(ctx);
-            Navigator.push<void>(
-              ctx,
-              MaterialPageRoute<void>(
-                builder: (_) => const OutOfStockBaraaScreen(),
-              ),
-            );
-          },
+          onTap: (ctx) => kioskDrawerLeavePosForPage(
+            ctx,
+            const OutOfStockBaraaScreen(),
+          ),
         ),
       if (access.allowsEbarimt)
         _KioskMenuAction(
           icon: Icons.receipt_long_outlined,
           labelKey: 'ebarimt',
-          onTap: (ctx) {
-            Navigator.pop(ctx);
-            Navigator.push<void>(
-              ctx,
-              MaterialPageRoute<void>(
-                builder: (_) => const EbarimtMenuScreen(),
-              ),
-            );
-          },
+          onTap: (ctx) =>
+              kioskDrawerLeavePosForPage(ctx, const EbarimtMenuScreen()),
         ),
       if (access.allowsHynalt)
         _KioskMenuAction(
           icon: Icons.trending_up_rounded,
           labelKey: 'menu_orlogo',
-          onTap: (ctx) {
-            Navigator.pop(ctx);
-            Navigator.push<void>(
-              ctx,
-              MaterialPageRoute<void>(
-                builder: (_) => const IncomeOverviewScreen(),
-              ),
-            );
-          },
+          onTap: (ctx) => kioskDrawerLeavePosForPage(
+            ctx,
+            const IncomeOverviewScreen(),
+          ),
         ),
       if (access.allowsTailan)
         _KioskMenuAction(
           icon: Icons.insert_chart_outlined,
           labelKey: 'tailan_menu',
-          onTap: (ctx) {
-            Navigator.pop(ctx);
-            Navigator.push<void>(
-              ctx,
-              MaterialPageRoute<void>(
-                builder: (_) => const TailanScreen(),
-              ),
-            );
-          },
+          onTap: (ctx) => kioskDrawerLeavePosForPage(ctx, const TailanScreen()),
         ),
       if (access.allowsBarimtiinJagsaalt)
         _KioskMenuAction(
           icon: Icons.shopping_cart_outlined,
           labelKey: 'menu_hudaldan_avalt',
-          onTap: (ctx) {
-            Navigator.pop(ctx);
-            Navigator.push<void>(
-              ctx,
-              MaterialPageRoute<void>(
-                builder: (_) => const PurchaseListScreen(),
-              ),
-            );
-          },
+          onTap: (ctx) =>
+              kioskDrawerLeavePosForPage(ctx, const PurchaseListScreen()),
         ),
       if (access.allowsBarimtiinJagsaalt)
         _KioskMenuAction(
           icon: Icons.history_rounded,
           labelKey: 'sales_history',
-          onTap: (ctx) {
-            Navigator.pop(ctx);
-            Navigator.push<void>(
-              ctx,
-              MaterialPageRoute<void>(
-                builder: (_) => const SalesHistoryScreen(),
-              ),
-            );
-          },
+          onTap: (ctx) =>
+              kioskDrawerLeavePosForPage(ctx, const SalesHistoryScreen()),
         ),
       if (access.allowsBaraaOrlogokh)
         _KioskMenuAction(
           icon: Icons.inventory_2_outlined,
           labelKey: 'inventory',
-          onTap: (ctx) {
-            Navigator.pop(ctx);
-            Navigator.push<void>(
-              ctx,
-              MaterialPageRoute<void>(
-                builder: (_) => const InventoryScreen(),
-              ),
-            );
-          },
+          onTap: (ctx) =>
+              kioskDrawerLeavePosForPage(ctx, const InventoryScreen()),
         ),
       if (access.allowsKhariltsagch)
         _KioskMenuAction(
           icon: Icons.people_outline,
           labelKey: 'customers',
-          onTap: (ctx) {
-            Navigator.pop(ctx);
-            Navigator.push<void>(
-              ctx,
-              MaterialPageRoute<void>(
-                builder: (_) => const CustomersScreen(),
-              ),
-            );
-          },
+          onTap: (ctx) =>
+              kioskDrawerLeavePosForPage(ctx, const CustomersScreen()),
         ),
       if (auth.posSession != null)
         _KioskMenuAction(
           icon: Icons.tune_rounded,
           labelKey: 'menu_pos_settings',
-          onTap: (ctx) {
-            Navigator.pop(ctx);
-            Navigator.push<void>(
-              ctx,
-              MaterialPageRoute<void>(
-                builder: (_) => const PosSettingsHubScreen(showAppBar: true),
-              ),
-            );
-          },
+          onTap: (ctx) => kioskDrawerLeavePosForPage(
+            ctx,
+            const PosSettingsHubScreen(showAppBar: true),
+          ),
         ),
       if (access.allowsEbarimt)
         _KioskMenuAction(
@@ -275,6 +206,26 @@ class KioskDrawer extends StatelessWidget {
                   ),
                   actions: [
                     TextButton(
+                      onPressed: () async {
+                        await PosNativeDebugLog.copySessionToClipboard();
+                        if (dCtx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            const SnackBar(
+                              content: Text('Session log copied to clipboard'),
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text('Copy session log'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(dCtx);
+                        PosNativeDebugLog.showSessionDialog(ctx);
+                      },
+                      child: const Text('View session log'),
+                    ),
+                    TextButton(
                       onPressed: () => Navigator.pop(dCtx),
                       child: const Text('Хаах'),
                     ),
@@ -282,6 +233,74 @@ class KioskDrawer extends StatelessWidget {
                 ),
               );
             }
+          },
+        ),
+      if (access.allowsEbarimt)
+        _KioskMenuAction(
+          icon: Icons.info_outline_rounded,
+          labelKey: 'menu_terminal_routing_debug',
+          onTap: (ctx) async {
+            final l10n = AppLocalizations.of(ctx);
+            Navigator.pop(ctx);
+            final body = await TerminalHardwareInfo.buildRoutingDebugReport();
+            if (!ctx.mounted) return;
+            await showDialog<void>(
+              context: ctx,
+              builder: (dCtx) => AlertDialog(
+                title: Text(l10n.tr('menu_terminal_routing_debug_title')),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  height: 420,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Theme.of(dCtx).colorScheme.outlineVariant,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(10),
+                      child: SelectableText(
+                        body,
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                          height: 1.35,
+                          color: Theme.of(dCtx).colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: body));
+                      if (dCtx.mounted) Navigator.pop(dCtx);
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(
+                            content: Text(l10n.tr('routing_debug_copied')),
+                          ),
+                        );
+                      }
+                    },
+                    child: const Text('Copy'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(dCtx);
+                      PosNativeDebugLog.showSessionDialog(ctx);
+                    },
+                    child: const Text('Full session log'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(dCtx),
+                    child: Text(l10n.tr('cancel')),
+                  ),
+                ],
+              ),
+            );
           },
         ),
       if (access.allowsEbarimt)

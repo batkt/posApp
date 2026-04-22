@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:http/http.dart' as http;
 
 class ApiConfig {
@@ -94,6 +96,17 @@ class ApiService {
     return headers;
   }
 
+  void _logHttp(String method, Uri uri, http.Response response) {
+    if (!kDebugMode) return;
+    final len = response.body.length;
+    final head = '[PosHTTP] $method $uri → ${response.statusCode} (${len}b)';
+    if (len <= 900) {
+      debugPrint('$head\n${response.body}');
+      return;
+    }
+    debugPrint('$head\n${response.body.substring(0, 900)}…');
+  }
+
   Future<ApiResponse<T>> get<T>(
     String endpoint, {
     T Function(dynamic)? parser,
@@ -108,6 +121,7 @@ class ApiService {
           .get(uri, headers: _getHeaders())
           .timeout(ApiConfig.timeout);
 
+      _logHttp('GET', uri, response);
       return _handleResponse(response, parser);
     } on ApiException {
       rethrow;
@@ -143,6 +157,7 @@ class ApiService {
           )
           .timeout(timeout ?? ApiConfig.timeout);
 
+      _logHttp('POST', uri, response);
       return _handleResponse(response, parser);
     } on ApiException {
       rethrow;
@@ -177,6 +192,7 @@ class ApiService {
           )
           .timeout(ApiConfig.timeout);
 
+      _logHttp('PUT', uri, response);
       return _handleResponse(response, parser);
     } on ApiException {
       rethrow;
@@ -206,6 +222,7 @@ class ApiService {
           .delete(uri, headers: _getHeaders())
           .timeout(ApiConfig.timeout);
 
+      _logHttp('DELETE', uri, response);
       return _handleResponse(response, parser);
     } on ApiException {
       rethrow;
