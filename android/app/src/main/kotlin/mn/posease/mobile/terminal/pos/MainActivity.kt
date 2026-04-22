@@ -1,14 +1,18 @@
-package com.example.posease
+package mn.posease.mobile.terminal.pos
 
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import kotlin.math.max
 import android.util.Base64
+import android.util.Log
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.lang.ClassNotFoundException
@@ -20,7 +24,8 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
-    private val channelName = "com.example.posease"
+    private val channelName = "mn.posease.mobile.terminal.pos"
+    private val eposLogTag = "PosEase POSEpos"
     /**
      * Known UniPOS package ids; [resolveUniPosTargetPackage] also scans SEND text/plain handlers
      * so other bank/PAX-shipped terminal apps can be found without hardcoding every id.
@@ -32,6 +37,56 @@ class MainActivity : FlutterFragmentActivity() {
     private val eposRequestCode = 9302
     private var pendingUniPosResult: MethodChannel.Result? = null
     private var pendingEposResult: MethodChannel.Result? = null
+    private var pendingEposInAppResult: MethodChannel.Result? = null
+    private lateinit var terminalProfile: TerminalHardwareProfile
+    private var eposInApp: EposOpenInAppHelper? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        terminalProfile = TerminalHardwareProfile.detect()
+        if (terminalProfile == TerminalHardwareProfile.EPOS_OPEN_IN_APP) {
+            try {
+                eposInApp = EposOpenInAppHelper(this, eposLogTag)
+                Log.i(eposLogTag, "EPOS Open API in-app enabled for ${Build.MODEL}")
+            } catch (e: Throwable) {
+                Log.e(eposLogTag, "EPOS Open API init failed — falling back to intent EPOS/Neptune", e)
+                eposInApp = null
+            }
+        } else {
+            Log.i(
+                eposLogTag,
+                "Terminal profile=$terminalProfile model=${Build.MODEL}",
+            )
+        }
+    }
+
+    /** Log full payloads to logcat; splits lines for Android's ~4k log limit. Filter: `adb logcat -s PosAppEpos`. */
+    private fun logCatLong(tag: String, title: String, detail: String) {
+        if (detail.isEmpty()) {
+            Log.i(tag, "$title (empty)")
+            return
+        }
+        val max = 3500
+        var i = 0
+        var part = 0
+        while (i < detail.length) {
+            val end = minOf(i + max, detail.length)
+            val piece = detail.substring(i, end)
+            if (part == 0) {
+                Log.i(tag, "$title $piece")
+            } else {
+                Log.i(tag, "$title (cont $part) $piece")
+            }
+            i = end
+            part++
+        }
+    }
+
+    /** Neptune / embedded PAX printer path — not used on A930/A8900 EPOS-in-app profile. */
+    private fun shouldUseNeptuneDirectForThermal(): Boolean {
+        if (terminalProfile != TerminalHardwareProfile.EPOS_OPEN_IN_APP) return true
+        return eposInApp == null
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -39,10 +94,37 @@ class MainActivity : FlutterFragmentActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call: MethodCall, result: MethodChannel.Result ->
                 when (call.method) {
+                    "terminal.hardwareProfile" -> {
+                        result.success(
+                            hashMapOf(
+                                "profile" to terminalProfile.name,
+                                "model" to Build.MODEL,
+                                "device" to Build.DEVICE,
+                                "manufacturer" to Build.MANUFACTURER,
+                                "product" to Build.PRODUCT,
+                                "eposInAppReady" to (eposInApp != null),
+                            ),
+                        )
+                    }
                     "android.epos.tasks.printBitmap" -> {
                         val base64 = call.argument<String>("base64")
                         if (base64.isNullOrEmpty()) {
                             result.error("ARG_ERROR", "base64 is required", null)
+                            return@setMethodCallHandler
+                        }
+                        val eposBridge = eposInApp
+                        if (eposBridge != null) {
+                            if (pendingEposInAppResult != null) {
+                                result.error("BUSY", "EPOS in-app request already in progress", null)
+                                return@setMethodCallHandler
+                            }
+                            pendingEposInAppResult = result
+                            try {
+                                eposBridge.startPrintBitmap(base64)
+                            } catch (e: Throwable) {
+                                pendingEposInAppResult = null
+                                result.error("PRINT_ERROR", e.message, null)
+                            }
                             return@setMethodCallHandler
                         }
                         try {
@@ -51,8 +133,16 @@ class MainActivity : FlutterFragmentActivity() {
                                 result.error("DECODE_ERROR", "Failed to decode bitmap", null)
                                 return@setMethodCallHandler
                             }
-                            printBitmapOnPax(bitmap)
-                            result.success("printed")
+                            if (shouldUseNeptuneDirectForThermal()) {
+                                printBitmapOnPax(bitmap)
+                                result.success("printed")
+                            } else {
+                                result.error(
+                                    "PRINT_UNSUPPORTED",
+                                    "Thermal print not used on this profile=${terminalProfile.name}",
+                                    null,
+                                )
+                            }
                         } catch (e: Throwable) {
                             result.error("PRINT_ERROR", e.message, null)
                         }
@@ -61,7 +151,19 @@ class MainActivity : FlutterFragmentActivity() {
                         try {
                             val text = call.argument<String>("text")
                             val bitmap = buildTestBitmap(text)
+                            val eposBridgeTest = eposInApp
+                            if (eposBridgeTest != null) {
+                                if (pendingEposInAppResult != null) {
+                                    result.error("BUSY", "EPOS in-app request already in progress", null)
+                                    return@setMethodCallHandler
+                                }
+                                pendingEposInAppResult = result
+                                val b64 = bitmapToBase64(bitmap)
+                                eposBridgeTest.startPrintBitmap(b64)
+                                return@setMethodCallHandler
+                            }
                             val preferred = call.argument<String>("packageName")
+                            // EPOS/Databank SEND first — same interoperable path as most POS terminals.
                             val targetEposPackage = resolveEposTargetPackage(preferred)
                             if (targetEposPackage != null) {
                                 if (pendingEposResult != null) {
@@ -89,9 +191,17 @@ class MainActivity : FlutterFragmentActivity() {
                                 }
                             }
 
-                            // Fallback for terminals where EPOS app is not installed.
-                            printBitmapOnPax(bitmap)
-                            result.success("printed")
+                            // No EPOS handler (or intent not resolvable): built-in PAX Neptune (A930RTX / legacy).
+                            if (shouldUseNeptuneDirectForThermal()) {
+                                printBitmapOnPax(bitmap)
+                                result.success("printed")
+                            } else {
+                                result.error(
+                                    "PRINT_UNSUPPORTED",
+                                    "No thermal path for profile=${terminalProfile.name}",
+                                    null,
+                                )
+                            }
                         } catch (e: Throwable) {
                             result.error("PRINT_ERROR", e.message, null)
                         }
@@ -105,6 +215,19 @@ class MainActivity : FlutterFragmentActivity() {
                             val originalId = originalIdAny?.toLong() ?: 0L
                             if (amount == null || amount <= 0.0) {
                                 result.error("ARG_ERROR", "amount must be > 0", null)
+                                return@setMethodCallHandler
+                            }
+                            val eposBridgePay = eposInApp
+                            if (eposBridgePay != null) {
+                                if (pendingEposInAppResult != null) {
+                                    result.error("BUSY", "EPOS in-app request already in progress", null)
+                                    return@setMethodCallHandler
+                                }
+                                pendingEposInAppResult = result
+                                val minor = EposOpenInAppHelper.amountDoubleToMinorUnits(amount)
+                                val dbRef =
+                                    "${System.currentTimeMillis()}_${originalId}_${code.hashCode()}"
+                                eposBridgePay.startSaleNoReceipt(minor, dbRef)
                                 return@setMethodCallHandler
                             }
                             val purchaseJson = JSONObject().apply {
@@ -154,6 +277,16 @@ class MainActivity : FlutterFragmentActivity() {
                                 result.error("ARG_ERROR", "base64 is required", null)
                                 return@setMethodCallHandler
                             }
+                            val eposBridgePb = eposInApp
+                            if (eposBridgePb != null) {
+                                if (pendingEposInAppResult != null) {
+                                    result.error("BUSY", "EPOS in-app request already in progress", null)
+                                    return@setMethodCallHandler
+                                }
+                                pendingEposInAppResult = result
+                                eposBridgePb.startPrintBitmap(base64)
+                                return@setMethodCallHandler
+                            }
                             val amount = call.argument<String>("amount") ?: "0.00"
                             val dbRefNo = call.argument<String>("dbRefNo")
                                 ?: System.currentTimeMillis().toString()
@@ -172,11 +305,19 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "android.epos.payment.healthCheck" -> {
                         try {
+                            val eposBridgeHc = eposInApp
+                            if (eposBridgeHc != null) {
+                                if (pendingEposInAppResult != null) {
+                                    result.error("BUSY", "EPOS in-app request already in progress", null)
+                                    return@setMethodCallHandler
+                                }
+                                pendingEposInAppResult = result
+                                eposBridgeHc.startHealthCheck()
+                                return@setMethodCallHandler
+                            }
+                            // Match epossdk.md §1.6.1: Java sets only CATEGORY_HEALTH_CHECK + empty Bundle.
                             val payload = JSONObject().apply {
                                 put("category", "android.epos.payment.healthCheck")
-                                put("commandType", "1")
-                                put("request-type", "healthCheck")
-                                put("dbRefNo", System.currentTimeMillis().toString())
                             }
                             val preferred = call.argument<String>("packageName")
                             launchEpos(payload.toString(), result, preferred)
@@ -222,6 +363,7 @@ class MainActivity : FlutterFragmentActivity() {
             return
         }
         pendingUniPosResult = result
+        logCatLong(eposLogTag, "UniPOS launch", "package=$targetPackage request=$request")
         @Suppress("DEPRECATION")
         startActivityForResult(intent, uniPosRequestCode)
     }
@@ -274,6 +416,7 @@ class MainActivity : FlutterFragmentActivity() {
             return
         }
         pendingEposResult = result
+        logCatLong(eposLogTag, "EPOS launch", "package=$targetPackage EXTRA_TEXT=$request")
         @Suppress("DEPRECATION")
         startActivityForResult(intent, eposRequestCode)
     }
@@ -379,6 +522,15 @@ class MainActivity : FlutterFragmentActivity() {
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        val eposBridgeResult = eposInApp
+        if (pendingEposInAppResult != null && eposBridgeResult != null) {
+            val p = pendingEposInAppResult!!
+            val delivered = eposBridgeResult.tryDeliverActivityResult(requestCode, resultCode, data, p)
+            if (delivered) {
+                pendingEposInAppResult = null
+                return
+            }
+        }
         if (requestCode == uniPosRequestCode) {
             val pending = pendingUniPosResult ?: return
             pendingUniPosResult = null
@@ -389,6 +541,11 @@ class MainActivity : FlutterFragmentActivity() {
                 "result" to data?.getStringExtra("result"),
                 "paymentType" to data?.getStringExtra("paymentType"),
                 "error" to data?.getStringExtra("error"),
+            )
+            logCatLong(
+                eposLogTag,
+                "UniPOS onActivityResult",
+                "activityResultCode=$resultCode payload=$payload",
             )
             if (resultCode == Activity.RESULT_OK) {
                 pending.success(payload)
@@ -407,15 +564,45 @@ class MainActivity : FlutterFragmentActivity() {
             val payload = hashMapOf<String, Any?>(
                 "resultCode" to resultCode
             )
-            data?.extras?.let { extras ->
-                for (key in extras.keySet()) {
-                    payload[key] = extras.get(key)
+            fun mergeEposJsonString(raw: String?) {
+                if (raw.isNullOrBlank()) return
+                try {
+                    val jo = JSONObject(raw)
+                    val it = jo.keys()
+                    while (it.hasNext()) {
+                        val k = it.next()
+                        val v = jo.get(k)
+                        payload[k] = when (v) {
+                            is JSONObject -> v.toString()
+                            is org.json.JSONArray -> v.toString()
+                            org.json.JSONObject.NULL -> null
+                            else -> v
+                        }
+                    }
+                } catch (_: Exception) {
                 }
             }
+            // EPOS often returns BaseResponse / jsonRet as JSON in a string extra, not only flat extras.
+            mergeEposJsonString(data?.getStringExtra(Intent.EXTRA_TEXT))
+            mergeEposJsonString(data?.getStringExtra("jsonRet"))
+            mergeEposJsonString(data?.getStringExtra("result"))
+            data?.extras?.let { extras ->
+                for (key in extras.keySet()) {
+                    if (!payload.containsKey(key)) {
+                        payload[key] = extras.get(key)
+                    }
+                }
+            }
+            logCatLong(
+                eposLogTag,
+                "EPOS onActivityResult",
+                "activityResultCode=$resultCode payload=$payload",
+            )
             if (resultCode == Activity.RESULT_OK) {
                 pending.success(payload)
             } else {
-                val errorMessage = data?.getStringExtra("rspMsg")
+                val errorMessage = (payload["rspMsg"] as? String)?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: data?.getStringExtra("rspMsg")
                     ?: data?.getStringExtra("error")
                     ?: "EPOS request canceled/failed"
                 pending.error("EPOS_FAILED", errorMessage, payload)
@@ -428,6 +615,41 @@ class MainActivity : FlutterFragmentActivity() {
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
     }
 
+    /**
+     * Thermal printers need 1-bit contrast: resize to ~384px width (58mm head) and
+     * threshold to pure black/white so anti-aliased grays do not print as fuzzy dots.
+     */
+    private fun prepareReceiptBitmapForPrinter(src: Bitmap): Bitmap {
+        val targetW = 384
+        val toProcess = if (src.width > targetW) {
+            val ratio = targetW.toFloat() / src.width
+            val nh = max(1, (src.height * ratio).toInt())
+            Bitmap.createScaledBitmap(src, targetW, nh, true)
+        } else {
+            src
+        }
+        val w = toProcess.width
+        val h = toProcess.height
+        val pixels = IntArray(w * h)
+        toProcess.getPixels(pixels, 0, w, 0, 0, w, h)
+        for (i in pixels.indices) {
+            val c = pixels[i]
+            val a = Color.alpha(c)
+            pixels[i] = if (a < 28) {
+                Color.WHITE
+            } else {
+                val lum = Color.red(c) * 0.299 + Color.green(c) * 0.587 + Color.blue(c) * 0.114
+                if (lum < 172.0) Color.BLACK else Color.WHITE
+            }
+        }
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        out.setPixels(pixels, 0, w, 0, 0, w, h)
+        if (toProcess !== src && !toProcess.isRecycled) {
+            toProcess.recycle()
+        }
+        return out
+    }
+
     private fun bitmapToBase64(bitmap: Bitmap): String {
         val stream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
@@ -435,6 +657,10 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun printBitmapOnPax(bitmap: Bitmap) {
+        val toPrint = prepareReceiptBitmapForPrinter(bitmap)
+        if (toPrint !== bitmap) {
+            bitmap.recycle()
+        }
         try {
             val neptuneClass = Class.forName("com.pax.neptunelite.api.NeptuneLiteUser")
             val neptune = neptuneClass.getMethod("getInstance").invoke(null)
@@ -452,14 +678,14 @@ class MainActivity : FlutterFragmentActivity() {
             } catch (_: Throwable) {}
 
             try {
-                printerClass.getMethod("printBitmap", Bitmap::class.java).invoke(printer, bitmap)
+                printerClass.getMethod("printBitmap", Bitmap::class.java).invoke(printer, toPrint)
             } catch (_: Throwable) {
                 // Some firmware exposes a second alignment arg.
                 printerClass.getMethod(
                     "printBitmap",
                     Bitmap::class.java,
                     Int::class.javaPrimitiveType
-                ).invoke(printer, bitmap, 0)
+                ).invoke(printer, toPrint, 0)
             }
 
             try {
@@ -483,6 +709,10 @@ class MainActivity : FlutterFragmentActivity() {
                 e.message
             }
             throw IllegalStateException("PAX printer error: $details", e)
+        } finally {
+            if (!toPrint.isRecycled) {
+                toPrint.recycle()
+            }
         }
     }
 
