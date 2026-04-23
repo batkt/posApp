@@ -351,35 +351,7 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
               ],
             )
           : null,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (!widget.showAppBar && pos != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      l10n.tr('ebarimt'),
-                      style: textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  if (_future != null)
-                    IconButton(
-                      tooltip: l10n.tr('sales_history_refresh'),
-                      onPressed: () => _reload(auth),
-                      icon: const Icon(Icons.refresh_rounded),
-                    ),
-                ],
-              ),
-            ),
-          Expanded(child: bodyCore),
-        ],
-      ),
+      body: bodyCore,
     );
   }
 }

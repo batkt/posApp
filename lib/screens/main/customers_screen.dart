@@ -5,6 +5,7 @@ import '../../models/customer_model.dart';
 import '../../models/locale_model.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
+import 'purchase_list_screen.dart';
 
 class CustomersScreen extends StatefulWidget {
   const CustomersScreen({super.key, this.showAppBar = true});
@@ -827,11 +828,21 @@ class CustomerDetailsSheet extends StatelessWidget {
                 // Actions
                 FilledButton.icon(
                   onPressed: () {
-                    // TODO: Show purchase history
-                    Navigator.pop(context);
+                    final nav = Navigator.of(context);
+                    final id = customer.id;
+                    final name = customer.name;
+                    nav.pop();
+                    nav.push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (ctx) => PurchaseListScreen(
+                          khariltsagchiinId: id,
+                          customerNameForTitle: name,
+                        ),
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.history),
-                  label: const Text('Худалдан авалтын түүх'),
+                  label: Text(AppLocalizations.of(context).tr('purchase_history')),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(double.infinity, 48),
                   ),

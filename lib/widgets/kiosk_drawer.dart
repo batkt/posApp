@@ -37,20 +37,30 @@ class KioskDrawer extends StatelessWidget {
     final auth = context.watch<AuthModel>();
     final access = auth.staffAccess;
     final user = auth.currentUser;
+    final drawerShell = mobileStaffShell;
 
     final menuActions = <_KioskMenuAction>[
       if (access.allowsDashboard)
         _KioskMenuAction(
           icon: Icons.dashboard_outlined,
           labelKey: 'dashboard',
-          onTap: (ctx) =>
-              kioskDrawerLeavePosForPage(ctx, const DashboardScreen()),
+          onTap: (ctx) => kioskDrawerLeavePosForPage(
+            ctx,
+            const DashboardScreen(),
+            mobileStaffShell: drawerShell,
+            titleKey: 'dashboard',
+          ),
         ),
       if (access.allowsToollogo)
         _KioskMenuAction(
           icon: Icons.calculate_outlined,
           labelKey: 'menu_toololt',
-          onTap: (ctx) => kioskDrawerLeavePosForPage(ctx, const ToololtScreen()),
+          onTap: (ctx) => kioskDrawerLeavePosForPage(
+            ctx,
+            const ToololtScreen(showAppBar: false),
+            mobileStaffShell: drawerShell,
+            titleKey: 'menu_toololt',
+          ),
         ),
       if (access.allowsBaraaMatrial)
         _KioskMenuAction(
@@ -58,15 +68,21 @@ class KioskDrawer extends StatelessWidget {
           labelKey: 'menu_out_of_stock_baraa',
           onTap: (ctx) => kioskDrawerLeavePosForPage(
             ctx,
-            const OutOfStockBaraaScreen(),
+            const OutOfStockBaraaScreen(showAppBar: false),
+            mobileStaffShell: drawerShell,
+            titleKey: 'menu_out_of_stock_baraa',
           ),
         ),
       if (access.allowsEbarimt)
         _KioskMenuAction(
           icon: Icons.receipt_long_outlined,
           labelKey: 'ebarimt',
-          onTap: (ctx) =>
-              kioskDrawerLeavePosForPage(ctx, const EbarimtMenuScreen()),
+          onTap: (ctx) => kioskDrawerLeavePosForPage(
+            ctx,
+            const EbarimtMenuScreen(showAppBar: false),
+            mobileStaffShell: drawerShell,
+            titleKey: 'ebarimt',
+          ),
         ),
       if (access.allowsHynalt)
         _KioskMenuAction(
@@ -74,42 +90,65 @@ class KioskDrawer extends StatelessWidget {
           labelKey: 'menu_orlogo',
           onTap: (ctx) => kioskDrawerLeavePosForPage(
             ctx,
-            const IncomeOverviewScreen(),
+            const IncomeOverviewScreen(showAppBar: false),
+            mobileStaffShell: drawerShell,
+            titleKey: 'menu_orlogo',
           ),
         ),
       if (access.allowsTailan)
         _KioskMenuAction(
           icon: Icons.insert_chart_outlined,
           labelKey: 'tailan_menu',
-          onTap: (ctx) => kioskDrawerLeavePosForPage(ctx, const TailanScreen()),
+          onTap: (ctx) => kioskDrawerLeavePosForPage(
+            ctx,
+            const TailanScreen(showAppBar: false),
+            mobileStaffShell: drawerShell,
+            titleKey: 'tailan_menu',
+          ),
         ),
       if (access.allowsBarimtiinJagsaalt)
         _KioskMenuAction(
           icon: Icons.shopping_cart_outlined,
           labelKey: 'menu_hudaldan_avalt',
-          onTap: (ctx) =>
-              kioskDrawerLeavePosForPage(ctx, const PurchaseListScreen()),
+          onTap: (ctx) => kioskDrawerLeavePosForPage(
+            ctx,
+            const PurchaseListScreen(showAppBar: false),
+            mobileStaffShell: drawerShell,
+            titleKey: 'menu_hudaldan_avalt',
+          ),
         ),
       if (access.allowsBarimtiinJagsaalt)
         _KioskMenuAction(
           icon: Icons.history_rounded,
           labelKey: 'sales_history',
-          onTap: (ctx) =>
-              kioskDrawerLeavePosForPage(ctx, const SalesHistoryScreen()),
+          onTap: (ctx) => kioskDrawerLeavePosForPage(
+            ctx,
+            const SalesHistoryScreen(showAppBar: false),
+            mobileStaffShell: drawerShell,
+            titleKey: 'sales_history',
+          ),
         ),
       if (access.allowsBaraaMatrial || access.allowsBaraaOrlogokh)
         _KioskMenuAction(
           icon: Icons.inventory_2_outlined,
           labelKey: 'inventory',
-          onTap: (ctx) =>
-              kioskDrawerLeavePosForPage(ctx, const InventoryScreen()),
+          onTap: (ctx) => kioskDrawerLeavePosForPage(
+            ctx,
+            const InventoryScreen(showAppBar: false),
+            mobileStaffShell: drawerShell,
+            titleKey: 'inventory',
+          ),
         ),
       if (access.allowsKhariltsagch)
         _KioskMenuAction(
           icon: Icons.people_outline,
           labelKey: 'customers',
-          onTap: (ctx) =>
-              kioskDrawerLeavePosForPage(ctx, const CustomersScreen()),
+          onTap: (ctx) => kioskDrawerLeavePosForPage(
+            ctx,
+            const CustomersScreen(showAppBar: false),
+            mobileStaffShell: drawerShell,
+            titleKey: 'customers',
+          ),
         ),
       if (auth.posSession != null)
         _KioskMenuAction(
@@ -117,7 +156,9 @@ class KioskDrawer extends StatelessWidget {
           labelKey: 'menu_pos_settings',
           onTap: (ctx) => kioskDrawerLeavePosForPage(
             ctx,
-            const PosSettingsHubScreen(showAppBar: true),
+            const PosSettingsHubScreen(showAppBar: false),
+            mobileStaffShell: drawerShell,
+            titleKey: 'menu_pos_settings',
           ),
         ),
       if (access.allowsEbarimt)
@@ -719,4 +760,77 @@ class _KioskMenuAction {
   final IconData icon;
   final String labelKey;
   final void Function(BuildContext context) onTap;
+}
+
+/// Pushed on top of the cashier shell so drawer destinations keep a **menu** button
+/// and the same [KioskDrawer]. The shell owns the single [AppBar]; [body] widgets
+/// must use `showAppBar: false` so titles are not duplicated.
+class KioskDrawerStackedPage extends StatefulWidget {
+  const KioskDrawerStackedPage({
+    super.key,
+    required this.mobileStaffShell,
+    required this.titleKey,
+    required this.body,
+  });
+
+  final bool mobileStaffShell;
+  /// [AppLocalizations] key for the top app bar (same keys as drawer labels).
+  final String titleKey;
+  final Widget body;
+
+  @override
+  State<KioskDrawerStackedPage> createState() => _KioskDrawerStackedPageState();
+}
+
+class _KioskDrawerStackedPageState extends State<KioskDrawerStackedPage> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Scaffold(
+      key: _scaffoldKey,
+      drawer: KioskDrawer(mobileStaffShell: widget.mobileStaffShell),
+      appBar: AppBar(
+        title: Text(
+          l10n.tr(widget.titleKey),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.tr('current_sale')),
+          ),
+        ],
+      ),
+      body: widget.body,
+    );
+  }
+}
+
+/// Close the kiosk/mobile drawer and push [page] under [KioskDrawerStackedPage].
+void kioskDrawerLeavePosForPage(
+  BuildContext context,
+  Widget page, {
+  required bool mobileStaffShell,
+  required String titleKey,
+}) {
+  resetCashierPosShellState(context);
+  final nav = Navigator.of(context);
+  nav.pop();
+  nav.push<void>(
+    MaterialPageRoute<void>(
+      builder: (_) => KioskDrawerStackedPage(
+        mobileStaffShell: mobileStaffShell,
+        titleKey: titleKey,
+        body: page,
+      ),
+    ),
+  );
 }

@@ -15,10 +15,11 @@ class HudaldanAvaltService {
     required DateTime ognooTo,
     int page = 1,
     int pageSize = 50,
+    /// Web `barimtiinJagsaalt`: filter `orlogoZarlagiinTuukh` to one customer.
+    String? khariltsagchiinId,
   }) async {
     final queryMap = <String, dynamic>{
       'baiguullagiinId': baiguullagiinId,
-      'khariltsagchiinId': {'\$exists': true},
       'salbariinId': salbariinId,
       'zassanEsekh': {'\$ne': true},
       'turul': {
@@ -31,6 +32,11 @@ class HudaldanAvaltService {
             '${ognooTo.year.toString().padLeft(4, '0')}-${ognooTo.month.toString().padLeft(2, '0')}-${ognooTo.day.toString().padLeft(2, '0')} 23:59:59',
       },
     };
+    if (khariltsagchiinId != null && khariltsagchiinId.trim().isNotEmpty) {
+      queryMap['khariltsagchiinId'] = khariltsagchiinId.trim();
+    } else {
+      queryMap['khariltsagchiinId'] = {'\$exists': true};
+    }
 
     try {
       final response = await _api.get<Map<String, dynamic>>(

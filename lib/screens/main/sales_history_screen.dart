@@ -130,12 +130,13 @@ void showPOSCompletedSaleSheet(
                       const SizedBox(height: 4),
                       Text(
                         () {
+                          final t = sale.timestamp.toLocal();
                           final lang =
                               Localizations.localeOf(context).languageCode;
                           if (lang == 'mn') {
-                            return '${MongolianDateFormatter.formatShortDate(sale.timestamp)} · ${MongolianDateFormatter.formatTime(sale.timestamp)}';
+                            return '${MongolianDateFormatter.formatShortDate(t)} · ${MongolianDateFormatter.formatTime(t, seconds: true)}';
                           }
-                          return '${DateFormat.yMMMd().format(sale.timestamp)} · ${DateFormat.Hm().format(sale.timestamp)}';
+                          return '${DateFormat.yMMMd().format(t)} · ${DateFormat.Hms().format(t)}';
                         }(),
                         style: textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
@@ -510,30 +511,14 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
               ],
             )
           : null,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (!widget.showAppBar && canRemote)
-            Align(
-              alignment: Alignment.centerRight,
-              child: IconButton(
-                tooltip: l10n.tr('sales_history_refresh'),
-                onPressed: () => _onRefresh(auth, true),
-                icon: const Icon(Icons.refresh_rounded),
-              ),
-            ),
-          Expanded(
-            child: _buildBody(
-              context,
-              colorScheme,
-              textTheme,
-              l10n,
-              auth,
-              sales,
-              canRemote,
-            ),
-          ),
-        ],
+      body: _buildBody(
+        context,
+        colorScheme,
+        textTheme,
+        l10n,
+        auth,
+        sales,
+        canRemote,
       ),
     );
   }
@@ -855,11 +840,8 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     final groups = <DateTime, List<CompletedSale>>{};
 
     for (final sale in sales) {
-      final date = DateTime(
-        sale.timestamp.year,
-        sale.timestamp.month,
-        sale.timestamp.day,
-      );
+      final local = sale.timestamp.toLocal();
+      final date = DateTime(local.year, local.month, local.day);
       groups.putIfAbsent(date, () => []);
       groups[date]!.add(sale);
     }
@@ -1005,7 +987,7 @@ class _SaleCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${l10n.tr('sales_history_time')}: ${MongolianDateFormatter.formatTime(sale.timestamp)}',
+                          '${l10n.tr('sales_history_time')}: ${MongolianDateFormatter.formatTime(sale.timestamp, seconds: true)}',
                           style: textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w500,

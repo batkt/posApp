@@ -25,19 +25,21 @@ class MongolianDateFormatter {
   ];
 
   static String formatDate(DateTime date) {
-    final day = date.day;
-    final month = mongolianMonths[date.month - 1];
-    final year = date.year;
-    final weekday = mongolianWeekdays[date.weekday - 1];
-    
+    final local = date.toLocal();
+    final day = local.day;
+    final month = mongolianMonths[local.month - 1];
+    final year = local.year;
+    final weekday = mongolianWeekdays[local.weekday - 1];
+
     return '$day $month, $year ($weekday)';
   }
 
   static String formatShortDate(DateTime date) {
-    final day = date.day;
-    final month = mongolianMonths[date.month - 1];
-    final year = date.year;
-    
+    final local = date.toLocal();
+    final day = local.day;
+    final month = mongolianMonths[local.month - 1];
+    final year = local.year;
+
     return '$day $month $year';
   }
 
@@ -57,14 +59,21 @@ class MongolianDateFormatter {
 
   /// Section title for sales history (weekday + calendar date in Mongolian).
   static String formatSalesHistorySectionDate(DateTime date) {
-    final weekday = mongolianWeekdays[date.weekday - 1];
-    return '$weekday · ${formatShortDate(date)}';
+    final local = date.toLocal();
+    final weekday = mongolianWeekdays[local.weekday - 1];
+    return '$weekday · ${formatShortDate(local)}';
   }
 
-  static String formatTime(DateTime date) {
-    final hour = date.hour.toString().padLeft(2, '0');
-    final minute = date.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
+  /// Wall-clock time in the device locale; [seconds] for transaction lists.
+  static String formatTime(DateTime date, {bool seconds = false}) {
+    final local = date.toLocal();
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    if (!seconds) {
+      return '$hour:$minute';
+    }
+    final sec = local.second.toString().padLeft(2, '0');
+    return '$hour:$minute:$sec';
   }
 
   static String formatDateTime(DateTime date) {
@@ -73,18 +82,20 @@ class MongolianDateFormatter {
 
   /// Receipt / thermal: `2026/04/21       13:59:59` (no weekday — avoids "Мягмар" etc.).
   static String formatReceiptNumericDateTime(DateTime date) {
-    final y = date.year.toString().padLeft(4, '0');
-    final mo = date.month.toString().padLeft(2, '0');
-    final d = date.day.toString().padLeft(2, '0');
-    final h = date.hour.toString().padLeft(2, '0');
-    final mi = date.minute.toString().padLeft(2, '0');
-    final s = date.second.toString().padLeft(2, '0');
+    final local = date.toLocal();
+    final y = local.year.toString().padLeft(4, '0');
+    final mo = local.month.toString().padLeft(2, '0');
+    final d = local.day.toString().padLeft(2, '0');
+    final h = local.hour.toString().padLeft(2, '0');
+    final mi = local.minute.toString().padLeft(2, '0');
+    final s = local.second.toString().padLeft(2, '0');
     return '$y/$mo/$d       $h:$mi:$s';
   }
 
   static String formatRelativeDate(DateTime date) {
+    final local = date.toLocal();
     final now = DateTime.now();
-    final difference = now.difference(date);
+    final difference = now.difference(local);
     
     if (difference.inDays == 0) {
       return 'Өнөөдөр';

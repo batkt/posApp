@@ -285,7 +285,19 @@ class Product {
   }
 
   /// Web `aguulakh.shirkheglekhEsekh`: `uldegdel` and sale `too` are **boxes**, not pieces.
-  bool get isBoxSaleUnit => shirkheglekhEsekh == true;
+  ///
+  /// Treat as box-sale when the flag is true, or when the flag is missing/`null` but the row
+  /// clearly describes box packaging (`negKhairtsaganDahiShirhegiinToo` or `khemjikhNegj`).
+  /// Only an explicit `shirkheglekhEsekh: false` disables this (matches piece-only SKUs).
+  bool get isBoxSaleUnit {
+    if (shirkheglekhEsekh == true) return true;
+    if (shirkheglekhEsekh == false) return false;
+    final neg = negKhairtsaganDahiShirhegiinToo;
+    if (neg != null && neg >= 2) return true;
+    final kn = khemjikhNegj?.trim().toLowerCase() ?? '';
+    if (kn.isEmpty) return false;
+    return kn.contains('хайрцаг');
+  }
 
   /// Suffix after stock / quantity on POS (web `posSystem`: "хайрцаг" vs "ш").
   String get posStockQuantitySuffix {

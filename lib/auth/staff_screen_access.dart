@@ -48,7 +48,9 @@ class StaffScreenAccess {
   /// `/khyanalt/khariltsagch` — customers.
   final bool allowsKhariltsagch;
 
-  /// No dedicated web key in staff data yet; only admins get the dashboard tile.
+  /// Home / summary tile: admins always; also staff who only use POS shells
+  /// ([allowsPosSystem], [allowsKiosk], [allowsMobile]) so kiosk/mobile drawers
+  /// are not empty (same screen header shows “POS Менежер” on [DashboardScreen]).
   final bool allowsDashboard;
 
   /// Web route `/khyanalt/eBarimt` and similar (per-employee `tsonkhniiTokhirgoo`).
@@ -138,7 +140,8 @@ class StaffScreenAccess {
     final toollogo = full || match('toollogo');
     final barimtiinJagsaalt = full || match('barimtiinJagsaalt');
     final khariltsagch = full || match('khariltsagch');
-    final dashboard = full;
+    final posShellUser = pos || kiosk || mobile;
+    final dashboard = full || posShellUser;
     final ebarimt = full || match('ebarimt');
     final hynalt = full ||
         match('/khyanalt/hynalt') ||

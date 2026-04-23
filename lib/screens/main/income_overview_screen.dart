@@ -133,15 +133,6 @@ class _IncomeOverviewScreenState extends State<IncomeOverviewScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            if (!widget.showAppBar)
-              Align(
-                alignment: Alignment.centerRight,
-                child: IconButton(
-                  tooltip: l10n.tr('action_refresh'),
-                  icon: const Icon(Icons.refresh_rounded),
-                  onPressed: _loading ? null : _load,
-                ),
-              ),
             OutlinedButton.icon(
               onPressed: _pickRange,
               icon: const Icon(Icons.date_range_rounded),

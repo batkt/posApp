@@ -162,17 +162,31 @@ Map<String, dynamic>? _ajiltanFromDoc(dynamic raw) {
   );
 }
 
+/// Parses API `ognoo` / `createdAt` (ISO string, millis, or Mongo `$date` wrapper).
+DateTime _parseGuilgeeOgnoo(dynamic ognoo) {
+  DateTime? ts;
+  if (ognoo is DateTime) {
+    ts = ognoo;
+  } else if (ognoo is int) {
+    ts = DateTime.fromMillisecondsSinceEpoch(ognoo, isUtc: true);
+  } else if (ognoo is String) {
+    ts = DateTime.tryParse(ognoo);
+  } else if (ognoo is Map) {
+    final inner = ognoo[r'$date'];
+    if (inner is String) {
+      ts = DateTime.tryParse(inner);
+    } else if (inner is int) {
+      ts = DateTime.fromMillisecondsSinceEpoch(inner, isUtc: true);
+    }
+  }
+  return ts ?? DateTime.now();
+}
+
 CompletedSale completedSaleFromGuilgeeDoc(Map<String, dynamic> doc) {
   final id = doc['guilgeeniiDugaar']?.toString() ??
       doc['_id']?.toString() ??
       'sale';
-  final ognoo = doc['ognoo'] ?? doc['createdAt'];
-  DateTime ts;
-  if (ognoo is String) {
-    ts = DateTime.tryParse(ognoo) ?? DateTime.now();
-  } else {
-    ts = DateTime.now();
-  }
+  final ts = _parseGuilgeeOgnoo(doc['ognoo'] ?? doc['createdAt']);
 
   final baraanuud = doc['baraanuud'] as List<dynamic>?;
   final items = <SaleItem>[];

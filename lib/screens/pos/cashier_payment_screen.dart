@@ -16,8 +16,10 @@ import '../../services/pos_transaction_service.dart';
 import '../../services/qpay_service.dart';
 import '../../services/unipos_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/khariltsagch_promo_discount.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/qpay_invoice_dialog.dart';
+import '../../widgets/box_line_pieces_sheet.dart';
 import '../shared/receipt_screen.dart';
 
 /// Default cashier terminal: UniPOS card (kiosk and mobile staff).
@@ -56,6 +58,10 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   /// Web `posSystem/index.js` tax flags (`borluulaltNUAT`, `eBarimtShine`, …).
   PosWebTaxContext _taxCtx = PosWebTaxContext.paymentDefault;
 
+  /// Web `posKhariltsagchModal` — сонгосон харилцагчийн мөр (`/khariltsagch`); хөнгөлөлт эндээс тооцогдоно.
+  Map<String, dynamic>? _khariltsagchRawRow;
+  double _promoBonusAshiglasan = 0;
+
   /// Blocks double-submit before the next frame applies [_busy].
   bool _submitInFlight = false;
 
@@ -88,6 +94,30 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     } catch (_) {}
   }
 
+  Map<String, dynamic>? _checkoutKhariltsagchPayload() {
+    final raw = _khariltsagchRawRow;
+    if (raw == null) return null;
+    return KhariltsagchPromoDiscount.buildCheckoutPayload(
+      khariltsagchRow: raw,
+      bonusAshiglasan: _promoBonusAshiglasan,
+    );
+  }
+
+  /// Гараар оруулсан эсвэл харилцагчийн хөнгөлөлт (вэб `niitDunNoat.hungulsunDun`).
+  double _effectiveDiscountMnt(SalesModel sales) {
+    final sub = sales.subtotal;
+    final payload = _checkoutKhariltsagchPayload();
+    if (payload != null) {
+      final d = KhariltsagchPromoDiscount.computeHungulsunDunTotal(
+        lineGrossBeforeDiscount:
+            sales.currentSaleItems.map((e) => e.total.toDouble()).toList(),
+        payload: payload,
+      );
+      return d.clamp(0.0, sub);
+    }
+    return _discountMnt.clamp(0.0, sub);
+  }
+
   CashierTotals _cashierTotals(SalesModel sales, double discountMnt) {
     final items = sales.currentSaleItems;
     return PosPaymentCore.calculateCashierTotalsWeb(
@@ -109,6 +139,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   }
 
   void _onDiscountTextChanged(double maxSubtotal) {
+    if (_khariltsagchRawRow != null) return;
     final raw = MntAmountFormatter.parseUserAmount(_discountInput.text);
     final v = raw.clamp(0.0, maxSubtotal);
     setState(() => _discountMnt = v);
@@ -124,11 +155,55 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   }
 
   void _formatDiscountFieldForDisplay(double maxSubtotal) {
+    if (_khariltsagchRawRow != null) return;
     final v = _discountMnt.clamp(0.0, maxSubtotal);
     setState(() => _discountMnt = v);
     _discountInput.text = v > 0.009 ? MntAmountFormatter.format(v) : '';
     _discountInput.selection =
         TextSelection.collapsed(offset: _discountInput.text.length);
+  }
+
+  Future<void> _openKhariltsagchPromoSheet(
+    BuildContext context,
+    SalesModel sales,
+  ) async {
+    final auth = context.read<AuthModel>();
+    final s = auth.posSession;
+    if (s == null) return;
+    final r = await showModalBottomSheet<_KhariltsagchPromoSheetResult>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (ctx) => _KhariltsagchPromoSheet(
+        baiguullagiinId: s.baiguullagiinId,
+        salbariinId: s.salbariinId,
+        initialRaw: _khariltsagchRawRow,
+        initialBonusAshiglasan: _promoBonusAshiglasan,
+      ),
+    );
+    if (!mounted || r == null) return;
+    if (r.cleared) {
+      setState(() {
+        _khariltsagchRawRow = null;
+        _promoBonusAshiglasan = 0;
+        _discountMnt = 0;
+        _discountInput.clear();
+      });
+      return;
+    }
+    setState(() {
+      _khariltsagchRawRow = Map<String, dynamic>.from(r.raw!);
+      _promoBonusAshiglasan = r.bonusAshiglasan;
+    });
+    if (!mounted) return;
+    final d = _effectiveDiscountMnt(sales);
+    setState(() {
+      _discountMnt = d;
+      _discountInput.text = d > 0.009 ? MntAmountFormatter.format(d) : '';
+      _discountInput.selection =
+          TextSelection.collapsed(offset: _discountInput.text.length);
+    });
   }
 
   Future<void> _primeOrderNumber() async {
@@ -221,6 +296,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       noatguiDun: totals.net,
       nhatiinDun: totals.nhhat,
       guilgeeniiDugaar: orderNo,
+      khariltsagch: _checkoutKhariltsagchPayload(),
       zeelKhariltsagchiinId: zeelKhariltsagchiinId,
       webTaxContext: _taxCtx,
       cashierDiscountMnt: totals.cappedDiscount,
@@ -376,7 +452,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         if (!mounted) return;
         final tw = _cashierTotals(
           sales,
-          _discountMnt.clamp(0.0, sales.subtotal),
+          _effectiveDiscountMnt(sales),
         );
         final completed = sales.completeCashierSale(
           paymentMethod: _methodId(_kind),
@@ -556,20 +632,42 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             );
           }
 
-          final effectiveDiscount =
-              _discountMnt.clamp(0.0, sales.subtotal).toDouble();
-          if (effectiveDiscount != _discountMnt) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
-              setState(() {
-                _discountMnt = effectiveDiscount;
-                if (!_discountFocus.hasFocus) {
-                  _discountInput.text = effectiveDiscount > 0.009
-                      ? MntAmountFormatter.format(effectiveDiscount)
-                      : '';
-                }
+          final effectiveDiscount = _effectiveDiscountMnt(sales);
+          if (_khariltsagchRawRow != null) {
+            if (!_discountFocus.hasFocus) {
+              final t = effectiveDiscount > 0.009
+                  ? MntAmountFormatter.format(effectiveDiscount)
+                  : '';
+              if ((_discountMnt - effectiveDiscount).abs() > 0.009 ||
+                  _discountInput.text != t) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  setState(() {
+                    _discountMnt = effectiveDiscount;
+                    _discountInput.value = TextEditingValue(
+                      text: t,
+                      selection: TextSelection.collapsed(offset: t.length),
+                    );
+                  });
+                });
+              }
+            }
+          } else {
+            final clampedManual =
+                _discountMnt.clamp(0.0, sales.subtotal).toDouble();
+            if (clampedManual != _discountMnt) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                setState(() {
+                  _discountMnt = clampedManual;
+                  if (!_discountFocus.hasFocus) {
+                    _discountInput.text = clampedManual > 0.009
+                        ? MntAmountFormatter.format(clampedManual)
+                        : '';
+                  }
+                });
               });
-            });
+            }
           }
           final totals = _cashierTotals(sales, effectiveDiscount);
           final due = totals.total;
@@ -596,6 +694,19 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                 paymentKindLabel: _paymentKindLabelMn(_kind),
                 discountController: _discountInput,
                 discountFocus: _discountFocus,
+                customerPromoLocked: _khariltsagchRawRow != null,
+                customerPromoName: _khariltsagchRawRow?['ner']?.toString(),
+                onOpenCustomerPromo: showZeelOption
+                    ? () => _openKhariltsagchPromoSheet(context, sales)
+                    : null,
+                onClearCustomerPromo: _khariltsagchRawRow != null
+                    ? () => setState(() {
+                          _khariltsagchRawRow = null;
+                          _promoBonusAshiglasan = 0;
+                          _discountMnt = 0;
+                          _discountInput.clear();
+                        })
+                    : null,
                 onDiscountChanged: () =>
                     _onDiscountTextChanged(sales.subtotal),
                 onDiscountEditingComplete: () =>
@@ -616,12 +727,21 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
               if (wide) {
                 return Padding(
                   padding: pad,
-                  child: Row(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(flex: 5, child: summary),
-                      const SizedBox(width: 20),
-                      Expanded(flex: 4, child: payment),
+                      _CashierBoxSaleLinesBar(sales: sales),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(flex: 5, child: summary),
+                            const SizedBox(width: 20),
+                            Expanded(flex: 4, child: payment),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -632,6 +752,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    _CashierBoxSaleLinesBar(sales: sales),
+                    const SizedBox(height: 12),
                     summary,
                     const SizedBox(height: 20),
                     payment,
@@ -641,6 +763,60 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             },
           );
         },
+      ),
+    );
+  }
+}
+
+/// Хайрцагтай мөрүүдийг **Төлбөр тооцоо** дэлгэцэнд харагдуулна (сагсны жагсаалт энд багатай).
+class _CashierBoxSaleLinesBar extends StatelessWidget {
+  const _CashierBoxSaleLinesBar({required this.sales});
+
+  final SalesModel sales;
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = sales.currentSaleItems
+        .where(
+          (e) => e.product.isBoxSaleUnit && e.uramshuulaliinId == null,
+        )
+        .toList();
+    if (lines.isEmpty) return const SizedBox.shrink();
+
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Material(
+      color: cs.secondaryContainer.withValues(alpha: 0.45),
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final item in lines)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      item.product.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => showBoxLinePiecesSheet(context, item),
+                    child: const Text(
+                      'Хайрцаглах',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -659,6 +835,10 @@ class _SummaryPanel extends StatelessWidget {
     required this.discountFocus,
     required this.onDiscountChanged,
     required this.onDiscountEditingComplete,
+    this.customerPromoLocked = false,
+    this.customerPromoName,
+    this.onOpenCustomerPromo,
+    this.onClearCustomerPromo,
   });
 
   final String orderId;
@@ -672,6 +852,10 @@ class _SummaryPanel extends StatelessWidget {
   final FocusNode discountFocus;
   final VoidCallback onDiscountChanged;
   final VoidCallback onDiscountEditingComplete;
+  final bool customerPromoLocked;
+  final String? customerPromoName;
+  final VoidCallback? onOpenCustomerPromo;
+  final VoidCallback? onClearCustomerPromo;
 
   @override
   Widget build(BuildContext context) {
@@ -718,13 +902,52 @@ class _SummaryPanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _row(context, 'Дүн', _fmtMnt(subtotal)),
+          if (onOpenCustomerPromo != null) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: onOpenCustomerPromo,
+              icon: const Icon(Icons.person_search_rounded, size: 20),
+              label: const Text(
+                'Харилцагчийн урамшуулал',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            if (customerPromoLocked &&
+                customerPromoName != null &&
+                customerPromoName!.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Харилцагч: $customerPromoName',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (onClearCustomerPromo != null)
+                    TextButton(
+                      onPressed: onClearCustomerPromo,
+                      child: const Text('Цэвэрлэх'),
+                    ),
+                ],
+              ),
+            ],
+          ],
           Padding(
             padding: const EdgeInsets.only(top: 6, bottom: 4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Хөнгөлөлт (₮)',
+                  customerPromoLocked
+                      ? 'Хөнгөлөлт (харилцагч)'
+                      : 'Хөнгөлөлт (₮)',
                   style: TextStyle(
                     color: cs.onSurfaceVariant,
                     fontSize: 12,
@@ -738,6 +961,7 @@ class _SummaryPanel extends StatelessWidget {
                     return TextField(
                       controller: discountController,
                       focusNode: discountFocus,
+                      readOnly: customerPromoLocked,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                         signed: false,
@@ -766,20 +990,32 @@ class _SummaryPanel extends StatelessWidget {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        suffixIcon: discountController.text.trim().isNotEmpty
-                            ? IconButton(
-                                tooltip: 'Арилгах',
-                                onPressed: () {
-                                  discountController.clear();
-                                  onDiscountChanged();
-                                },
-                                icon: Icon(
-                                  Icons.clear_rounded,
-                                  size: 20,
-                                  color: cs.outline,
-                                ),
-                              )
-                            : null,
+                        suffixIcon: customerPromoLocked
+                            ? (onClearCustomerPromo != null
+                                ? IconButton(
+                                    tooltip: 'Харилцагчийн урамшуулал арилгах',
+                                    onPressed: onClearCustomerPromo,
+                                    icon: Icon(
+                                      Icons.person_off_outlined,
+                                      size: 20,
+                                      color: cs.outline,
+                                    ),
+                                  )
+                                : null)
+                            : (discountController.text.trim().isNotEmpty
+                                ? IconButton(
+                                    tooltip: 'Арилгах',
+                                    onPressed: () {
+                                      discountController.clear();
+                                      onDiscountChanged();
+                                    },
+                                    icon: Icon(
+                                      Icons.clear_rounded,
+                                      size: 20,
+                                      color: cs.outline,
+                                    ),
+                                  )
+                                : null),
                       ),
                     );
                   },
@@ -1313,6 +1549,336 @@ class _ZeelCustomerPickerSheetState extends State<_ZeelCustomerPickerSheet> {
               child: OutlinedButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Болих'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KhariltsagchPromoSheetResult {
+  const _KhariltsagchPromoSheetResult.saved(this.raw, this.bonusAshiglasan)
+      : cleared = false;
+
+  const _KhariltsagchPromoSheetResult.cleared()
+      : cleared = true,
+        raw = null,
+        bonusAshiglasan = 0;
+
+  final bool cleared;
+  final Map<String, dynamic>? raw;
+  final double bonusAshiglasan;
+}
+
+/// Вэб `PosKhariltsagchModal`: харилцагч сонгох + хөнгөлөлт/бонус.
+class _KhariltsagchPromoSheet extends StatefulWidget {
+  const _KhariltsagchPromoSheet({
+    required this.baiguullagiinId,
+    required this.salbariinId,
+    this.initialRaw,
+    this.initialBonusAshiglasan = 0,
+  });
+
+  final String baiguullagiinId;
+  final String salbariinId;
+  final Map<String, dynamic>? initialRaw;
+  final double initialBonusAshiglasan;
+
+  @override
+  State<_KhariltsagchPromoSheet> createState() => _KhariltsagchPromoSheetState();
+}
+
+class _KhariltsagchPromoSheetState extends State<_KhariltsagchPromoSheet> {
+  final _search = TextEditingController();
+  final _bonusAshiglasanCtrl = TextEditingController();
+  final _service = KhariltsagchService();
+  Timer? _debounce;
+  List<Map<String, dynamic>> _rows = [];
+  bool _loading = false;
+  String? _err;
+  Map<String, dynamic>? _selected;
+  bool _loyaltyBonusEnabled = false;
+
+  static double _num(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.initialRaw != null
+        ? Map<String, dynamic>.from(widget.initialRaw!)
+        : null;
+    if (widget.initialBonusAshiglasan > 0.009) {
+      _bonusAshiglasanCtrl.text =
+          MntAmountFormatter.format(widget.initialBonusAshiglasan);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadLoyalty();
+      _load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _search.dispose();
+    _bonusAshiglasanCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadLoyalty() async {
+    final m =
+        await posSettingsService.loyaltyErkhAvya(widget.baiguullagiinId);
+    if (!mounted) return;
+    final t = m?['tokhirgoo'];
+    final l = t is Map ? t['loyalty'] : null;
+    setState(() {
+      _loyaltyBonusEnabled = l is Map && l['ashiglakhEsekh'] == true;
+    });
+  }
+
+  Future<void> _load() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _err = null;
+    });
+    final r = await _service.fetchList(
+      baiguullagiinId: widget.baiguullagiinId,
+      salbariinId: widget.salbariinId,
+      search: _search.text,
+    );
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      if (r.success) {
+        _rows = r.rows;
+      } else {
+        _err = r.error;
+        _rows = [];
+      }
+    });
+  }
+
+  void _scheduleLoad() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), _load);
+  }
+
+  bool get _canSave {
+    final s = _selected;
+    if (s == null) return false;
+    if (s['khunglukhEsekh'] == true) return true;
+    if (_loyaltyBonusEnabled) return true;
+    return false;
+  }
+
+  double _parseBonusAshiglasan() {
+    return MntAmountFormatter.parseUserAmount(_bonusAshiglasanCtrl.text)
+        .clamp(0.0, double.infinity);
+  }
+
+  void _onSave() {
+    final s = _selected;
+    if (s == null || !_canSave) return;
+    final cap = _num(s['onoo']);
+    final bonus = _parseBonusAshiglasan().clamp(0.0, cap);
+    Navigator.pop(
+      context,
+      _KhariltsagchPromoSheetResult.saved(s, bonus),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final maxH = MediaQuery.sizeOf(context).height * 0.72;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: SizedBox(
+        height: maxH,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 4, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Харилцагчийн урамшуулал',
+                      textAlign: TextAlign.center,
+                      style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 6),
+              child: Text(
+                'Харилцагч сонгох:',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _search,
+                decoration: InputDecoration(
+                  labelText: 'Хайх',
+                  hintText: 'Нэр, утас, имэйл, регистр…',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onChanged: (_) => _scheduleLoad(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              flex: _selected == null ? 1 : 2,
+              child: _loading && _rows.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : _err != null && _rows.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              _err!,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: cs.error),
+                            ),
+                          ),
+                        )
+                      : _rows.isEmpty
+                          ? Center(
+                              child: Text(
+                                'Харилцагч олдсонгүй',
+                                style: TextStyle(color: cs.onSurfaceVariant),
+                              ),
+                            )
+                          : ListView.separated(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              itemCount: _rows.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (context, i) {
+                                final m = _rows[i];
+                                final c = Customer.fromKhariltsagch(m);
+                                final id = m['_id']?.toString() ?? '';
+                                final sel = id.isNotEmpty &&
+                                    id == (_selected?['_id']?.toString());
+                                return ListTile(
+                                  selected: sel,
+                                  title: Text(
+                                    c.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  subtitle: Text(
+                                    c.phone,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  onTap: id.isEmpty
+                                      ? null
+                                      : () => setState(() {
+                                            _selected =
+                                                Map<String, dynamic>.from(m);
+                                          }),
+                                );
+                              },
+                            ),
+            ),
+            if (_selected != null)
+              Expanded(
+                flex: 1,
+                child: Material(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Хөнгөлөлттэй эсэх: ${_selected!['khunglukhEsekh'] == true ? "Тийм" : "Үгүй"}',
+                          style: tt.bodyMedium,
+                        ),
+                        if (_selected!['khunglukhTurul']?.toString() == 'Хувь')
+                          Text(
+                            'Хөнгөлөх хувь: ${_selected!['khunglukhEsekh'] == true ? _num(_selected!['khunglukhKhuvi']) : 0}%',
+                            style: tt.bodyMedium,
+                          )
+                        else
+                          Text(
+                            'Хөнгөлөх дүн: ${_selected!['khunglukhEsekh'] == true ? MntAmountFormatter.format(_num(_selected!['khunglukhDun'])) : "0"} ₮',
+                            style: tt.bodyMedium,
+                          ),
+                        if (_loyaltyBonusEnabled) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            'Цуглуулсан оноо: ${MntAmountFormatter.format(_num(_selected!['onoo']))}',
+                            style: tt.bodyMedium,
+                          ),
+                          const SizedBox(height: 6),
+                          TextField(
+                            controller: _bonusAshiglasanCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                  RegExp(r'[\d.,\s]')),
+                            ],
+                            decoration: InputDecoration(
+                              labelText: 'Ашиглах урамшуулалын оноо (заавал биш)',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(
+                        context,
+                        const _KhariltsagchPromoSheetResult.cleared(),
+                      ),
+                      child: const Text('Цэвэрлэх'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _canSave && _selected != null ? _onSave : null,
+                      child: const Text('Хадгалах'),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

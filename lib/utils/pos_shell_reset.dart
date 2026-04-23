@@ -16,10 +16,3 @@ void resetCashierPosShellState(BuildContext context) {
   sales.signalCashierReturnToProductsAfterReceipt();
 }
 
-/// Close the kiosk/mobile drawer and push [page], after abandoning any sale.
-void kioskDrawerLeavePosForPage(BuildContext context, Widget page) {
-  resetCashierPosShellState(context);
-  final nav = Navigator.of(context);
-  nav.pop();
-  nav.push<void>(MaterialPageRoute<void>(builder: (_) => page));
-}

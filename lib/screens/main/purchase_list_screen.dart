@@ -11,9 +11,20 @@ import '../../utils/mongolian_date_formatter.dart';
 
 /// Web parity: `barimtiinJagsaalt` tab **Худалдан авалт** (`/orlogoZarlagiinTuukh`).
 class PurchaseListScreen extends StatefulWidget {
-  const PurchaseListScreen({super.key, this.showAppBar = true});
+  const PurchaseListScreen({
+    super.key,
+    this.showAppBar = true,
+    this.khariltsagchiinId,
+    this.customerNameForTitle,
+  });
 
   final bool showAppBar;
+
+  /// When set, loads only this customer's rows (same as web customer filter).
+  final String? khariltsagchiinId;
+
+  /// Shown under the app bar title when [khariltsagchiinId] is set.
+  final String? customerNameForTitle;
 
   @override
   State<PurchaseListScreen> createState() => _PurchaseListScreenState();
@@ -96,6 +107,7 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
       ognooTo: _range.end,
       page: _page,
       pageSize: _pageSize,
+      khariltsagchiinId: widget.khariltsagchiinId,
     );
 
     if (!mounted) return;
@@ -125,7 +137,23 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
     return Scaffold(
       appBar: widget.showAppBar
           ? AppBar(
-              title: Text(l10n.tr('menu_hudaldan_avalt')),
+              title: widget.customerNameForTitle != null &&
+                      widget.customerNameForTitle!.trim().isNotEmpty
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(l10n.tr('menu_hudaldan_avalt')),
+                        Text(
+                          widget.customerNameForTitle!.trim(),
+                          style: textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    )
+                  : Text(l10n.tr('menu_hudaldan_avalt')),
               centerTitle: true,
               actions: [
                 IconButton(
@@ -151,14 +179,6 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
               ),
             ),
           ),
-          if (!widget.showAppBar)
-            Align(
-              alignment: Alignment.centerRight,
-              child: IconButton(
-                icon: const Icon(Icons.refresh_rounded),
-                onPressed: _loading ? null : () => _load(reset: true),
-              ),
-            ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () => _load(reset: true),

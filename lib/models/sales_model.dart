@@ -4,6 +4,7 @@ import '../data/payment_display_config.dart';
 import '../payment/pos_payment_core.dart';
 import '../utils/buunii_une_helper.dart';
 import 'cart_model.dart';
+import 'inventory_model.dart';
 
 class SaleItem {
   final Product product;
@@ -19,6 +20,10 @@ class SaleItem {
   /// Үнэ гараар тохируулсан эсвэл бөөний тiers-ээс гадуурх нэгж үнэ — тоо өөрчлөхөд автомат бөөнөөр дахин тооцохгүй.
   bool forceRetailPricing;
 
+  /// Хайрцагтай бараа: задлаж зарсан **нийт ширхэг** (вэб `zadlakhToo`). Хоосон бол
+  /// `quantity` хайрцаг × [Product.negKhairtsaganDahiShirhegiinToo].
+  double? boxPiecesSold;
+
   SaleItem({
     required this.product,
     required this.unitPrice,
@@ -26,9 +31,40 @@ class SaleItem {
     this.quantity = 1,
     this.uramshuulaliinId,
     this.forceRetailPricing = false,
+    this.boxPiecesSold,
   });
 
-  double get total => unitPrice * quantity;
+  double get _negPerBox {
+    final n = product.negKhairtsaganDahiShirhegiinToo ?? 1;
+    return n < 1 ? 1.0 : n.toDouble();
+  }
+
+  /// Нэг хайрцаг дахь ширхэг (хайрцагтай бараанд).
+  double get negPerBox => _negPerBox;
+
+  /// Нийт ширхэг (хайрцагтайд задлах эсвэл энгийн бараанд `quantity`).
+  double get effectivePieces {
+    if (product.isBoxSaleUnit) {
+      return boxPiecesSold ?? (quantity * _negPerBox);
+    }
+    return quantity.toDouble();
+  }
+
+  /// API `too`: хайрцагтайд хайрцгийн тоо (дробь зөвшөөрнө), бусадад `quantity`.
+  double get apiTooUnits {
+    if (product.isBoxSaleUnit) {
+      return effectivePieces / _negPerBox;
+    }
+    return quantity.toDouble();
+  }
+
+  double get total {
+    if (product.isBoxSaleUnit) {
+      final perPiece = unitPrice / _negPerBox;
+      return perPiece * effectivePieces;
+    }
+    return unitPrice * quantity;
+  }
 
   SaleItem copyWith({
     Product? product,
@@ -37,6 +73,7 @@ class SaleItem {
     double? retailUnitPrice,
     String? uramshuulaliinId,
     bool? forceRetailPricing,
+    double? boxPiecesSold,
   }) {
     return SaleItem(
       product: product ?? this.product,
@@ -45,6 +82,7 @@ class SaleItem {
       retailUnitPrice: retailUnitPrice ?? this.retailUnitPrice,
       uramshuulaliinId: uramshuulaliinId ?? this.uramshuulaliinId,
       forceRetailPricing: forceRetailPricing ?? this.forceRetailPricing,
+      boxPiecesSold: boxPiecesSold ?? this.boxPiecesSold,
     );
   }
 }
@@ -119,6 +157,16 @@ class SalesModel extends ChangeNotifier {
   bool get isSaleEmpty => _currentSale.isEmpty;
   int get saleItemCount => _currentSale.fold(0, (sum, item) => sum + item.quantity);
 
+  /// Нийт ширхэгийн ойролцоо (хайрцагтай мөрүүдэд задласан ширхэг).
+  int get salePieceCountApprox => _currentSale.fold(
+        0,
+        (sum, item) =>
+            sum +
+            (item.product.isBoxSaleUnit
+                ? item.effectivePieces.round()
+                : item.quantity),
+      );
+
   /// Distinct бараа (төрөл), not raw row count — same бараа may appear as separate
   /// [SaleItem] rows; [currentSaleItems] stays separate for receipt / API lines.
   int get uniqueSaleItems {
@@ -182,8 +230,11 @@ class SalesModel extends ChangeNotifier {
       line.unitPrice = line.retailUnitPrice;
       return;
     }
+    final tierQty = line.product.isBoxSaleUnit
+        ? line.apiTooUnits
+        : line.quantity.toDouble();
     final tier = BuuniiUneHelper.resolveUnitPrice(
-      qty: line.quantity.toDouble(),
+      qty: tierQty,
       buuniiUneJagsaalt: line.product.buuniiUneJagsaalt,
       retailUnit: line.retailUnitPrice,
     );
@@ -195,7 +246,9 @@ class SalesModel extends ChangeNotifier {
     final existingIndex =
         _currentSale.indexWhere((item) => item.product.id == product.id);
     if (existingIndex >= 0) {
-      _currentSale[existingIndex].quantity++;
+      final line = _currentSale[existingIndex];
+      line.boxPiecesSold = null;
+      line.quantity++;
       _reapplyWholesaleForIndex(existingIndex);
     } else {
       _currentSale.add(SaleItem(
@@ -253,6 +306,7 @@ class SalesModel extends ChangeNotifier {
     }
     final index = _currentSale.indexWhere((item) => item.product.id == productId);
     if (index >= 0) {
+      _currentSale[index].boxPiecesSold = null;
       _currentSale[index].quantity = quantity;
       _reapplyWholesaleForIndex(index);
       notifyListeners();
@@ -262,7 +316,9 @@ class SalesModel extends ChangeNotifier {
   void incrementSaleQuantity(String productId) {
     final index = _currentSale.indexWhere((item) => item.product.id == productId);
     if (index >= 0) {
-      _currentSale[index].quantity++;
+      final line = _currentSale[index];
+      line.boxPiecesSold = null;
+      line.quantity++;
       _reapplyWholesaleForIndex(index);
       notifyListeners();
     }
@@ -272,13 +328,52 @@ class SalesModel extends ChangeNotifier {
     final index = _currentSale.indexWhere((item) => item.product.id == productId);
     if (index >= 0) {
       if (_currentSale[index].quantity > 1) {
-        _currentSale[index].quantity--;
+        final line = _currentSale[index];
+        line.boxPiecesSold = null;
+        line.quantity--;
         _reapplyWholesaleForIndex(index);
         notifyListeners();
       } else {
         removeFromSale(productId);
       }
     }
+  }
+
+  /// Хайрцагтай мөр: задлах ширхэг (вэб `khemjikhNegjUurchlukh`). [pieces] нь агуулах дахь
+  /// нийт ширхэгийн хязгаарт байх ёстой.
+  void setBoxLinePieces(
+    String productId,
+    double pieces, {
+    InventoryModel? inventory,
+  }) {
+    final i = _currentSale.indexWhere((e) => e.product.id == productId);
+    if (i < 0) return;
+    final line = _currentSale[i];
+    if (!line.product.isBoxSaleUnit) return;
+    final neg = line.negPerBox;
+    final maxPieces = (line.product.uldegdel ?? line.product.stock) * neg;
+    final clamped = pieces.clamp(0.01, maxPieces);
+    final newQty = (clamped / neg).ceil().clamp(1, 999999);
+    final oldQty = line.quantity;
+    line.boxPiecesSold = clamped;
+    line.quantity = newQty;
+    if (inventory != null && oldQty != newQty) {
+      if (oldQty > newQty) {
+        inventory.restock(productId, oldQty - newQty);
+      } else {
+        inventory.deductStock(productId, newQty - oldQty);
+      }
+    }
+    _reapplyWholesaleForIndex(i);
+    notifyListeners();
+  }
+
+  void clearBoxLinePiecesOverride(String productId) {
+    final i = _currentSale.indexWhere((e) => e.product.id == productId);
+    if (i < 0) return;
+    _currentSale[i].boxPiecesSold = null;
+    _reapplyWholesaleForIndex(i);
+    notifyListeners();
   }
 
   void updateSaleItemPrice(String productId, double newPrice) {

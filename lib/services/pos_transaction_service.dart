@@ -221,9 +221,9 @@ class PosTransactionService {
     for (var i = 0; i < items.length; i++) {
       final line = items[i];
       final p = line.product;
-      final qty = _finiteDouble(line.quantity);
+      final qty = _finiteDouble(line.apiTooUnits);
       final unitPrice = _finiteDouble(line.unitPrice);
-      final lineTotal = unitPrice * qty;
+      final lineTotal = _finiteDouble(line.total);
       baraanuud.add({
         'baraa': _buildSaleBaraa(
           product: p,
