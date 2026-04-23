@@ -172,11 +172,11 @@ class ToololtService {
       'toogKharuulakhEsekh': toogKharuulakhEsekh,
       'turul': turul,
     };
-    if (baraanuudCodes != null && baraanuudCodes.isNotEmpty) {
-      body['baraanuud'] = baraanuudCodes;
-    }
-    if (angilaluud != null && angilaluud.isNotEmpty) {
-      body['angilaluud'] = angilaluud;
+    // Match web `toollogoEkhluulekhModal.js` onFinish: only these keys per turul.
+    if (turul == 'Бараа сонгох') {
+      body['baraanuud'] = List<String>.from(baraanuudCodes ?? const []);
+    } else if (turul == 'Ангилал') {
+      body['angilaluud'] = List<String>.from(angilaluud ?? const []);
     }
     try {
       final response = await _api.post<dynamic>(

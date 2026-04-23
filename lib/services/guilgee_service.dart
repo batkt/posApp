@@ -140,20 +140,12 @@ Product _productFromBaraaMap(Map<String, dynamic>? baraa, {String? fallbackId}) 
       imageUrl: '',
     );
   }
-  final id = baraa['_id']?.toString() ?? baraa['id']?.toString() ?? fallbackId ?? '';
-  final name = baraa['ner']?.toString() ?? baraa['name']?.toString() ?? 'Бараа';
-  final une = _parseDouble(baraa['niitUne'] ?? baraa['zarakhUne'] ?? baraa['une']);
-  final img = baraa['zurag']?.toString() ?? '';
-  return Product(
-    id: id,
-    name: name,
-    description: '',
-    price: une,
-    category: baraa['angilal']?.toString() ?? '',
-    imageUrl: img,
-    code: baraa['code']?.toString(),
-    barCode: baraa['barCode']?.toString(),
-  );
+  final m = Map<String, dynamic>.from(baraa);
+  final idStr = m['_id']?.toString() ?? m['id']?.toString() ?? '';
+  if (idStr.isEmpty && fallbackId != null && fallbackId.isNotEmpty) {
+    m['_id'] = fallbackId;
+  }
+  return Product.fromJson(m);
 }
 
 double _parseDouble(dynamic v) {
@@ -202,7 +194,9 @@ CompletedSale completedSaleFromGuilgeeDoc(Map<String, dynamic> doc) {
       items.add(SaleItem(
         product: p,
         unitPrice: unit,
+        retailUnitPrice: unit,
         quantity: qty,
+        forceRetailPricing: true,
       ));
     }
   }
@@ -211,6 +205,7 @@ CompletedSale completedSaleFromGuilgeeDoc(Map<String, dynamic> doc) {
   final hungulsunDun = _parseDouble(doc['hungulsunDun']);
   final noatiinDun = _parseDouble(doc['noatiinDun']);
   final nhatiinDun = _parseDouble(doc['nhatiinDun']);
+  final noatguiDun = _parseDouble(doc['noatguiDun']);
   final tulbur = doc['tulbur'] as List<dynamic>?;
   final subtotal =
       (niitUne - noatiinDun - nhatiinDun).clamp(0.0, double.infinity);
@@ -225,6 +220,7 @@ CompletedSale completedSaleFromGuilgeeDoc(Map<String, dynamic> doc) {
     timestamp: ts,
     discount: hungulsunDun,
     nhhat: nhatiinDun,
+    noatguiSum: noatguiDun,
     ajiltan: _ajiltanFromDoc(doc['ajiltan']),
     ebarimtAvsan: doc['ebarimtAvsanEsekh'] == true,
   );

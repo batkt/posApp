@@ -39,7 +39,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
     try {
-      final d = await PosTransactionService().fetchZakhialgiinDugaar();
+      final d = await PosTransactionService().fetchZakhialgiinDugaar(
+        baiguullagiinId: auth.posSession!.baiguullagiinId,
+      );
       if (d != null && d.isNotEmpty && mounted) {
         sales.setGuilgeeniiDugaar(d);
       }
@@ -67,7 +69,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         var orderNo = sales.guilgeeniiDugaar;
         String? guilgeeMongoId;
         if (orderNo == null || orderNo.isEmpty) {
-          final d = await svc.fetchZakhialgiinDugaar();
+          final d = await svc.fetchZakhialgiinDugaar(
+            baiguullagiinId: session.baiguullagiinId,
+          );
           if (d == null || d.isEmpty) {
             throw PosTransactionException('Захиалгын дугаар авах боломжгүй');
           }

@@ -586,16 +586,22 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                     ),
                     SizedBox(
                       width: 76,
-                      child: Text(
-                        '${item.quantity}',
-                        textAlign: TextAlign.center,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: Colors.black,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                          fontFeatures: const [
-                            ui.FontFeature.tabularFigures(),
-                          ],
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          item.product.isBoxSaleUnit
+                              ? '${item.quantity}\nхайрцаг'
+                              : '${item.quantity}',
+                          textAlign: TextAlign.center,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: Colors.black,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            height: item.product.isBoxSaleUnit ? 1.05 : null,
+                            fontFeatures: const [
+                              ui.FontFeature.tabularFigures(),
+                            ],
+                          ),
                         ),
                       ),
                     ),

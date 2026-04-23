@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../payment/pos_payment_core.dart';
 import 'api_service.dart';
 
 /// Organization / branch / employee settings (`tokhirgoo`, web `pages/khyanalt/tokhirgoo`).
@@ -156,6 +157,41 @@ class PosSettingsService {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Org + branch `tokhirgoo` merged — web `salbar?.tokhirgoo` / `baiguullaga.tokhirgoo`.
+  Future<PosWebTaxContext> loadPosWebTaxContext({
+    required String baiguullagiinId,
+    required String salbariinId,
+  }) async {
+    final org = await fetchBaiguullaga(baiguullagiinId);
+    final orgTok = org?['tokhirgoo'];
+    final orgMap = orgTok is Map
+        ? Map<String, dynamic>.from(orgTok)
+        : <String, dynamic>{};
+
+    final salb = await fetchSalbaruud(baiguullagiinId);
+    Map<String, dynamic>? branchTok;
+    for (final s in salb) {
+      if (s['_id']?.toString() == salbariinId) {
+        final t = s['tokhirgoo'];
+        if (t is Map) branchTok = Map<String, dynamic>.from(t);
+        break;
+      }
+    }
+
+    final merged = <String, dynamic>{...orgMap};
+    if (branchTok != null) merged.addAll(branchTok);
+
+    final borl = merged['borluulaltNUAT'] == true;
+    final shine = merged['eBarimtShine'] == true;
+
+    return PosWebTaxContext(
+      borluulaltNUAT: borl,
+      eBarimtShine: shine,
+      isModalOpenTulbur: true,
+      baraaNUATModalOpen: false,
+    );
   }
 
   /// Web `useDans` — query uses `barilgiinId` (legacy spelling).

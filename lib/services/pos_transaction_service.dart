@@ -4,8 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:http/http.dart' as http;
 
+import '../models/cart_model.dart';
+import '../payment/pos_payment_core.dart';
 import '../models/pos_session.dart';
 import '../models/sales_model.dart';
+import '../utils/buunii_une_helper.dart';
 import 'api_service.dart';
 
 class PosTransactionService {
@@ -49,18 +52,37 @@ class PosTransactionService {
   }
 
   Map<String, dynamic> _buildSaleBaraa({
-    required dynamic product,
+    required Product product,
     required String fallbackSalbariinId,
     required double unitPrice,
     required double lineTotal,
+    required double lineQuantity,
+    String? uramshuulaliinId,
+    PosWebLineTax? webLineTax,
   }) {
     final noatBodohEsekh = product.noatBodohEsekh == true;
     final nhatBodohEsekh = product.nhatBodohEsekh == true;
-    final lineNet = noatBodohEsekh ? (lineTotal / 1.1) : lineTotal;
-    final lineVat = noatBodohEsekh ? (lineTotal - lineNet) : 0.0;
+    final lineNet = webLineTax != null
+        ? webLineTax.noatguiDun
+        : (noatBodohEsekh ? (lineTotal / 1.1) : lineTotal);
+    final lineVat = webLineTax != null
+        ? webLineTax.noatiinDun
+        : (noatBodohEsekh ? (lineTotal - lineNet) : 0.0);
+
+    final retailBase = _finiteDouble(product.price);
+    double buuniiUnePayload = 0;
+    if (product.buuniiUneEsekh == true &&
+        product.buuniiUneJagsaalt.isNotEmpty) {
+      final tier = BuuniiUneHelper.resolveUnitPrice(
+        qty: lineQuantity,
+        buuniiUneJagsaalt: product.buuniiUneJagsaalt,
+        retailUnit: retailBase,
+      );
+      if (tier != null) buuniiUnePayload = tier;
+    }
 
     return {
-      if ((product.id ?? '').toString().isNotEmpty) '_id': product.id,
+      if (product.id.trim().isNotEmpty) '_id': product.id,
       'ner': product.name,
       'code': product.code,
       'barCode': product.barCode,
@@ -71,7 +93,8 @@ class PosTransactionService {
       'niitUne': _fixed2Num(unitPrice),
       'zarakhUne': _fixed2Num(unitPrice),
       // posBack ebarimtShine builder uses this directly for totalAmount.
-      'zarsanNiitUne': _fixed2Num(lineTotal),
+      'zarsanNiitUne':
+          _fixed2Num(webLineTax?.zarsanNiitUne ?? lineTotal),
       'hungulsunDun': 0,
       'urtugUne': _fixed2Num(product.urtugUne ?? product.costPrice),
       'uldegdel': _fixed2Num(product.uldegdel ?? product.stock),
@@ -81,14 +104,17 @@ class PosTransactionService {
       'nhatBodohEsekh': nhatBodohEsekh,
       'ognooniiMedeelelBurtgekhEsekh': product.ognooniiMedeelelBurtgekhEsekh,
       'noatiinDun': _fixed2Num(lineVat),
-      'nhatiinDun': 0,
+      'nhatiinDun': _fixed2Num(webLineTax?.nhatiinDun ?? 0),
       'noatguiDun': _fixed2Num(lineNet),
       'shirkheglekhEsekh': product.shirkheglekhEsekh,
       'negKhairtsaganDahiShirhegiinToo':
           _fixed2Num(product.negKhairtsaganDahiShirhegiinToo),
-      // Keep frontend-compatible keys; Product model doesn't expose these lists.
-      'buuniiUneJagsaalt': const [],
-      'uramshuulal': const [],
+      'buuniiUneEsekh': product.buuniiUneEsekh,
+      'buuniiUneJagsaalt': product.buuniiUneJagsaalt,
+      'buuniiUne': _fixed2Num(buuniiUnePayload),
+      'uramshuulal': product.uramshuulal,
+      if (uramshuulaliinId != null && uramshuulaliinId.trim().isNotEmpty)
+        'uramshuulaliinId': uramshuulaliinId.trim(),
       'nemeltMedeelel': const [],
       'orlogdsonEsekh': product.orlogdsonEsekh,
       'zarlagdsanEsekh': product.zarlagdsanEsekh,
@@ -124,10 +150,19 @@ class PosTransactionService {
   }
 
   /// Same as web `POST /zakhialgiinDugaarAvya` when the first line item is added.
-  Future<String?> fetchZakhialgiinDugaar() async {
+  /// [baiguullagiinId] is required so concurrent devices get distinct order numbers.
+  Future<String?> fetchZakhialgiinDugaar({
+    required String baiguullagiinId,
+  }) async {
+    final bid = baiguullagiinId.trim();
+    if (bid.isEmpty) return null;
     final uri = Uri.parse('${ApiConfig.posBaseUrl}/zakhialgiinDugaarAvya');
     final res = await _http
-        .post(uri, headers: _headers(), body: jsonEncode({}))
+        .post(
+          uri,
+          headers: _headers(),
+          body: jsonEncode({'baiguullagiinId': bid}),
+        )
         .timeout(ApiConfig.timeout);
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw PosTransactionException(
@@ -159,25 +194,51 @@ class PosTransactionService {
     /// Web `tulburTuluhModal`: `tulbur[]` with `turul: "zeel"` must include `khariltsagchiinId`
     /// for `guilgeeRoute` receivable (`avlagaGuilgeeKhadgalya`).
     String? zeelKhariltsagchiinId,
+
+    /// When set (cashier POS), НӨАТ/НХАТ per line matches web `posSystem/index.js`.
+    PosWebTaxContext? webTaxContext,
+    double cashierDiscountMnt = 0,
   }) async {
     final items = sales.currentSaleItems;
-    final baraanuud = items.map((line) {
+
+    List<PosWebLineTax>? webSplits;
+    if (webTaxContext != null && items.isNotEmpty) {
+      webSplits = PosPaymentCore.computeLineTaxesForCart(
+        lineGrossAmounts: items.map((l) => l.total).toList(),
+        noatBodohPerLine:
+            items.map((l) => l.product.noatBodohEsekh == true).toList(),
+        nhatBodohPerLine:
+            items.map((l) => l.product.nhatBodohEsekh == true).toList(),
+        discountMnt: cashierDiscountMnt,
+        ctx: webTaxContext,
+      );
+      if (webSplits.length != items.length) {
+        webSplits = null;
+      }
+    }
+
+    final baraanuud = <Map<String, dynamic>>[];
+    for (var i = 0; i < items.length; i++) {
+      final line = items[i];
       final p = line.product;
       final qty = _finiteDouble(line.quantity);
       final unitPrice = _finiteDouble(line.unitPrice);
       final lineTotal = unitPrice * qty;
-      return {
+      baraanuud.add({
         'baraa': _buildSaleBaraa(
           product: p,
           fallbackSalbariinId: session.salbariinId,
           unitPrice: unitPrice,
           lineTotal: lineTotal,
+          lineQuantity: qty,
+          uramshuulaliinId: line.uramshuulaliinId,
+          webLineTax: webSplits != null ? webSplits[i] : null,
         ),
         'niitUne': _fixed2String(lineTotal),
         'too': qty,
         'salbariinId': p.salbariinId ?? session.salbariinId,
-      };
-    }).toList();
+      });
+    }
 
     // Web `tulbur`: `[{ turul, une, khariltsagchiinId? }]`
     // Cash: `une` = төлсөн дүн minus хариулт; card/dans/zeel: full `tulsunDun`.

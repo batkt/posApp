@@ -8,6 +8,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/responsive_helper.dart';
 import '../../utils/mongolian_date_formatter.dart';
+import '../../utils/uramshuulal_helper.dart';
 import 'cashier_payment_screen.dart';
 import '../main/checkout_screen.dart';
 import '../../widgets/barcode_scan_sheet.dart';
@@ -111,12 +112,160 @@ class _POSScreenState extends State<POSScreen> {
     sales.clearSale();
   }
 
+  void _showBulkPricingSheet(BuildContext context, SaleItem item) {
+    final l10n = AppLocalizations.of(context);
+    final p = item.product;
+    if (p.buuniiUneEsekh != true || p.buuniiUneJagsaalt.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.tr('pos_sale_no_bulk'))),
+      );
+      return;
+    }
+    final tiers = List<Map<String, dynamic>>.from(p.buuniiUneJagsaalt)
+      ..sort(
+        (a, b) => ((a['buuniiToo'] as num?) ?? 0).compareTo(
+              (b['buuniiToo'] as num?) ?? 0,
+            ),
+      );
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Text(
+                    l10n.tr('pos_sale_bulk_sheet_title'),
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.auto_awesome_motion_outlined),
+                  title: Text(l10n.tr('pos_sale_auto_bulk')),
+                  onTap: () {
+                    ctx.read<SalesModel>().useAutomaticWholesaleForProduct(
+                          item.product.id,
+                        );
+                    Navigator.pop(ctx);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.storefront_outlined),
+                  title: Text(l10n.tr('pos_sale_retail')),
+                  onTap: () {
+                    ctx.read<SalesModel>().applyRetailUnitForLine(item.product.id);
+                    Navigator.pop(ctx);
+                  },
+                ),
+                const Divider(height: 1),
+                for (final t in tiers)
+                  ListTile(
+                    leading: const Icon(Icons.layers_outlined),
+                    title: Text(
+                      '≥ ${t['buuniiToo']} — ${MntAmountFormatter.format((t['buuniiUne'] as num?)?.toDouble() ?? 0)} ₮',
+                    ),
+                    onTap: () {
+                      final u = (t['buuniiUne'] as num?)?.toDouble() ?? 0;
+                      ctx.read<SalesModel>().applyWholesaleTierUnit(
+                            item.product.id,
+                            u,
+                          );
+                      Navigator.pop(ctx);
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showPromotionSheet(BuildContext context, SaleItem item) {
+    final l10n = AppLocalizations.of(context);
+    final now = DateTime.now();
+    final active = UramshuulalHelper.activePromotions(item.product.uramshuulal, now);
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Text(
+                    l10n.tr('pos_sale_promo_sheet_title'),
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+                if (item.uramshuulaliinId != null)
+                  ListTile(
+                    leading: Icon(Icons.clear_all, color: Theme.of(ctx).colorScheme.error),
+                    title: Text(l10n.tr('pos_sale_clear_promo')),
+                    onTap: () {
+                      ctx.read<SalesModel>().setLineUramshuulal(item.product.id, null);
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                if (active.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    child: Text(
+                      l10n.tr('pos_sale_no_active_promos'),
+                      style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  )
+                else
+                  for (final r in active)
+                    ListTile(
+                      leading: const Icon(Icons.local_offer_outlined),
+                      title: Text(r['ner']?.toString() ?? '—'),
+                      trailing:
+                          item.uramshuulaliinId == UramshuulalHelper.promotionPickId(r)
+                              ? Icon(
+                                  Icons.check_circle,
+                                  color: Theme.of(ctx).colorScheme.primary,
+                                )
+                              : null,
+                      onTap: () {
+                        final id = UramshuulalHelper.promotionPickId(r);
+                        ctx.read<SalesModel>().setLineUramshuulal(
+                              item.product.id,
+                              id,
+                            );
+                        Navigator.pop(ctx);
+                      },
+                    ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _openPaymentScreen(BuildContext context) {
     final auth = context.read<AuthModel>();
     final cashier = auth.currentUser?.isCashier == true;
     final useCashierPayment =
         cashier || widget.cashierMode || auth.staffAccess.allowsMobile;
-    final mobileQpayMode = widget.mobileStaffMode || auth.staffAccess.allowsMobile;
+    final mobileQpayMode =
+        widget.mobileStaffMode || auth.staffAccess.allowsMobile;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -203,8 +352,8 @@ class _POSScreenState extends State<POSScreen> {
     final cashierMobileTwoStep = widget.cashierMode &&
         (widget.mobileStaffMode || ResponsiveHelper.isMobile(context));
     if (cashierMobileTwoStep) {
-      final returnEpoch =
-          context.select<SalesModel, int>((s) => s.cashierReturnToProductsEpoch);
+      final returnEpoch = context
+          .select<SalesModel, int>((s) => s.cashierReturnToProductsEpoch);
       if (returnEpoch != _appliedCashierReturnEpoch && returnEpoch > 0) {
         _appliedCashierReturnEpoch = returnEpoch;
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -540,7 +689,8 @@ class _POSScreenState extends State<POSScreen> {
                               ),
                             ),
                             Text(
-                              MntAmountFormatter.formatTugrikSpaced(sales.total),
+                              MntAmountFormatter.formatTugrikSpaced(
+                                  sales.total),
                               style: tt.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w800,
                                 color: cs.primary,
@@ -555,7 +705,8 @@ class _POSScreenState extends State<POSScreen> {
                   ),
                   const SizedBox(height: 12),
                   FilledButton.icon(
-                    onPressed: sales.isSaleEmpty ? null : _goCashierCheckoutStep,
+                    onPressed:
+                        sales.isSaleEmpty ? null : _goCashierCheckoutStep,
                     icon: const Icon(Icons.arrow_forward_rounded, size: 22),
                     label: const Text(
                       'Дараагийн алхам',
@@ -792,7 +943,10 @@ class _POSScreenState extends State<POSScreen> {
 
     return Consumer2<InventoryModel, SalesModel>(
       builder: (context, inventory, sales, child) {
-        final products = inventory.filteredInventory.where((item) {
+        // Use raw [inventory.inventory], not [filteredInventory]: the latter applies
+        // [InventoryModel]'s global search/category (e.g. from Inventory screen), which
+        // would persist and hide products here while this screen's search field stays empty.
+        final products = inventory.inventory.where((item) {
           final showAll =
               _selectedCategory == 'Бүгд' || _selectedCategory == 'All';
           final p = item.product;
@@ -930,8 +1084,27 @@ class _POSScreenState extends State<POSScreen> {
     return _SaleItemTile(
       sheetMode: sheetStyle,
       item: item,
+      showBulkAction:
+          item.product.buuniiUneEsekh == true &&
+          item.product.buuniiUneJagsaalt.isNotEmpty,
+      showPromoAction: item.product.uramshuulal.isNotEmpty,
+      onBulkTap: () => _showBulkPricingSheet(context, item),
+      onPromoTap: () => _showPromotionSheet(context, item),
       onIncrement: () {
         final inventory = context.read<InventoryModel>();
+        final inv = inventory.getInventoryItem(item.product.id);
+        if (inv == null || inv.currentStock <= 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                item.product.isBoxSaleUnit
+                    ? 'Хайрцагийн үлдэгдэл хүрэлцэхгүй байна'
+                    : 'Үлдэгдэл хүрэлцэхгүй байна',
+              ),
+            ),
+          );
+          return;
+        }
         inventory.deductStock(item.product.id, 1);
         sales.incrementSaleQuantity(item.product.id);
       },
@@ -1085,9 +1258,8 @@ class _POSScreenState extends State<POSScreen> {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: sales.isSaleEmpty
-                  ? null
-                  : () => _openPaymentScreen(context),
+              onPressed:
+                  sales.isSaleEmpty ? null : () => _openPaymentScreen(context),
               icon: Icon(Icons.payment, size: context.responsiveIconSize(20)),
               label: Text(
                 'Төлөх',
@@ -1137,7 +1309,7 @@ class _POSScreenState extends State<POSScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              _sheetSummaryLine(context, 'Дэд дүн', sales.subtotal, false),
+              _sheetSummaryLine(context, 'Дүн', sales.subtotal, false),
               const SizedBox(height: 8),
               _sheetSummaryLine(context, 'НӨАТ (10%)', sales.tax, false),
               const SizedBox(height: 12),
@@ -1291,8 +1463,10 @@ class _POSScreenState extends State<POSScreen> {
 class _ProductCard extends StatelessWidget {
   final InventoryItem item;
   final VoidCallback onTap;
+
   /// Units of this SKU in the active sale (drives border + badge).
   final int inSaleQuantity;
+
   /// Remove one unit from sale + restock (shown as − on card when in sale).
   final VoidCallback? onRemoveOneFromSale;
 
@@ -1332,7 +1506,8 @@ class _ProductCard extends StatelessWidget {
     final stockHealthy = stock > 20;
     final stockColor = stockHealthy ? _stockPlentyGreen : _stockLowRed;
 
-    final borderColor = inCart ? colorScheme.primary : colorScheme.outlineVariant;
+    final borderColor =
+        inCart ? colorScheme.primary : colorScheme.outlineVariant;
     final borderWidth = inCart ? 2.5 : 1.0;
 
     return Material(
@@ -1499,7 +1674,8 @@ class _ProductCard extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               SizedBox(
-                                height: context.responsiveFontSize(11) * 1.2 * 2,
+                                height:
+                                    context.responsiveFontSize(11) * 1.2 * 2,
                                 width: double.infinity,
                                 child: Text(
                                   item.product.name,
@@ -1533,28 +1709,36 @@ class _ProductCard extends StatelessWidget {
                               ),
                             ],
                           ),
-                          Row(
-                            children: [
-                              Text(
-                                'Үлдэгдэл: ',
-                                style: textTheme.labelSmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: context.responsiveFontSize(9),
+                          Tooltip(
+                            message: item.product.boxPiecesPerBoxHint ??
+                                'Үлдэгдэл: $stock ${item.product.posStockQuantitySuffix}',
+                            child: Row(
+                              children: [
+                                Text(
+                                  'Үлдэгдэл: ',
+                                  style: textTheme.labelSmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: context.responsiveFontSize(9),
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                '$stock',
-                                style: textTheme.labelMedium?.copyWith(
-                                  color: stockColor,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: context.responsiveFontSize(10),
-                                  fontFeatures: const [
-                                    FontFeature.tabularFigures(),
-                                  ],
+                                Flexible(
+                                  child: Text(
+                                    '$stock ${item.product.posStockQuantitySuffix}',
+                                    style: textTheme.labelMedium?.copyWith(
+                                      color: stockColor,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: context.responsiveFontSize(10),
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -1575,7 +1759,8 @@ class _ProductCard extends StatelessWidget {
                               vertical: 5,
                             ),
                             child: Text(
-                              MntAmountFormatter.formatTugrikSpaced(item.product.price),
+                              MntAmountFormatter.formatTugrikSpaced(
+                                  item.product.price),
                               style: textTheme.labelLarge?.copyWith(
                                 color: colorScheme.onPrimaryContainer,
                                 fontWeight: FontWeight.w800,
@@ -1608,6 +1793,10 @@ class _SaleItemTile extends StatelessWidget {
     required this.onIncrement,
     required this.onDecrement,
     required this.onRemove,
+    required this.showBulkAction,
+    required this.showPromoAction,
+    required this.onBulkTap,
+    required this.onPromoTap,
     this.sheetMode = false,
   });
 
@@ -1615,6 +1804,10 @@ class _SaleItemTile extends StatelessWidget {
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
   final VoidCallback onRemove;
+  final bool showBulkAction;
+  final bool showPromoAction;
+  final VoidCallback onBulkTap;
+  final VoidCallback onPromoTap;
   final bool sheetMode;
 
   @override
@@ -1659,17 +1852,65 @@ class _SaleItemTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'MNT ${MntAmountFormatter.format(item.product.price)}',
+                        'MNT ${MntAmountFormatter.format(item.unitPrice)}',
                         style: textTheme.bodyMedium?.copyWith(
                           color: colorScheme.primary,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                      if (item.uramshuulaliinId != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.local_offer,
+                              size: 14,
+                              color: colorScheme.tertiary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              AppLocalizations.of(context).tr('pos_sale_promo'),
+                              style: textTheme.labelSmall?.copyWith(
+                                color: colorScheme.tertiary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ],
             ),
+            if (showBulkAction || showPromoAction) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                alignment: WrapAlignment.end,
+                children: [
+                  if (showBulkAction)
+                    ActionChip(
+                      avatar: const Icon(Icons.layers_outlined, size: 18),
+                      label: Text(
+                        AppLocalizations.of(context).tr('pos_sale_bulk'),
+                        style: textTheme.labelMedium,
+                      ),
+                      onPressed: onBulkTap,
+                    ),
+                  if (showPromoAction)
+                    ActionChip(
+                      avatar: const Icon(Icons.card_giftcard_outlined, size: 18),
+                      label: Text(
+                        AppLocalizations.of(context).tr('pos_sale_promo'),
+                        style: textTheme.labelMedium,
+                      ),
+                      onPressed: onPromoTap,
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -1681,13 +1922,28 @@ class _SaleItemTile extends StatelessWidget {
                   iconSize: 22,
                 ),
                 SizedBox(
-                  width: 36,
-                  child: Text(
-                    '${item.quantity}',
-                    textAlign: TextAlign.center,
-                    style: textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                  width: item.product.isBoxSaleUnit ? 52 : 36,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${item.quantity}',
+                        textAlign: TextAlign.center,
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (item.product.isBoxSaleUnit)
+                        Text(
+                          item.product.posStockQuantitySuffix,
+                          textAlign: TextAlign.center,
+                          style: textTheme.labelSmall?.copyWith(
+                            height: 1,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 IconButton(
@@ -1755,6 +2011,73 @@ class _SaleItemTile extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (showBulkAction || showPromoAction) ...[
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 0,
+                        children: [
+                          if (showBulkAction)
+                            InkWell(
+                              onTap: onBulkTap,
+                              borderRadius: BorderRadius.circular(20),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 2,
+                                  horizontal: 4,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.layers_outlined,
+                                      size: 14,
+                                      color: colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      AppLocalizations.of(context).tr('pos_sale_bulk'),
+                                      style: textTheme.labelSmall?.copyWith(
+                                        color: colorScheme.primary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          if (showPromoAction)
+                            InkWell(
+                              onTap: onPromoTap,
+                              borderRadius: BorderRadius.circular(20),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 2,
+                                  horizontal: 4,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.card_giftcard_outlined,
+                                      size: 14,
+                                      color: colorScheme.tertiary,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      AppLocalizations.of(context).tr('pos_sale_promo'),
+                                      style: textTheme.labelSmall?.copyWith(
+                                        color: colorScheme.tertiary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 6),
                     Text(
                       '${MntAmountFormatter.format(item.unitPrice)} × ${item.quantity} ₮',
@@ -1799,16 +2122,33 @@ class _SaleItemTile extends StatelessWidget {
                           ),
                         ),
                         SizedBox(
-                          width: 28,
-                          child: Text(
-                            '${item.quantity}',
-                            textAlign: TextAlign.center,
-                            style: textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
+                          width: item.product.isBoxSaleUnit ? 40 : 28,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${item.quantity}',
+                                textAlign: TextAlign.center,
+                                style: textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
+                              if (item.product.isBoxSaleUnit)
+                                Text(
+                                  item.product.posStockQuantitySuffix,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: textTheme.labelSmall?.copyWith(
+                                    height: 1,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                         IconButton(

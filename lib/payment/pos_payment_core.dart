@@ -1,5 +1,51 @@
 // Shared POS totals — keep in sync with pos/tools/logic/posPaymentCore.js where applicable.
 
+/// Branch/org flags for tax split — mirrors web `pages/khyanalt/posSystem/index.js` (`niitDunNoat`).
+class PosWebTaxContext {
+  const PosWebTaxContext({
+    required this.borluulaltNUAT,
+    required this.eBarimtShine,
+    this.isModalOpenTulbur = true,
+    this.baraaNUATModalOpen = false,
+  });
+
+  /// Web `salbar?.tokhirgoo?.borluulaltNUAT` (org-level in mobile: from `baiguullaga.tokhirgoo`).
+  final bool borluulaltNUAT;
+
+  /// Web `salbar?.tokhirgoo?.eBarimtShine`.
+  final bool eBarimtShine;
+
+  /// Web payment step: `isModalOpenTulbur === true`.
+  final bool isModalOpenTulbur;
+
+  /// Web SKU VAT modal — mobile POS keeps `false` (same as paying on web register).
+  final bool baraaNUATModalOpen;
+
+  /// Until settings load — typical e-barимт POS (per-product НӨАТ flags respected).
+  static const PosWebTaxContext paymentDefault = PosWebTaxContext(
+    borluulaltNUAT: false,
+    eBarimtShine: true,
+    isModalOpenTulbur: true,
+    baraaNUATModalOpen: false,
+  );
+}
+
+/// One cart line after discount allocation — web per-row `noatiinDun` / `nhatiinDun` / `noatguiDun`.
+class PosWebLineTax {
+  const PosWebLineTax({
+    required this.zarsanNiitUne,
+    required this.noatiinDun,
+    required this.nhatiinDun,
+    required this.noatguiDun,
+  });
+
+  /// Line gross used for split (after optional `borluulaltNUAT` /1.1 strip).
+  final double zarsanNiitUne;
+  final double noatiinDun;
+  final double nhatiinDun;
+  final double noatguiDun;
+}
+
 class CashierTotals {
   const CashierTotals({
     required this.cappedDiscount,
@@ -80,6 +126,170 @@ abstract final class PosPaymentCore {
       vat: vat,
       nhhat: nh,
       total: total,
+    );
+  }
+
+  static double _round2(double x) =>
+      double.parse(x.clamp(0.0, double.infinity).toStringAsFixed(2));
+
+  /// Single line — same logic as web `songogdsomEmnuud.map` tax block (simplified: no per-line loyalty).
+  static PosWebLineTax computeLineTaxWeb({
+    required double lineGrossAfterDiscount,
+    required bool noatBodohEsekh,
+    required bool nhatBodohEsekh,
+    required PosWebTaxContext ctx,
+  }) {
+    var z = _round2(lineGrossAfterDiscount);
+    if (z <= 0) {
+      return const PosWebLineTax(
+        zarsanNiitUne: 0,
+        noatiinDun: 0,
+        nhatiinDun: 0,
+        noatguiDun: 0,
+      );
+    }
+
+    if (ctx.borluulaltNUAT &&
+        ctx.isModalOpenTulbur &&
+        !ctx.baraaNUATModalOpen &&
+        noatBodohEsekh) {
+      z = _round2(z / 1.1);
+    }
+
+    var tempNoatBodohEsekh = ctx.borluulaltNUAT &&
+            ctx.isModalOpenTulbur &&
+            !ctx.baraaNUATModalOpen
+        ? false
+        : (ctx.eBarimtShine ? noatBodohEsekh : false);
+
+    double noatiinDun = 0;
+    double nhatiinDun = 0;
+
+    if (nhatBodohEsekh && tempNoatBodohEsekh) {
+      final negBaraaniiNoat = _round2(z / 1.12 / 10);
+      noatiinDun = negBaraaniiNoat;
+      nhatiinDun = _round2(negBaraaniiNoat / 5);
+    } else if (tempNoatBodohEsekh && !nhatBodohEsekh) {
+      noatiinDun = _round2(z / 1.1 / 10);
+    } else if (!tempNoatBodohEsekh && nhatBodohEsekh) {
+      nhatiinDun = _round2(z / 1.02 / 50);
+    }
+
+    final noatguiDun = _round2(z - noatiinDun - nhatiinDun);
+
+    return PosWebLineTax(
+      zarsanNiitUne: z,
+      noatiinDun: noatiinDun,
+      nhatiinDun: nhatiinDun,
+      noatguiDun: noatguiDun > 0 ? noatguiDun : 0,
+    );
+  }
+
+  /// Per-line splits after spreading [discountMnt] proportionally (web cart discount).
+  static List<PosWebLineTax> computeLineTaxesForCart({
+    required List<double> lineGrossAmounts,
+    required List<bool> noatBodohPerLine,
+    required List<bool> nhatBodohPerLine,
+    required double discountMnt,
+    required PosWebTaxContext ctx,
+  }) {
+    assert(lineGrossAmounts.length == noatBodohPerLine.length);
+    assert(lineGrossAmounts.length == nhatBodohPerLine.length);
+
+    final subtotal = lineGrossAmounts.fold<double>(
+      0,
+      (s, e) => s + (e.isFinite ? e : 0),
+    );
+    final cappedDiscount =
+        discountMnt.clamp(0.0, subtotal > 0 ? subtotal : 0).toDouble();
+
+    if (lineGrossAmounts.isEmpty) return [];
+
+    if (subtotal <= 0) {
+      return List<PosWebLineTax>.filled(
+        lineGrossAmounts.length,
+        const PosWebLineTax(
+          zarsanNiitUne: 0,
+          noatiinDun: 0,
+          nhatiinDun: 0,
+          noatguiDun: 0,
+        ),
+      );
+    }
+
+    final out = <PosWebLineTax>[];
+    var allocatedDiscount = 0.0;
+    for (var i = 0; i < lineGrossAmounts.length; i++) {
+      final gross = lineGrossAmounts[i].clamp(0.0, double.infinity);
+      final isLast = i == lineGrossAmounts.length - 1;
+      final share = isLast
+          ? _round2(cappedDiscount - allocatedDiscount)
+          : _round2(cappedDiscount * gross / subtotal);
+      allocatedDiscount = _round2(allocatedDiscount + share);
+      final adj = _round2((gross - share).clamp(0.0, double.infinity));
+
+      out.add(
+        computeLineTaxWeb(
+          lineGrossAfterDiscount: adj,
+          noatBodohEsekh: noatBodohPerLine[i],
+          nhatBodohEsekh: nhatBodohPerLine[i],
+          ctx: ctx,
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Cart-level totals matching web `niitDunNoat` aggregation (invoice discount spread by line share).
+  static CashierTotals calculateCashierTotalsWeb({
+    required List<double> lineGrossAmounts,
+    required List<bool> noatBodohPerLine,
+    required List<bool> nhatBodohPerLine,
+    required double discountMnt,
+    required PosWebTaxContext ctx,
+  }) {
+    final splits = computeLineTaxesForCart(
+      lineGrossAmounts: lineGrossAmounts,
+      noatBodohPerLine: noatBodohPerLine,
+      nhatBodohPerLine: nhatBodohPerLine,
+      discountMnt: discountMnt,
+      ctx: ctx,
+    );
+
+    final subtotal = lineGrossAmounts.fold<double>(
+      0,
+      (s, e) => s + (e.isFinite ? e : 0),
+    );
+    final cappedDiscount =
+        discountMnt.clamp(0.0, subtotal > 0 ? subtotal : 0).toDouble();
+
+    if (lineGrossAmounts.isEmpty || subtotal <= 0) {
+      return CashierTotals(
+        cappedDiscount: cappedDiscount,
+        net: 0,
+        vat: 0,
+        nhhat: 0,
+        total: 0,
+      );
+    }
+
+    double sumNoat = 0;
+    double sumNhat = 0;
+    double sumNoatgui = 0;
+    double sumZarsan = 0;
+    for (final split in splits) {
+      sumNoat = _round2(sumNoat + split.noatiinDun);
+      sumNhat = _round2(sumNhat + split.nhatiinDun);
+      sumNoatgui = _round2(sumNoatgui + split.noatguiDun);
+      sumZarsan = _round2(sumZarsan + split.zarsanNiitUne);
+    }
+
+    return CashierTotals(
+      cappedDiscount: cappedDiscount,
+      net: sumNoatgui,
+      vat: sumNoat,
+      nhhat: sumNhat,
+      total: sumZarsan,
     );
   }
 

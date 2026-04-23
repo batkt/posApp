@@ -251,12 +251,23 @@ class BaraaDetailScreen extends StatelessWidget {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Үлдэгдэл: ${item.currentStock} ${product.khemjikhNegj ?? product.unitLabel}',
+                                'Үлдэгдэл: ${item.currentStock} ${product.posStockQuantitySuffix}',
                                 style: textTheme.bodySmall?.copyWith(
                                   color: colorScheme.onSurfaceVariant,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
+                              if (product.boxPiecesPerBoxHint != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  product.boxPiecesPerBoxHint!,
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -298,6 +309,20 @@ class BaraaDetailScreen extends StatelessWidget {
                         label: 'Хэмжих нэгж',
                         value: product.khemjikhNegj ?? product.unitLabel,
                       ),
+                      if (product.isBoxSaleUnit) ...[
+                        _DetailRow(
+                          icon: Icons.inventory_outlined,
+                          label: 'Хайрцаглах',
+                          value: 'Тийм',
+                        ),
+                        if (product.negKhairtsaganDahiShirhegiinToo != null &&
+                            product.negKhairtsaganDahiShirhegiinToo! > 0)
+                          _DetailRow(
+                            icon: Icons.apps_outlined,
+                            label: 'Нэг хайрцаг дахь ширхэг',
+                            value: '${product.negKhairtsaganDahiShirhegiinToo} ш',
+                          ),
+                      ],
                       _DetailRow(
                         icon: Icons.inventory_2_outlined,
                         label: 'Хамгийн бага нөөц',

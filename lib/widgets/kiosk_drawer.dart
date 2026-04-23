@@ -6,7 +6,6 @@ import '../models/auth_model.dart';
 import '../models/locale_model.dart';
 import '../screens/main/ebarimt_menu_screen.dart';
 import '../screens/main/dashboard_screen.dart';
-import '../screens/main/baraa_catalog_screen.dart';
 import '../screens/main/customers_screen.dart';
 import '../screens/main/inventory_screen.dart';
 import '../screens/main/out_of_stock_baraa_screen.dart';
@@ -46,13 +45,6 @@ class KioskDrawer extends StatelessWidget {
           labelKey: 'dashboard',
           onTap: (ctx) =>
               kioskDrawerLeavePosForPage(ctx, const DashboardScreen()),
-        ),
-      if (access.allowsBaraaMatrial)
-        _KioskMenuAction(
-          icon: Icons.list_alt_rounded,
-          labelKey: 'menu_baraa_list',
-          onTap: (ctx) =>
-              kioskDrawerLeavePosForPage(ctx, const BaraaCatalogScreen()),
         ),
       if (access.allowsToollogo)
         _KioskMenuAction(
@@ -105,7 +97,7 @@ class KioskDrawer extends StatelessWidget {
           onTap: (ctx) =>
               kioskDrawerLeavePosForPage(ctx, const SalesHistoryScreen()),
         ),
-      if (access.allowsBaraaOrlogokh)
+      if (access.allowsBaraaMatrial || access.allowsBaraaOrlogokh)
         _KioskMenuAction(
           icon: Icons.inventory_2_outlined,
           labelKey: 'inventory',

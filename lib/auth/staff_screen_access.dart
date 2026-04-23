@@ -33,10 +33,10 @@ class StaffScreenAccess {
   /// Any granted path under `/khyanalt/aguulakh/` (role hints, future screens).
   final bool allowsAnyAguulakhRoute;
 
-  /// `/khyanalt/aguulakh/baraaMatrial` — baraa list + out-of-stock in the app.
+  /// `/khyanalt/aguulakh/baraaMatrial` — out-of-stock list; main product list is [InventoryScreen] (merged with Orlogokh).
   final bool allowsBaraaMatrial;
 
-  /// `/khyanalt/aguulakh/baraaOrlogokh` — inventory / “бараа материал”.
+  /// `/khyanalt/aguulakh/baraaOrlogokh` — inventory / «Бараа материал».
   final bool allowsBaraaOrlogokh;
 
   /// `/khyanalt/aguulakh/toollogo` — тооллого.

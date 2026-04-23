@@ -2,17 +2,30 @@ import 'package:flutter/foundation.dart';
 
 import '../data/payment_display_config.dart';
 import '../payment/pos_payment_core.dart';
+import '../utils/buunii_une_helper.dart';
 import 'cart_model.dart';
 
 class SaleItem {
   final Product product;
   int quantity;
-  final double unitPrice;
+  double unitPrice;
+
+  /// Жижиглэнгийн нэгж үнэ (эхний оруулалт / гараар өөрчилсөн суурь).
+  final double retailUnitPrice;
+
+  /// `POST /guilgeeniiTuukhKhadgalya` → `baraa.uramshuulaliinId` (сонгосон урамшуулал).
+  String? uramshuulaliinId;
+
+  /// Үнэ гараар тохируулсан эсвэл бөөний тiers-ээс гадуурх нэгж үнэ — тоо өөрчлөхөд автомат бөөнөөр дахин тооцохгүй.
+  bool forceRetailPricing;
 
   SaleItem({
     required this.product,
     required this.unitPrice,
+    required this.retailUnitPrice,
     this.quantity = 1,
+    this.uramshuulaliinId,
+    this.forceRetailPricing = false,
   });
 
   double get total => unitPrice * quantity;
@@ -21,11 +34,17 @@ class SaleItem {
     Product? product,
     int? quantity,
     double? unitPrice,
+    double? retailUnitPrice,
+    String? uramshuulaliinId,
+    bool? forceRetailPricing,
   }) {
     return SaleItem(
       product: product ?? this.product,
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
+      retailUnitPrice: retailUnitPrice ?? this.retailUnitPrice,
+      uramshuulaliinId: uramshuulaliinId ?? this.uramshuulaliinId,
+      forceRetailPricing: forceRetailPricing ?? this.forceRetailPricing,
     );
   }
 }
@@ -41,8 +60,11 @@ class CompletedSale {
   final String? notes;
   /// Хөнгөлөлт (MNT), applied before VAT.
   final double discount;
-  /// НХАТ (MNT), added after VAT on net taxable amount.
+  /// НХАТ (MNT). With web-parity cashier totals this is summed from line splits, not typed in.
   final double nhhat;
+
+  /// НӨАТ-гүй дүн (суурь), web `noatguiDun` aggregate — thermal slip breakdown.
+  final double noatguiSum;
 
   /// Staff snapshot from `guilgeeniiTuukh` / local completion (if available).
   final Map<String, dynamic>? ajiltan;
@@ -61,6 +83,7 @@ class CompletedSale {
     this.notes,
     this.discount = 0,
     this.nhhat = 0,
+    this.noatguiSum = 0,
     this.ajiltan,
     this.ebarimtAvsan = false,
   });
@@ -150,16 +173,71 @@ class SalesModel extends ChangeNotifier {
   int get totalRecordedSaleCount => _salesHistory.length;
 
   // Current Sale methods
+  void _reapplyWholesaleForIndex(int index) {
+    if (index < 0 || index >= _currentSale.length) return;
+    final line = _currentSale[index];
+    if (line.forceRetailPricing) return;
+    if (line.product.buuniiUneEsekh != true ||
+        line.product.buuniiUneJagsaalt.isEmpty) {
+      line.unitPrice = line.retailUnitPrice;
+      return;
+    }
+    final tier = BuuniiUneHelper.resolveUnitPrice(
+      qty: line.quantity.toDouble(),
+      buuniiUneJagsaalt: line.product.buuniiUneJagsaalt,
+      retailUnit: line.retailUnitPrice,
+    );
+    line.unitPrice = tier ?? line.retailUnitPrice;
+  }
+
   void addToSale(Product product, {double? customPrice}) {
-    final existingIndex = _currentSale.indexWhere((item) => item.product.id == product.id);
+    final retail = customPrice ?? product.price;
+    final existingIndex =
+        _currentSale.indexWhere((item) => item.product.id == product.id);
     if (existingIndex >= 0) {
       _currentSale[existingIndex].quantity++;
+      _reapplyWholesaleForIndex(existingIndex);
     } else {
       _currentSale.add(SaleItem(
         product: product,
-        unitPrice: customPrice ?? product.price,
+        unitPrice: retail,
+        retailUnitPrice: retail,
       ));
+      _reapplyWholesaleForIndex(_currentSale.length - 1);
     }
+    notifyListeners();
+  }
+
+  /// Бөөний түвшингийн нэгж үнэ (гарын авлага) — дараагийн тоо өөрчлөлтөд tier дахин тооцохгүй.
+  void applyWholesaleTierUnit(String productId, double tierUnitPrice) {
+    final i = _currentSale.indexWhere((e) => e.product.id == productId);
+    if (i < 0) return;
+    _currentSale[i].unitPrice = tierUnitPrice;
+    _currentSale[i].forceRetailPricing = true;
+    notifyListeners();
+  }
+
+  void applyRetailUnitForLine(String productId) {
+    final i = _currentSale.indexWhere((e) => e.product.id == productId);
+    if (i < 0) return;
+    _currentSale[i].unitPrice = _currentSale[i].retailUnitPrice;
+    _currentSale[i].forceRetailPricing = true;
+    notifyListeners();
+  }
+
+  /// Тоо ширхэгээр бөөний tier автоматаар (вэб `buuniiUneAvakh`).
+  void useAutomaticWholesaleForProduct(String productId) {
+    final i = _currentSale.indexWhere((e) => e.product.id == productId);
+    if (i < 0) return;
+    _currentSale[i].forceRetailPricing = false;
+    _reapplyWholesaleForIndex(i);
+    notifyListeners();
+  }
+
+  void setLineUramshuulal(String productId, String? uramshuulaliinId) {
+    final i = _currentSale.indexWhere((e) => e.product.id == productId);
+    if (i < 0) return;
+    _currentSale[i].uramshuulaliinId = uramshuulaliinId;
     notifyListeners();
   }
 
@@ -176,6 +254,7 @@ class SalesModel extends ChangeNotifier {
     final index = _currentSale.indexWhere((item) => item.product.id == productId);
     if (index >= 0) {
       _currentSale[index].quantity = quantity;
+      _reapplyWholesaleForIndex(index);
       notifyListeners();
     }
   }
@@ -184,6 +263,7 @@ class SalesModel extends ChangeNotifier {
     final index = _currentSale.indexWhere((item) => item.product.id == productId);
     if (index >= 0) {
       _currentSale[index].quantity++;
+      _reapplyWholesaleForIndex(index);
       notifyListeners();
     }
   }
@@ -193,6 +273,7 @@ class SalesModel extends ChangeNotifier {
     if (index >= 0) {
       if (_currentSale[index].quantity > 1) {
         _currentSale[index].quantity--;
+        _reapplyWholesaleForIndex(index);
         notifyListeners();
       } else {
         removeFromSale(productId);
@@ -203,7 +284,8 @@ class SalesModel extends ChangeNotifier {
   void updateSaleItemPrice(String productId, double newPrice) {
     final index = _currentSale.indexWhere((item) => item.product.id == productId);
     if (index >= 0) {
-      _currentSale[index] = _currentSale[index].copyWith(unitPrice: newPrice);
+      _currentSale[index].unitPrice = newPrice;
+      _currentSale[index].forceRetailPricing = true;
       notifyListeners();
     }
   }
@@ -220,6 +302,7 @@ class SalesModel extends ChangeNotifier {
     String? notes,
     String? orderId,
   }) {
+    final std = PosPaymentCore.calculateStandardSaleTotals(subtotal);
     final sale = CompletedSale(
       id: orderId ?? PaymentDisplayConfig.generateLegacySaleId(),
       items: List.from(_currentSale),
@@ -229,6 +312,7 @@ class SalesModel extends ChangeNotifier {
       paymentMethod: paymentMethod,
       timestamp: DateTime.now(),
       notes: notes,
+      noatguiSum: std.net,
     );
     _salesHistory.add(sale);
     clearSale();
@@ -236,18 +320,23 @@ class SalesModel extends ChangeNotifier {
   }
 
   /// Cashier checkout: discount and НХАТ adjust totals; VAT (10%) on net subtotal.
+  ///
+  /// When [totalsSnapshot] is set (web-parity НӨАТ/НХАТ split), it is used instead of
+  /// flat [calculateCashierTotals].
   CompletedSale completeCashierSale({
     required String paymentMethod,
     double discountMnt = 0,
     double nhhatMnt = 0,
+    CashierTotals? totalsSnapshot,
     String? notes,
     String? orderId,
   }) {
-    final t = PosPaymentCore.calculateCashierTotals(
-      subtotal: subtotal,
-      discountMnt: discountMnt,
-      nhhatMnt: nhhatMnt,
-    );
+    final t = totalsSnapshot ??
+        PosPaymentCore.calculateCashierTotals(
+          subtotal: subtotal,
+          discountMnt: discountMnt,
+          nhhatMnt: nhhatMnt,
+        );
     final now = DateTime.now();
     final resolvedOrderId = orderId ?? PaymentDisplayConfig.generateOrderPreview();
 
@@ -262,6 +351,7 @@ class SalesModel extends ChangeNotifier {
       notes: notes,
       discount: t.cappedDiscount,
       nhhat: t.nhhat,
+      noatguiSum: t.net,
     );
     _salesHistory.add(sale);
     clearSale();

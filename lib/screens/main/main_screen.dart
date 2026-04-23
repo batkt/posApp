@@ -6,7 +6,6 @@ import '../../theme/app_theme.dart';
 import '../../widgets/drawer_branch_switch.dart';
 import 'dashboard_screen.dart';
 import 'inventory_screen.dart';
-import 'baraa_catalog_screen.dart';
 import 'toololt_screen.dart';
 import 'customers_screen.dart';
 import 'sales_history_screen.dart';
@@ -22,8 +21,9 @@ class MainScreen extends StatefulWidget {
   const MainScreen({super.key, this.initialSection});
 
   /// Optional drawer section id: `dashboard`, `staff_permissions`, `pos_settings`,
-  /// `baraa_catalog`, `inventory`, `out_of_stock`, `toololt`, `ebarimt`, `customers`,
+  /// `inventory`, `out_of_stock`, `toololt`, `ebarimt`, `customers`,
   /// `income_overview`, `purchase_list`, `tailan`, `history`.
+  /// Legacy `baraa_catalog` is treated as `inventory`.
   final String? initialSection;
 
   @override
@@ -108,16 +108,6 @@ class _MainScreenState extends State<MainScreen> {
     }
     if (access.allowsBaraaMatrial) {
       push(
-        const BaraaCatalogScreen(showAppBar: false),
-        _MenuItem(
-          icon: Icons.list_alt_rounded,
-          selectedIcon: Icons.list_alt_rounded,
-          label: 'menu_baraa_list',
-          section: 'baraa_catalog',
-          index: 0,
-        ),
-      );
-      push(
         const OutOfStockBaraaScreen(showAppBar: false),
         _MenuItem(
           icon: Icons.remove_shopping_cart_outlined,
@@ -128,7 +118,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
       );
     }
-    if (access.allowsBaraaOrlogokh) {
+    if (access.allowsBaraaMatrial || access.allowsBaraaOrlogokh) {
       push(
         const InventoryScreen(showAppBar: false),
         _MenuItem(
@@ -238,7 +228,10 @@ class _MainScreenState extends State<MainScreen> {
     }
     final auth = context.read<AuthModel>();
     final entries = _entriesFor(auth);
-    final i = entries.indexWhere((e) => e.menu.section == widget.initialSection);
+    final wantedSection = widget.initialSection == 'baraa_catalog'
+        ? 'inventory'
+        : widget.initialSection;
+    final i = entries.indexWhere((e) => e.menu.section == wantedSection);
     if (i >= 0) {
       setState(() => _currentIndex = i);
     }

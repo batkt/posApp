@@ -45,6 +45,13 @@ class Product {
   /// Буцаалт/зарлагын тоо — зөвхөн API-аас ирвэл (жишээ нь tailan/toollogo мөр).
   final int? butsaaltToo;
 
+  /// Бөөний үнэ (тоо ширхэгийн түвшин).
+  final bool? buuniiUneEsekh;
+  final List<Map<String, dynamic>> buuniiUneJagsaalt;
+
+  /// Урамшууллын цонхнууд (вэб `aguulakh.uramshuulal`).
+  final List<Map<String, dynamic>> uramshuulal;
+
   const Product({
     required this.id,
     required this.name,
@@ -84,6 +91,9 @@ class Product {
     this.updatedAt,
     this.ajiltan,
     this.butsaaltToo,
+    this.buuniiUneEsekh,
+    this.buuniiUneJagsaalt = const [],
+    this.uramshuulal = const [],
   });
 
   static int _asInt(dynamic v, {int fallback = 0}) {
@@ -103,6 +113,31 @@ class Product {
     if (v is String) {
       final n = num.tryParse(v);
       if (n != null) return n.toInt();
+    }
+    return null;
+  }
+
+  /// Excel / legacy rows may send `"Тийм"` / `"1"` (same as posBack `excel.js`).
+  static bool? _asNullableBool(dynamic v) {
+    if (v == null) return null;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v.toString().trim().toLowerCase();
+    if (s.isEmpty) return null;
+    if (s == 'true' ||
+        s == '1' ||
+        s == 'yes' ||
+        s == 'тийм' ||
+        s == 'y') {
+      return true;
+    }
+    if (s == 'false' ||
+        s == '0' ||
+        s == 'no' ||
+        s == 'үгүй' ||
+        s == 'ugui' ||
+        s == 'n') {
+      return false;
     }
     return null;
   }
@@ -150,9 +185,9 @@ class Product {
       baiguullagiinId: json['baiguullagiinId'],
       salbariinId: json['salbariinId'],
       angilal: json['angilal'],
-      khemjikhNegj: json['khemjikhNegj'],
+      khemjikhNegj: _asOptionalString(json['khemjikhNegj']),
       urtugUne: _asDouble(json['urtugUne']),
-      shirkheglekhEsekh: json['shirkheglekhEsekh'],
+      shirkheglekhEsekh: _asNullableBool(json['shirkheglekhEsekh']),
       noatBodohEsekh: json['noatBodohEsekh'],
       nhatBodohEsekh: json['nhatBodohEsekh'],
       ognooniiMedeelelBurtgekhEsekh: json['ognooniiMedeelelBurtgekhEsekh'],
@@ -176,7 +211,22 @@ class Product {
         json['butsaalt'],
         json['zarlagiinTooKhemjee'],
       ]),
+      buuniiUneEsekh:
+          json['buuniiUneEsekh'] is bool ? json['buuniiUneEsekh'] as bool : null,
+      buuniiUneJagsaalt: _deepMapList(json['buuniiUneJagsaalt']),
+      uramshuulal: _deepMapList(json['uramshuulal']),
     );
+  }
+
+  static List<Map<String, dynamic>> _deepMapList(dynamic v) {
+    if (v is! List) return const [];
+    final out = <Map<String, dynamic>>[];
+    for (final e in v) {
+      if (e is Map) {
+        out.add(Map<String, dynamic>.from(e));
+      }
+    }
+    return out;
   }
 
   static int? _firstInt(List<dynamic> candidates) {
@@ -234,6 +284,25 @@ class Product {
     }
   }
 
+  /// Web `aguulakh.shirkheglekhEsekh`: `uldegdel` and sale `too` are **boxes**, not pieces.
+  bool get isBoxSaleUnit => shirkheglekhEsekh == true;
+
+  /// Suffix after stock / quantity on POS (web `posSystem`: "хайрцаг" vs "ш").
+  String get posStockQuantitySuffix {
+    if (isBoxSaleUnit) return 'хайрцаг';
+    final k = khemjikhNegj?.trim();
+    if (k != null && k.isNotEmpty) return k;
+    return unitLabel;
+  }
+
+  /// Web tooltip "Нэг хайрцаг дахь ширхэг: Nш".
+  String? get boxPiecesPerBoxHint {
+    if (!isBoxSaleUnit) return null;
+    final n = negKhairtsaganDahiShirhegiinToo;
+    if (n == null || n < 1) return null;
+    return '1 хайрцагт $n ш';
+  }
+
   double? get profit => costPrice != null ? price - costPrice! : null;
   double? get profitMargin => costPrice != null && costPrice! > 0
       ? ((price - costPrice!) / costPrice!) * 100
@@ -266,6 +335,9 @@ class Product {
       'orlogdsonEsekh': orlogdsonEsekh,
       'zarlagdsanEsekh': zarlagdsanEsekh,
       'ajiltan': ajiltan,
+      'buuniiUneEsekh': buuniiUneEsekh,
+      'buuniiUneJagsaalt': buuniiUneJagsaalt,
+      'uramshuulal': uramshuulal,
     };
     map.removeWhere((_, v) => v == null);
     return map;

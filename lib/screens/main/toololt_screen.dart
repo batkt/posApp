@@ -1200,7 +1200,9 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
 
   Future<void> _pickCategories() async {
     final categoryService = CategoryService();
-    final picked = <String>{..._angilal};
+    final picked = <String>{
+      ..._angilal.map((e) => e.trim()).where((e) => e.isNotEmpty),
+    };
     final res = await categoryService.getCategories(
       baiguullagiinId: widget.pos.baiguullagiinId,
       limit: 200,
@@ -1217,14 +1219,19 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) {
+          final angilaluud = res.categories
+              .map((cat) => cat.angilal.trim())
+              .where((a) => a.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
           return AlertDialog(
             title: Text(widget.l10n.tr('toololt_pick_categories')),
             content: SizedBox(
               width: double.maxFinite,
               height: 360,
               child: ListView(
-                children: res.categories.map((cat) {
-                  final a = cat.angilal;
+                children: angilaluud.map((a) {
                   final sel = picked.contains(a);
                   return CheckboxListTile(
                     value: sel,
@@ -1252,7 +1259,9 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
                   setState(() {
                     _angilal
                       ..clear()
-                      ..addAll(picked);
+                      ..addAll(
+                        picked.map((e) => e.trim()).where((e) => e.isNotEmpty),
+                      );
                   });
                   Navigator.pop(ctx);
                 },
@@ -1280,7 +1289,11 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
       );
       return;
     }
-    if (_turul == 'Ангилал' && _angilal.isEmpty) {
+    final songogsonAngilal = _angilal
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    if (_turul == 'Ангилал' && songogsonAngilal.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.tr('toololt_pick_categories'))),
       );
@@ -1297,7 +1310,7 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
       uldegdelteiBaraaToolohEsekh: _zeroStock,
       toogKharuulakhEsekh: _prefill,
       baraanuudCodes: _turul == 'Бараа сонгох' ? _codes.toList() : null,
-      angilaluud: _turul == 'Ангилал' ? _angilal.toList() : null,
+      angilaluud: _turul == 'Ангилал' ? songogsonAngilal : null,
     );
     if (!mounted) return;
     setState(() => _submitting = false);

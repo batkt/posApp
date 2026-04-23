@@ -11,6 +11,7 @@ import '../../models/customer_model.dart';
 import '../../models/sales_model.dart';
 import '../../payment/pos_payment_core.dart';
 import '../../services/khariltsagch_service.dart';
+import '../../services/pos_settings_service.dart';
 import '../../services/pos_transaction_service.dart';
 import '../../services/qpay_service.dart';
 import '../../services/unipos_service.dart';
@@ -50,8 +51,10 @@ String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   _PayKind _kind = _PayKind.cash;
   double _discountMnt = 0;
-  double _nhhatMnt = 0;
   bool _busy = false;
+
+  /// Web `posSystem/index.js` tax flags (`borluulaltNUAT`, `eBarimtShine`, …).
+  PosWebTaxContext _taxCtx = PosWebTaxContext.paymentDefault;
 
   /// Blocks double-submit before the next frame applies [_busy].
   bool _submitInFlight = false;
@@ -66,7 +69,36 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     _discountInput = TextEditingController();
     _discountFocus = FocusNode();
     _orderPreview = PaymentDisplayConfig.generateOrderPreview();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _primeOrderNumber());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _primeOrderNumber();
+      _loadPosWebTaxContext();
+    });
+  }
+
+  Future<void> _loadPosWebTaxContext() async {
+    final auth = context.read<AuthModel>();
+    final s = auth.posSession;
+    if (s == null) return;
+    try {
+      final ctx = await posSettingsService.loadPosWebTaxContext(
+        baiguullagiinId: s.baiguullagiinId,
+        salbariinId: s.salbariinId,
+      );
+      if (mounted) setState(() => _taxCtx = ctx);
+    } catch (_) {}
+  }
+
+  CashierTotals _cashierTotals(SalesModel sales, double discountMnt) {
+    final items = sales.currentSaleItems;
+    return PosPaymentCore.calculateCashierTotalsWeb(
+      lineGrossAmounts: items.map((e) => e.total).toList(),
+      noatBodohPerLine:
+          items.map((e) => e.product.noatBodohEsekh == true).toList(),
+      nhatBodohPerLine:
+          items.map((e) => e.product.nhatBodohEsekh == true).toList(),
+      discountMnt: discountMnt,
+      ctx: _taxCtx,
+    );
   }
 
   @override
@@ -108,7 +140,9 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       return;
     }
     try {
-      final d = await PosTransactionService().fetchZakhialgiinDugaar();
+      final d = await PosTransactionService().fetchZakhialgiinDugaar(
+        baiguullagiinId: auth.posSession!.baiguullagiinId,
+      );
       if (d != null && d.isNotEmpty && mounted) {
         sales.setGuilgeeniiDugaar(d);
         setState(() {});
@@ -164,7 +198,9 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     var orderNo = sales.guilgeeniiDugaar;
     String? guilgeeMongoId;
     if (orderNo == null || orderNo.isEmpty) {
-      final d = await svc.fetchZakhialgiinDugaar();
+      final d = await svc.fetchZakhialgiinDugaar(
+        baiguullagiinId: session.baiguullagiinId,
+      );
       if (d == null || d.isEmpty) {
         throw PosTransactionException('Захиалгын дугаар авах боломжгүй');
       }
@@ -186,6 +222,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       nhatiinDun: totals.nhhat,
       guilgeeniiDugaar: orderNo,
       zeelKhariltsagchiinId: zeelKhariltsagchiinId,
+      webTaxContext: _taxCtx,
+      cashierDiscountMnt: totals.cappedDiscount,
     );
 
     guilgeeMongoId =
@@ -194,8 +232,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     if (!mounted) return;
     final completed = sales.completeCashierSale(
       paymentMethod: _methodId(_kind),
-      discountMnt: _discountMnt,
-      nhhatMnt: _nhhatMnt,
+      discountMnt: totals.cappedDiscount,
+      totalsSnapshot: totals,
       orderId: orderNo,
     );
     _goReceipt(
@@ -227,7 +265,9 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     try {
       var orderNo = sales.guilgeeniiDugaar;
       if (orderNo == null || orderNo.isEmpty) {
-        final d = await svc.fetchZakhialgiinDugaar();
+        final d = await svc.fetchZakhialgiinDugaar(
+          baiguullagiinId: session.baiguullagiinId,
+        );
         if (d == null || d.isEmpty) {
           throw PosTransactionException('Захиалгын дугаар авах боломжгүй');
         }
@@ -334,10 +374,14 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         );
       } else {
         if (!mounted) return;
+        final tw = _cashierTotals(
+          sales,
+          _discountMnt.clamp(0.0, sales.subtotal),
+        );
         final completed = sales.completeCashierSale(
           paymentMethod: _methodId(_kind),
-          discountMnt: _discountMnt,
-          nhhatMnt: _nhhatMnt,
+          discountMnt: tw.cappedDiscount,
+          totalsSnapshot: tw,
           orderId: _orderPreview,
         );
         _goReceipt(completed);
@@ -372,19 +416,16 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     CompletedSale completed, {
     String? guilgeeniiMongoId,
   }) {
-    final t = PosPaymentCore.calculateCashierTotals(
-      subtotal: completed.subtotal,
-      discountMnt: completed.discount,
-      nhhatMnt: completed.nhhat,
-    );
-    final slip = (completed.discount > 0.009 || completed.nhhat > 0.009)
+    final slip = (completed.discount > 0.009 ||
+            completed.nhhat > 0.009 ||
+            completed.tax > 0.009)
         ? CashierSlipTotals(
             grossSubtotal: completed.subtotal,
-            discount: t.cappedDiscount,
-            noatgui: t.net,
-            noat: t.vat,
-            nhat: t.nhhat,
-            payable: t.total,
+            discount: completed.discount,
+            noatgui: completed.noatguiSum,
+            noat: completed.tax,
+            nhat: completed.nhhat,
+            payable: completed.total,
           )
         : null;
     Navigator.pushReplacement(
@@ -530,11 +571,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
               });
             });
           }
-          final totals = PosPaymentCore.calculateCashierTotals(
-            subtotal: sales.subtotal,
-            discountMnt: effectiveDiscount,
-            nhhatMnt: _nhhatMnt,
-          );
+          final totals = _cashierTotals(sales, effectiveDiscount);
           final due = totals.total;
 
           return LayoutBuilder(
@@ -680,7 +717,7 @@ class _SummaryPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          _row(context, 'Дэд дүн', _fmtMnt(subtotal)),
+          _row(context, 'Дүн', _fmtMnt(subtotal)),
           Padding(
             padding: const EdgeInsets.only(top: 6, bottom: 4),
             child: Column(

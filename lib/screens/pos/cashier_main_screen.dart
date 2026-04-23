@@ -5,6 +5,7 @@ import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../widgets/kiosk_drawer.dart';
 import '../../widgets/kiosk_terminal_pay_signal_listener.dart';
+import '../main/khaalt_screen.dart';
 import 'pos_screen.dart';
 
 /// Kiosk POS (`/khyanalt/kiosk`): same [POSScreen] as full app, plus drawer; electronic pay is **карт** (UniPOS CARD, not QPay).
@@ -66,6 +67,14 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
             ),
           ],
         ),
+        actions: [
+          if (auth.canSubmitPosSales)
+            IconButton(
+              tooltip: l10n.tr('menu_khaalt'),
+              icon: const Icon(Icons.payments_outlined),
+              onPressed: () => showKhaaltModal(context),
+            ),
+        ],
       ),
       body: const SafeArea(
         child: KioskTerminalPaySignalListener(

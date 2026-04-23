@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../widgets/kiosk_drawer.dart';
+import '../main/khaalt_screen.dart';
 import '../pos/pos_screen.dart';
 
 /// Staff with only `/khyanalt/mobile` in `tsonkhniiTokhirgoo`: same sale flow as kiosk
@@ -66,6 +67,14 @@ class _MobilePosMainScreenState extends State<MobilePosMainScreen> {
             ),
           ],
         ),
+        actions: [
+          if (auth.canSubmitPosSales)
+            IconButton(
+              tooltip: l10n.tr('menu_khaalt'),
+              icon: const Icon(Icons.payments_outlined),
+              onPressed: () => showKhaaltModal(context),
+            ),
+        ],
       ),
       body: const SafeArea(
         child: POSScreen(
