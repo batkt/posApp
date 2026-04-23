@@ -1,0 +1,13 @@
+# Copy this file to key.properties (same folder: android/key.properties)
+# and fill in values. Never commit key.properties or your .jks to git.
+#
+# Generate a keystore once (example — pick your own passwords & CN):
+#   cd android
+#   keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# Paths are relative to the android/ directory.
+
+storePassword=zevtabs2021
+keyPassword=zevtabs2021
+keyAlias=upload
+storeFile=upload-keystore.jks
