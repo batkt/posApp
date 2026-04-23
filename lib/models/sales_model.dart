@@ -95,7 +95,24 @@ class SalesModel extends ChangeNotifier {
   List<SaleItem> get currentSaleItems => List.unmodifiable(_currentSale);
   bool get isSaleEmpty => _currentSale.isEmpty;
   int get saleItemCount => _currentSale.fold(0, (sum, item) => sum + item.quantity);
-  int get uniqueSaleItems => _currentSale.length;
+
+  /// Distinct бараа (төрөл), not raw row count — same бараа may appear as separate
+  /// [SaleItem] rows; [currentSaleItems] stays separate for receipt / API lines.
+  int get uniqueSaleItems {
+    final keys = <String>{};
+    for (final item in _currentSale) {
+      keys.add(_distinctProductKey(item.product));
+    }
+    return keys.length;
+  }
+
+  static String _distinctProductKey(Product p) {
+    final id = p.id.trim();
+    if (id.isNotEmpty) return 'id:$id';
+    final c = (p.code ?? '').toString().trim();
+    final s = (p.salbariinId ?? '').toString().trim();
+    return 'code:$c|$s';
+  }
 
   double get subtotal => _currentSale.fold(0, (sum, item) => sum + item.total);
   double get tax =>

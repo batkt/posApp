@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../models/auth_model.dart';
 import '../models/locale_model.dart';
+import '../services/pos_transaction_service.dart';
 import '../services/terminal_tulbur_signal_service.dart';
 import '../services/unipos_service.dart';
 import '../utils/mnt_amount_formatter.dart';
@@ -116,14 +117,20 @@ class _KioskTerminalPaySignalListenerState
       builder: (ctx) => _TerminalSignalDialog(
         item: item,
         onOpenUniPos: () async {
-          final r = await UniPosService.purchase(amount: item.amountMnt);
-          if (!ctx.mounted) return;
-          if (r != null && r['skipped'] == true) {
+          try {
+            final r = await UniPosService.purchase(amount: item.amountMnt);
+            UniPosService.requireSuccessfulTerminalCardPayment(r);
+          } on PosTransactionException catch (e) {
+            if (!ctx.mounted) return;
             messenger.showSnackBar(
-              const SnackBar(content: Text('UniPOS зөвхөн Android дээр ажиллана')),
+              SnackBar(
+                content: Text(e.message),
+                behavior: SnackBarBehavior.floating,
+              ),
             );
             return;
           }
+          if (!ctx.mounted) return;
           try {
             await _svc.markCompleted(item.id);
             if (!ctx.mounted) return;

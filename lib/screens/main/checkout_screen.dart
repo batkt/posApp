@@ -57,15 +57,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (auth.canSubmitPosSales) {
         if (_selectedPaymentMethod == PosPaymentCore.methodCard) {
           final terminal = await UniPosService.purchase(amount: sales.total);
-          final paymentType = terminal?['paymentType']?.toString().toUpperCase();
-          if (paymentType != null &&
-              paymentType.isNotEmpty &&
-              paymentType != 'CARD' &&
-              paymentType != 'QPAY') {
-            throw PosTransactionException(
-              'UniPOS төлбөр амжилтгүй: $paymentType',
-            );
-          }
+          UniPosService.requireSuccessfulTerminalCardPayment(
+            terminal,
+            allowQpay: true,
+          );
         }
         final session = auth.posSession!;
         final svc = PosTransactionService();
@@ -118,13 +113,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     } on PosTransactionException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
+          SnackBar(content: Text(posPaymentErrorUserMessage(e))),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(posPaymentErrorUserMessage(e))),
         );
       }
     } finally {

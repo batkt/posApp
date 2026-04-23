@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -5,8 +7,10 @@ import 'package:provider/provider.dart';
 import '../../data/payment_display_config.dart';
 import '../../models/auth_model.dart';
 import '../../models/cart_model.dart';
+import '../../models/customer_model.dart';
 import '../../models/sales_model.dart';
 import '../../payment/pos_payment_core.dart';
+import '../../services/khariltsagch_service.dart';
 import '../../services/pos_transaction_service.dart';
 import '../../services/qpay_service.dart';
 import '../../services/unipos_service.dart';
@@ -24,8 +28,8 @@ enum CashierTerminalPaymentMode {
   qpayOnly,
 }
 
-/// Cashier: **Бэлэн** / **Карт** or **QPay** / **Данс** (`khariltsakh`), then confirm sheet
-/// (бэлэн: олгосон дүн, хариулт; карт/QPay/данс: нийт баталгаажуулах).
+/// Cashier: **Бэлэн** / **Карт** or **QPay** / **Данс** (`khariltsakh`) / **Зээл** (`zeel`).
+/// Бэлэн: дүн + хариултын sheet; карт/данс/QPay: шууд терминал / QPay; зээл: харилцагч сонгоод API.
 class CashierPaymentScreen extends StatefulWidget {
   const CashierPaymentScreen({
     super.key,
@@ -39,7 +43,7 @@ class CashierPaymentScreen extends StatefulWidget {
   State<CashierPaymentScreen> createState() => _CashierPaymentScreenState();
 }
 
-enum _PayKind { cash, card, dans }
+enum _PayKind { cash, card, dans, zeel }
 
 String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 
@@ -53,12 +57,46 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   bool _submitInFlight = false;
 
   late final String _orderPreview;
+  late final TextEditingController _discountInput;
+  late final FocusNode _discountFocus;
 
   @override
   void initState() {
     super.initState();
+    _discountInput = TextEditingController();
+    _discountFocus = FocusNode();
     _orderPreview = PaymentDisplayConfig.generateOrderPreview();
     WidgetsBinding.instance.addPostFrameCallback((_) => _primeOrderNumber());
+  }
+
+  @override
+  void dispose() {
+    _discountInput.dispose();
+    _discountFocus.dispose();
+    super.dispose();
+  }
+
+  void _onDiscountTextChanged(double maxSubtotal) {
+    final raw = MntAmountFormatter.parseUserAmount(_discountInput.text);
+    final v = raw.clamp(0.0, maxSubtotal);
+    setState(() => _discountMnt = v);
+    if (raw > maxSubtotal + 0.01 && _discountInput.text.isNotEmpty) {
+      final t = v > 0.009 ? MntAmountFormatter.format(v) : '';
+      if (t != _discountInput.text) {
+        _discountInput.value = TextEditingValue(
+          text: t,
+          selection: TextSelection.collapsed(offset: t.length),
+        );
+      }
+    }
+  }
+
+  void _formatDiscountFieldForDisplay(double maxSubtotal) {
+    final v = _discountMnt.clamp(0.0, maxSubtotal);
+    setState(() => _discountMnt = v);
+    _discountInput.text = v > 0.009 ? MntAmountFormatter.format(v) : '';
+    _discountInput.selection =
+        TextSelection.collapsed(offset: _discountInput.text.length);
   }
 
   Future<void> _primeOrderNumber() async {
@@ -88,6 +126,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             : PosPaymentCore.methodCard;
       case _PayKind.dans:
         return PosPaymentCore.methodAccount;
+      case _PayKind.zeel:
+        return PosPaymentCore.methodCredit;
     }
   }
 
@@ -101,83 +141,18 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             : 'Карт';
       case _PayKind.dans:
         return 'Данс';
+      case _PayKind.zeel:
+        return 'Зээл';
     }
-  }
-
-  Future<void> _showDiscountDialog() async {
-    final controller = TextEditingController(
-      text: _discountMnt > 0 ? _discountMnt.round().toString() : '',
-    );
-    final sales = context.read<SalesModel>();
-    final maxD = sales.subtotal;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Хөнгөлөлт'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Дүн (₮)',
-            hintText: '0',
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Болих')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Хадгалах')),
-        ],
-      ),
-    );
-    if (ok == true && mounted) {
-      final v = double.tryParse(controller.text.trim()) ?? 0;
-      setState(() => _discountMnt = v.clamp(0, maxD));
-    }
-    controller.dispose();
-  }
-
-  Future<void> _showNhhatDialog() async {
-    final controller = TextEditingController(
-      text: _nhhatMnt > 0 ? _nhhatMnt.round().toString() : '',
-    );
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('НХАТ'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Дүн (₮)',
-            hintText: '0',
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Болих')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Хадгалах')),
-        ],
-      ),
-    );
-    if (ok == true && mounted) {
-      final v = double.tryParse(controller.text.trim()) ?? 0;
-      setState(() => _nhhatMnt = v.clamp(0, 1e12));
-    }
-    controller.dispose();
   }
 
   /// After kiosk UniPOS or mobile QPay confirms — `guilgeeniiTuukhKhadgalya` + e-barimt + receipt.
   Future<void> _finalizeApiSale(
     SalesModel sales,
     double tender,
-    CashierTotals totals,
-  ) async {
+    CashierTotals totals, {
+    String? zeelKhariltsagchiinId,
+  }) async {
     final due = totals.total;
     final isCash = _kind == _PayKind.cash;
     final tulsunDun = isCash ? tender : due;
@@ -210,6 +185,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       noatguiDun: totals.net,
       nhatiinDun: totals.nhhat,
       guilgeeniiDugaar: orderNo,
+      zeelKhariltsagchiinId: zeelKhariltsagchiinId,
     );
 
     guilgeeMongoId =
@@ -283,12 +259,12 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
 
       if (paid != true || !mounted) return;
 
-      await _finalizeApiSale(sales, tender, totals);
+      await _finalizeApiSale(sales, tender, totals, zeelKhariltsagchiinId: null);
     } on PosTransactionException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.message),
+            content: Text(posPaymentErrorUserMessage(e)),
             backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
@@ -298,7 +274,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$e'),
+            content: Text(posPaymentErrorUserMessage(e)),
             backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
@@ -315,11 +291,13 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     SalesModel sales,
     double tender, {
     required CashierTotals totals,
+    String? zeelKhariltsagchiinId,
   }) async {
     if (sales.isSaleEmpty || _busy || _submitInFlight) return;
 
     final due = totals.total;
-    final isCash = _kind == _PayKind.cash; // карт + данс: бүтэн дүн, хариултгүй
+    // Бэлэн: олгосон дүн + хариулт; карт/данс/зээл: нийт дүнээр, хариултгүй.
+    final isCash = _kind == _PayKind.cash;
     if (isCash && tender + 0.5 < due) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -346,18 +324,14 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         if (_kind == _PayKind.card &&
             widget.terminalMode == CashierTerminalPaymentMode.cardOnly) {
           final terminal = await UniPosService.purchase(amount: tulsunDun);
-          final paymentType =
-              terminal?['paymentType']?.toString().toUpperCase();
-          if (paymentType != null && paymentType.isNotEmpty) {
-            final isCard = paymentType == 'CARD';
-            if (!isCard) {
-              throw PosTransactionException(
-                'Касс: зөвхөн карт. QPay хориотой. Төлбөр: $paymentType',
-              );
-            }
-          }
+          UniPosService.requireSuccessfulTerminalCardPayment(terminal);
         }
-        await _finalizeApiSale(sales, tender, totals);
+        await _finalizeApiSale(
+          sales,
+          tender,
+          totals,
+          zeelKhariltsagchiinId: zeelKhariltsagchiinId,
+        );
       } else {
         if (!mounted) return;
         final completed = sales.completeCashierSale(
@@ -372,7 +346,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.message),
+            content: Text(posPaymentErrorUserMessage(e)),
             backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
@@ -382,7 +356,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('$e'),
+            content: Text(posPaymentErrorUserMessage(e)),
             backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
@@ -398,6 +372,21 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     CompletedSale completed, {
     String? guilgeeniiMongoId,
   }) {
+    final t = PosPaymentCore.calculateCashierTotals(
+      subtotal: completed.subtotal,
+      discountMnt: completed.discount,
+      nhhatMnt: completed.nhhat,
+    );
+    final slip = (completed.discount > 0.009 || completed.nhhat > 0.009)
+        ? CashierSlipTotals(
+            grossSubtotal: completed.subtotal,
+            discount: t.cappedDiscount,
+            noatgui: t.net,
+            noat: t.vat,
+            nhat: t.nhhat,
+            payable: t.total,
+          )
+        : null;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -409,6 +398,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           paymentMethod: completed.paymentMethod,
           orderNumber: completed.id,
           guilgeeniiMongoId: guilgeeniiMongoId,
+          cashierSlipTotals: slip,
         ),
       ),
     );
@@ -416,33 +406,86 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
 
   Future<void> _startPayFlow(SalesModel sales, CashierTotals totals) async {
     final due = totals.total;
-    final tender = await showModalBottomSheet<double>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black54,
-      builder: (ctx) => Theme(
-        data: Theme.of(context),
-        child: _TulburConfirmSheet(
-          kind: _kind,
-          due: due,
-          terminalMode: widget.terminalMode,
+
+    if (_kind == _PayKind.cash) {
+      final tender = await showModalBottomSheet<double>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black54,
+        builder: (ctx) => Theme(
+          data: Theme.of(context),
+          child: _TulburConfirmSheet(
+            kind: _kind,
+            due: due,
+          ),
         ),
-      ),
-    );
-    if (tender != null && mounted) {
-      if (widget.terminalMode == CashierTerminalPaymentMode.qpayOnly &&
-          _kind == _PayKind.card) {
-        await _runMobileQpayFlow(sales, totals, tender);
-      } else {
+      );
+      if (tender != null && mounted) {
         await _submit(sales, tender, totals: totals);
       }
+      return;
+    }
+
+    if (_kind == _PayKind.zeel) {
+      if (!mounted) return;
+      final session = context.read<AuthModel>().posSession;
+      if (session == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('POS сесс олдсонгүй'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+      final id = await showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black54,
+        builder: (ctx) => Theme(
+          data: Theme.of(context),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Material(
+              color: Theme.of(ctx).colorScheme.surface,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
+              clipBehavior: Clip.antiAlias,
+              child: _ZeelCustomerPickerSheet(
+                baiguullagiinId: session.baiguullagiinId,
+                salbariinId: session.salbariinId,
+              ),
+            ),
+          ),
+        ),
+      );
+      if (id == null || !mounted) return;
+      await _submit(
+        sales,
+        due,
+        totals: totals,
+        zeelKhariltsagchiinId: id,
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    if (widget.terminalMode == CashierTerminalPaymentMode.qpayOnly &&
+        _kind == _PayKind.card) {
+      await _runMobileQpayFlow(sales, totals, due);
+    } else {
+      await _submit(sales, due, totals: totals);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final usePosBackend = context.watch<AuthModel>().canSubmitPosSales;
+    final auth = context.watch<AuthModel>();
+    final usePosBackend = auth.canSubmitPosSales;
+    final showZeelOption =
+        usePosBackend && auth.staffAccess.allowsKhariltsagch;
 
     return Scaffold(
       appBar: AppBar(
@@ -472,9 +515,24 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             );
           }
 
+          final effectiveDiscount =
+              _discountMnt.clamp(0.0, sales.subtotal).toDouble();
+          if (effectiveDiscount != _discountMnt) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              setState(() {
+                _discountMnt = effectiveDiscount;
+                if (!_discountFocus.hasFocus) {
+                  _discountInput.text = effectiveDiscount > 0.009
+                      ? MntAmountFormatter.format(effectiveDiscount)
+                      : '';
+                }
+              });
+            });
+          }
           final totals = PosPaymentCore.calculateCashierTotals(
             subtotal: sales.subtotal,
-            discountMnt: _discountMnt,
+            discountMnt: effectiveDiscount,
             nhhatMnt: _nhhatMnt,
           );
           final due = totals.total;
@@ -499,13 +557,18 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                 nhhat: totals.nhhat,
                 total: totals.total,
                 paymentKindLabel: _paymentKindLabelMn(_kind),
-                onDiscount: _showDiscountDialog,
-                onNhhat: _showNhhatDialog,
+                discountController: _discountInput,
+                discountFocus: _discountFocus,
+                onDiscountChanged: () =>
+                    _onDiscountTextChanged(sales.subtotal),
+                onDiscountEditingComplete: () =>
+                    _formatDiscountFieldForDisplay(sales.subtotal),
               );
 
               final payment = _PaymentPanel(
                 kind: _kind,
                 terminalMode: widget.terminalMode,
+                showZeelOption: showZeelOption,
                 dueFormatted: _fmtMnt(due),
                 onKind: (k) => setState(() => _kind = k),
                 onCancel: () => Navigator.pop(context),
@@ -555,8 +618,10 @@ class _SummaryPanel extends StatelessWidget {
     required this.nhhat,
     required this.total,
     required this.paymentKindLabel,
-    required this.onDiscount,
-    required this.onNhhat,
+    required this.discountController,
+    required this.discountFocus,
+    required this.onDiscountChanged,
+    required this.onDiscountEditingComplete,
   });
 
   final String orderId;
@@ -566,8 +631,10 @@ class _SummaryPanel extends StatelessWidget {
   final double nhhat;
   final double total;
   final String paymentKindLabel;
-  final VoidCallback onDiscount;
-  final VoidCallback onNhhat;
+  final TextEditingController discountController;
+  final FocusNode discountFocus;
+  final VoidCallback onDiscountChanged;
+  final VoidCallback onDiscountEditingComplete;
 
   @override
   Widget build(BuildContext context) {
@@ -614,10 +681,86 @@ class _SummaryPanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _row(context, 'Дэд дүн', _fmtMnt(subtotal)),
-          _row(context, 'Хөнгөлөлт', _fmtMnt(discount),
-              onTap: onDiscount, hint: 'Засах'),
+          Padding(
+            padding: const EdgeInsets.only(top: 6, bottom: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Хөнгөлөлт (₮)',
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ListenableBuilder(
+                  listenable: discountController,
+                  builder: (context, _) {
+                    return TextField(
+                      controller: discountController,
+                      focusNode: discountFocus,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                        signed: false,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[\d.,\s]')),
+                      ],
+                      onChanged: (_) => onDiscountChanged(),
+                      onEditingComplete: onDiscountEditingComplete,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSurface,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                      decoration: InputDecoration(
+                        hintText: '0',
+                        isDense: true,
+                        filled: true,
+                        fillColor: cs.surfaceContainerHighest
+                            .withValues(alpha: 0.55),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        suffixIcon: discountController.text.trim().isNotEmpty
+                            ? IconButton(
+                                tooltip: 'Арилгах',
+                                onPressed: () {
+                                  discountController.clear();
+                                  onDiscountChanged();
+                                },
+                                icon: Icon(
+                                  Icons.clear_rounded,
+                                  size: 20,
+                                  color: cs.outline,
+                                ),
+                              )
+                            : null,
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Дээд ${_fmtMnt(subtotal)} · одоо тооцоололд ${_fmtMnt(discount)}',
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.9),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
           _row(context, 'НӨАТ', _fmtMnt(vat)),
-          _row(context, 'НХАТ', _fmtMnt(nhhat), onTap: onNhhat, hint: 'Засах'),
+          _row(context, 'НХАТ', _fmtMnt(nhhat)),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Divider(color: cs.outlineVariant, height: 1),
@@ -637,10 +780,16 @@ class _SummaryPanel extends StatelessWidget {
     bool emphasize = false,
     bool sub = false,
     bool positive = false,
+    bool accent = false,
     VoidCallback? onTap,
     String? hint,
   }) {
     final cs = Theme.of(context).colorScheme;
+    final valueColor = positive
+        ? AppColors.onSuccessContainer
+        : (emphasize
+            ? cs.primary
+            : (accent ? cs.primary : cs.onSurface));
     final child = Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
@@ -669,9 +818,7 @@ class _SummaryPanel extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              color: positive
-                  ? AppColors.onSuccessContainer
-                  : (emphasize ? cs.primary : cs.onSurface),
+              color: valueColor,
               fontSize: emphasize ? 18 : (sub ? 13 : 14),
               fontWeight: emphasize ? FontWeight.w800 : FontWeight.w600,
               fontFeatures: const [FontFeature.tabularFigures()],
@@ -697,6 +844,7 @@ class _PaymentPanel extends StatelessWidget {
   const _PaymentPanel({
     required this.kind,
     required this.terminalMode,
+    required this.showZeelOption,
     required this.dueFormatted,
     required this.onKind,
     required this.onCancel,
@@ -706,6 +854,7 @@ class _PaymentPanel extends StatelessWidget {
 
   final _PayKind kind;
   final CashierTerminalPaymentMode terminalMode;
+  final bool showZeelOption;
   final String dueFormatted;
   final ValueChanged<_PayKind> onKind;
   final VoidCallback onCancel;
@@ -726,11 +875,14 @@ class _PaymentPanel extends StatelessWidget {
             'Карт',
             Icons.credit_card_rounded,
           );
-    final methods = [
+    final methods = <(_PayKind, String, IconData)>[
       (_PayKind.cash, 'Бэлэн', Icons.payments_rounded),
       mid,
       (_PayKind.dans, 'Данс', Icons.account_balance_rounded),
     ];
+    if (showZeelOption) {
+      methods.add((_PayKind.zeel, 'Зээл', Icons.schedule_outlined));
+    }
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -759,21 +911,70 @@ class _PaymentPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              for (var i = 0; i < methods.length; i++) ...[
-                if (i > 0) const SizedBox(width: 8),
-                Expanded(
-                  child: _methodTile(
-                    context,
-                    methods[i].$1,
-                    methods[i].$2,
-                    methods[i].$3,
+          if (methods.length <= 3)
+            Row(
+              children: [
+                for (var i = 0; i < methods.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: _methodTile(
+                      context,
+                      methods[i].$1,
+                      methods[i].$2,
+                      methods[i].$3,
+                    ),
                   ),
+                ],
+              ],
+            )
+          else
+            Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _methodTile(
+                        context,
+                        methods[0].$1,
+                        methods[0].$2,
+                        methods[0].$3,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _methodTile(
+                        context,
+                        methods[1].$1,
+                        methods[1].$2,
+                        methods[1].$3,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _methodTile(
+                        context,
+                        methods[2].$1,
+                        methods[2].$2,
+                        methods[2].$3,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _methodTile(
+                        context,
+                        methods[3].$1,
+                        methods[3].$2,
+                        methods[3].$3,
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ],
-          ),
+            ),
           const SizedBox(height: 20),
           Text(
             'Төлөх дүн (сагснаас)',
@@ -897,17 +1098,202 @@ class _PaymentPanel extends StatelessWidget {
   }
 }
 
-/// Bottom sheet: card/dans = confirm total; cash = tender + change (вэб `tulburTuluhModal`).
+/// Web `zeelModal.js`: [khariltsagchiinId] for `tulbur.turul === "zeel"`.
+class _ZeelCustomerPickerSheet extends StatefulWidget {
+  const _ZeelCustomerPickerSheet({
+    required this.baiguullagiinId,
+    required this.salbariinId,
+  });
+
+  final String baiguullagiinId;
+  final String salbariinId;
+
+  @override
+  State<_ZeelCustomerPickerSheet> createState() =>
+      _ZeelCustomerPickerSheetState();
+}
+
+class _ZeelCustomerPickerSheetState extends State<_ZeelCustomerPickerSheet> {
+  final _search = TextEditingController();
+  final _service = KhariltsagchService();
+  Timer? _debounce;
+  List<Map<String, dynamic>> _rows = [];
+  bool _loading = false;
+  String? _err;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _err = null;
+    });
+    final r = await _service.fetchList(
+      baiguullagiinId: widget.baiguullagiinId,
+      salbariinId: widget.salbariinId,
+      search: _search.text,
+    );
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      if (r.success) {
+        _rows = r.rows;
+      } else {
+        _err = r.error;
+        _rows = [];
+      }
+    });
+  }
+
+  void _scheduleLoad() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), _load);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final maxH = MediaQuery.sizeOf(context).height * 0.65;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: SizedBox(
+        height: maxH,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 4, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Зээл',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 4),
+              child: Text(
+                'Харилцагч сонгоно уу',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _search,
+                decoration: InputDecoration(
+                  labelText: 'Хайх',
+                  hintText: 'Нэр, утас, имэйл, регистр…',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onChanged: (_) => _scheduleLoad(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _loading && _rows.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : _err != null && _rows.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              _err!,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: cs.error),
+                            ),
+                          ),
+                        )
+                      : _rows.isEmpty
+                          ? Center(
+                              child: Text(
+                                'Харилцагч олдсонгүй',
+                                style: TextStyle(color: cs.onSurfaceVariant),
+                              ),
+                            )
+                          : ListView.separated(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              itemCount: _rows.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (context, i) {
+                                final m = _rows[i];
+                                final c = Customer.fromKhariltsagch(m);
+                                final id = m['_id']?.toString() ?? '';
+                                return ListTile(
+                                  title: Text(
+                                    c.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  subtitle: Text(
+                                    c.phone,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  trailing: const Icon(
+                                      Icons.chevron_right_rounded),
+                                  onTap: id.isEmpty
+                                      ? null
+                                      : () => Navigator.pop(context, id),
+                                );
+                              },
+                            ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Болих'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet: бэлэн = tender + change (вэб `tulburTuluhModal`). Карт/данс: шууд төлөлт.
 class _TulburConfirmSheet extends StatefulWidget {
   const _TulburConfirmSheet({
     required this.kind,
     required this.due,
-    required this.terminalMode,
   });
 
   final _PayKind kind;
   final double due;
-  final CashierTerminalPaymentMode terminalMode;
 
   @override
   State<_TulburConfirmSheet> createState() => _TulburConfirmSheetState();
@@ -1001,132 +1387,6 @@ class _TulburConfirmSheetState extends State<_TulburConfirmSheet> {
     final pad = MediaQuery.paddingOf(context);
     final due = widget.due;
     final cs = Theme.of(context).colorScheme;
-    final isSimpleConfirm =
-        widget.kind == _PayKind.card || widget.kind == _PayKind.dans;
-    final confirmTitle = widget.kind == _PayKind.dans
-        ? 'Дансаар төлөх'
-        : widget.terminalMode == CashierTerminalPaymentMode.qpayOnly
-            ? 'QPay төлөх'
-            : 'Картаар төлөх';
-    final confirmIcon = widget.kind == _PayKind.dans
-        ? Icons.account_balance_rounded
-        : widget.terminalMode == CashierTerminalPaymentMode.qpayOnly
-            ? Icons.qr_code_2_rounded
-            : Icons.credit_card_rounded;
-
-    if (isSimpleConfirm) {
-      return Padding(
-        padding: EdgeInsets.only(bottom: pad.bottom),
-        child: ClipRRect(
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(_sheetRadius)),
-          child: Container(
-            decoration: _sheetDecoration(context),
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _dragHandle(context),
-                const SizedBox(height: 8),
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(22),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: cs.primaryContainer.withValues(alpha: 0.55),
-                    ),
-                    child: Icon(
-                      confirmIcon,
-                      size: 52,
-                      color: cs.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  confirmTitle,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Нийт төлбөр',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: cs.onSurfaceVariant,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  _fmtMnt(due),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: cs.primary,
-                    fontSize: 38,
-                    fontWeight: FontWeight.w800,
-                    height: 1.1,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-                const SizedBox(height: 28),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 18),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        onPressed: () {
-                          HapticFeedback.mediumImpact();
-                          Navigator.pop(context, due);
-                        },
-                        child: const Text(
-                          'Баталгаажуулах',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: cs.onSurface,
-                          side: BorderSide(color: cs.outlineVariant),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text(
-                          'Болих',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
 
     final media = MediaQuery.of(context);
     final viewH = media.size.height;
@@ -1422,7 +1682,7 @@ class _TulburConfirmSheetState extends State<_TulburConfirmSheet> {
                                 }
                               : null,
                           child: Text(
-                            'Төлбөр баталгаажуулах',
+                            'Төлөх',
                             textAlign: TextAlign.center,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,

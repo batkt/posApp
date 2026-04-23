@@ -19,6 +19,25 @@ import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../utils/thermal_receipt_image.dart';
 
+/// Breakdown for thermal slip when cashier used хөнгөлөлт / НХАТ (И-Баримт not loaded yet).
+class CashierSlipTotals {
+  const CashierSlipTotals({
+    required this.grossSubtotal,
+    required this.discount,
+    required this.noatgui,
+    required this.noat,
+    required this.nhat,
+    required this.payable,
+  });
+
+  final double grossSubtotal;
+  final double discount;
+  final double noatgui;
+  final double noat;
+  final double nhat;
+  final double payable;
+}
+
 class ReceiptScreen extends StatefulWidget {
   const ReceiptScreen({
     super.key,
@@ -28,6 +47,7 @@ class ReceiptScreen extends StatefulWidget {
     required this.orderNumber,
     this.initialEbarimt,
     this.guilgeeniiMongoId,
+    this.cashierSlipTotals,
   });
 
   final List<CartItem> items;
@@ -36,6 +56,7 @@ class ReceiptScreen extends StatefulWidget {
   final String orderNumber;
   final Map<String, dynamic>? initialEbarimt;
   final String? guilgeeniiMongoId;
+  final CashierSlipTotals? cashierSlipTotals;
 
   @override
   State<ReceiptScreen> createState() => _ReceiptScreenState();
@@ -225,7 +246,8 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Терминал хэвлэгч байхгүй тул системийн хэвлэх цонх нээгдлээ'),
+            content: Text(
+                'Терминал хэвлэгч байхгүй тул системийн хэвлэх цонх нээгдлээ'),
           ),
         );
       }
@@ -364,21 +386,27 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final ebarimtCompanyNer = _companyNameFromEbarimt(e);
     final khungulE = _ebarimtKhungulukh(e);
     final cartTax = _cartTaxApprox(widget.items);
+    final slip = widget.cashierSlipTotals;
     final thermalPay = e != null
         ? (totalAmount > 0 ? totalAmount : widget.total)
         : widget.total;
-    final thermalVat = e != null ? totalVat : cartTax.noat;
-    final thermalCt = e != null ? totalCityTax : cartTax.nhat;
+    final useSlip = e == null && slip != null;
+    final thermalVat = e != null
+        ? totalVat
+        : (useSlip ? slip.noat : cartTax.noat);
+    final thermalCt = e != null
+        ? totalCityTax
+        : (useSlip ? slip.nhat : cartTax.nhat);
     final thermalNoatguiRaw = e != null
         ? (thermalPay - thermalVat - thermalCt)
-        : cartTax.noatgui;
-    final thermalNoatgui =
-        thermalNoatguiRaw < 0 ? 0.0 : thermalNoatguiRaw;
+        : (useSlip ? slip.noatgui : cartTax.noatgui);
+    final thermalNoatgui = thermalNoatguiRaw < 0 ? 0.0 : thermalNoatguiRaw;
     final thermalNiitDun = e != null ? (thermalPay + khungulE) : thermalPay;
     final thermalTulukh = thermalPay;
     final thermalIb = thermalPay;
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
@@ -626,6 +654,14 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             ],
           ),
         ),
+        if (useSlip && slip.discount > 0.009)
+          _thermalPaymentMoneyRow(
+            textTheme,
+            label: 'Хөнгөлөлт',
+            value: '−${_fmtMnt(slip.discount)}',
+            topPad: 4,
+            fontSize: 14,
+          ),
         _thermalPaymentMoneyRow(
           textTheme,
           label: 'Нийт дүн',
@@ -676,7 +712,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                'Сугалаа: ${_str(e['lottery'])}',
+                'Сугалааны дугаар: ${_str(e['lottery'])}',
                 textAlign: TextAlign.center,
                 style: textTheme.bodySmall?.copyWith(
                   color: Colors.black,
@@ -790,7 +826,6 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                 ),
               ),
             ),
-
             Material(
               color: Theme.of(context).colorScheme.surface,
               elevation: 6,
@@ -836,7 +871,6 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       ),
     );
   }
-
 }
 
 /// Web parity: [pos/components/modalBody/posSystem/eBarimt.js] — Иргэн vs ААН, `POST /ebarimtShivye`.
@@ -860,6 +894,7 @@ class _EbarimtBuyerDialogState extends State<_EbarimtBuyerDialog> {
   final TextEditingController _reg = TextEditingController();
   bool _loading = false;
   String? _tin;
+
   /// Full JSON from `GET /tatvaraasBaiguullagaAvya/:regno` (includes `name`, `found`, `tin`).
   Map<String, dynamic>? _tatvarInfo;
 
@@ -1127,4 +1162,3 @@ class _EbarimtBuyerDialogState extends State<_EbarimtBuyerDialog> {
     );
   }
 }
-

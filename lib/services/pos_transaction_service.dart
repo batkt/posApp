@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:http/http.dart' as http;
 
 import '../models/pos_session.dart';
@@ -155,6 +156,9 @@ class PosTransactionService {
     required String guilgeeniiDugaar,
     bool baraaNUATModalOpen = false,
     Map<String, dynamic>? khariltsagch,
+    /// Web `tulburTuluhModal`: `tulbur[]` with `turul: "zeel"` must include `khariltsagchiinId`
+    /// for `guilgeeRoute` receivable (`avlagaGuilgeeKhadgalya`).
+    String? zeelKhariltsagchiinId,
   }) async {
     final items = sales.currentSaleItems;
     final baraanuud = items.map((line) {
@@ -175,17 +179,26 @@ class PosTransactionService {
       };
     }).toList();
 
-    // Web `tulbur`: `[{ turul: "belen"|"cart"|"qpay"|"khariltsakh", une: number }]`
-    // Cash: `une` = төлсөн дүн minus хариулт; card/dans: full `tulsunDun`.
+    // Web `tulbur`: `[{ turul, une, khariltsagchiinId? }]`
+    // Cash: `une` = төлсөн дүн minus хариулт; card/dans/zeel: full `tulsunDun`.
     final lineUne = paymentTurul == 'belen'
         ? _finiteDouble(tulsunDun) - _finiteDouble(hariult)
         : _finiteDouble(tulsunDun);
-    final tulbur = [
-      {
-        'turul': paymentTurul,
-        'une': _fixed2Num(lineUne),
+    if (paymentTurul == 'zeel') {
+      final zid = zeelKhariltsagchiinId?.trim();
+      if (zid == null || zid.isEmpty) {
+        throw PosTransactionException('Зээл төлбөрт харилцагч сонгоно уу');
       }
-    ];
+    }
+    final tulburLine = <String, dynamic>{
+      'turul': paymentTurul,
+      'une': _fixed2Num(lineUne),
+    };
+    final zTrim = zeelKhariltsagchiinId?.trim();
+    if (paymentTurul == 'zeel' && zTrim != null && zTrim.isNotEmpty) {
+      tulburLine['khariltsagchiinId'] = zTrim;
+    }
+    final tulbur = [tulburLine];
 
     final body = <String, dynamic>{
       'baiguullagiinId': session.baiguullagiinId,
@@ -375,6 +388,81 @@ class PosTransactionException implements Exception {
   final String message;
   final int? statusCode;
 
+  /// Snackbars: short Mongolian only — no stacked PlatformException / JSON noise.
+  static String toUserMessage(String raw) {
+    var t = raw.trim();
+    if (t.isEmpty) return raw;
+
+    // UniPOS / terminal: show exactly one of these phrases if present (substring match).
+    const terminalSnippets = <String>[
+      'Карт унших хугацаа дууссан',
+      'Карт унших оролдлого хийгдээгүй',
+      'Карттай харьцахад алдаа гарлаа',
+      'Сүлжээний холболтонд алдаа гарлаа',
+    ];
+    for (final s in terminalSnippets) {
+      if (t.contains(s)) return s;
+    }
+
+    final l = t.toLowerCase();
+    if (t.contains('Гүйлгээ цуцлагдсан') ||
+        (l.contains('гүйлгээ') && l.contains('цуцлагдсан')) ||
+        (l.contains('transaction') && l.contains('cancel')) ||
+        l.contains('txn has been cancelled') ||
+        l.contains('txn cancelled') ||
+        l.contains('user cancel')) {
+      return 'Төлбөр цуцлагдсан';
+    }
+
+    t = _stripVerboseErrorWrapper(t);
+    // One line, reasonable length for snackbar.
+    final line = t.split(RegExp(r'[\r\n]+')).map((s) => s.trim()).firstWhere(
+          (s) => s.isNotEmpty,
+          orElse: () => t,
+        );
+    if (line.length > 160) {
+      return '${line.substring(0, 157)}…';
+    }
+    return line;
+  }
+
+  static String _stripVerboseErrorWrapper(String t) {
+    var u = t;
+    const pfx = 'PlatformException(';
+    if (u.startsWith(pfx)) {
+      const msgKey = 'message: ';
+      final i = u.indexOf(msgKey);
+      if (i >= 0) {
+        var rest = u.substring(i + msgKey.length).trim();
+        if (rest.startsWith('"')) {
+          rest = rest.substring(1);
+          final end = rest.indexOf('"');
+          if (end > 0) return rest.substring(0, end).trim();
+        }
+      }
+    }
+    return u;
+  }
+
   @override
   String toString() => message;
+}
+
+/// Snackbar-safe text for payment failures ([PosTransactionException] or any [Object]).
+String posPaymentErrorUserMessage(Object error) {
+  if (error is PosTransactionException) {
+    return PosTransactionException.toUserMessage(error.message);
+  }
+  if (error is PlatformException) {
+    final msg = (error.message ?? '').trim();
+    if (msg.isNotEmpty) {
+      return PosTransactionException.toUserMessage(msg);
+    }
+    final det = error.details?.toString().trim();
+    if (det != null && det.isNotEmpty) {
+      return PosTransactionException.toUserMessage(det);
+    }
+    return PosTransactionException.toUserMessage(error.code);
+  }
+  return PosTransactionException.toUserMessage(error.toString());
 }
