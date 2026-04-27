@@ -14,12 +14,18 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
+  final _codeController = TextEditingController();
+  final _newPasswordController = TextEditingController();
+  
   bool _isLoading = false;
   bool _codeSent = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
     _usernameController.dispose();
+    _codeController.dispose();
+    _newPasswordController.dispose();
     super.dispose();
   }
 
@@ -42,6 +48,37 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         const SnackBar(
           content:
               Text('Хэрэглэгчийн нэр олдсонгүй. Шалгаад дахин оролдоно уу.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _verifyAndResetCode() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    setState(() => _isLoading = true);
+    final auth = context.read<AuthModel>();
+    final success = await auth.confirmPasswordReset(
+      _usernameController.text.trim(),
+      _codeController.text.trim(),
+      _newPasswordController.text,
+    );
+    setState(() => _isLoading = false);
+    
+    if (!mounted) return;
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Нууц үг амжилттай солигдлоо. Шинэ нууц үгээрээ нэвтэрнэ үү.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      Navigator.pop(context); // close forgot password screen
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Код буруу эсвэл алдаа гарлаа.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -167,7 +204,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${_usernameController.text} хэрэглэгчид SMS илгээлээ. Кодыг оруулна уу.',
+                    '${_usernameController.text} хэрэглэгчид SMS илгээлээ.',
                     style: textTheme.bodyLarge?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
@@ -175,23 +212,80 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ),
                   const SizedBox(height: 32),
 
-                  // Back to Login
+                  // Code Field
+                  TextFormField(
+                    controller: _codeController,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Баталгаажуулах код',
+                      prefixIcon: Icon(Icons.pin_outlined),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Код оруулна уу';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // New Password Field
+                  TextFormField(
+                    controller: _newPasswordController,
+                    obscureText: _obscurePassword,
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => _verifyAndResetCode(),
+                    decoration: InputDecoration(
+                      labelText: 'Шинэ нууц үг',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                        onPressed: () {
+                          setState(
+                              () => _obscurePassword = !_obscurePassword);
+                        },
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Шинэ нууц үгээ оруулна уу';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Reset Button
                   FilledButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _isLoading ? null : _verifyAndResetCode,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
-                    child: const Text(
-                      'Нэвтрэх рүү буцах',
-                      style: TextStyle(fontSize: 16),
-                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Нууц үг солих',
+                            style: TextStyle(fontSize: 16),
+                          ),
                   ),
                   const SizedBox(height: 12),
 
                   // Resend
                   TextButton(
                     onPressed: () => setState(() => _codeSent = false),
-                    child: const Text('SMS ирээгүй юу? Дахин илгээх'),
+                    child: const Text('SMS ирээгүй юу? Дахин илгээх / Буцах'),
                   ),
                 ],
               ],
