@@ -10,6 +10,9 @@ import '../../services/pos_transaction_service.dart';
 import '../../services/unipos_service.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../shared/receipt_screen.dart';
+import 'customers_screen.dart';
+import '../../models/customer_model.dart';
+import '../../models/locale_model.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -94,6 +97,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           noatguiDun: std.net,
           nhatiinDun: 0,
           guilgeeniiDugaar: orderNo,
+          zeelKhariltsagchiinId: _selectedPaymentMethod == 'credit' 
+            ? sales.selectedCustomer?.id 
+            : null,
         );
 
         guilgeeMongoId =
@@ -263,6 +269,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       const SizedBox(height: 16),
                       ...PaymentDisplayConfig.checkoutMethods
                           .map((method) => _buildPaymentMethodTile(method)),
+                      
+                      if (_selectedPaymentMethod == 'credit') ...[
+                        const SizedBox(height: 24),
+                        Text(
+                          'Customer for Credit',
+                          style: textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildCustomerSelector(sales),
+                      ],
                     ],
                   ),
                 ),
@@ -477,6 +495,159 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           onChanged: (value) => setState(() => _selectedPaymentMethod = value!),
         ),
       ),
+    );
+  }
+
+  Widget _buildCustomerSelector(SalesModel sales) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final customer = sales.selectedCustomer;
+
+    return Card(
+      child: ListTile(
+        onTap: _pickCustomer,
+        leading: CircleAvatar(
+          backgroundColor: customer != null
+              ? colorScheme.primaryContainer
+              : colorScheme.surfaceContainerHighest,
+          child: Icon(
+            customer != null ? Icons.person : Icons.person_add_outlined,
+            color: customer != null
+                ? colorScheme.primary
+                : colorScheme.onSurfaceVariant,
+          ),
+        ),
+        title: Text(
+          customer?.name ?? 'Select Customer',
+          style: textTheme.bodyLarge?.copyWith(
+            fontWeight: customer != null ? FontWeight.w600 : null,
+          ),
+        ),
+        subtitle: customer != null ? Text(customer.phone) : null,
+        trailing: customer != null
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => sales.setSelectedCustomer(null),
+              )
+            : const Icon(Icons.chevron_right),
+      ),
+    );
+  }
+
+  Future<void> _pickCustomer() async {
+    final sales = context.read<SalesModel>();
+    
+    // For now, since CustomersScreen doesn't return a value easily,
+    // we show a dialog or we could modify CustomersScreen.
+    // Let's use a simple modal with the customer list for now.
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => const _CustomerPickerModal(),
+    );
+  }
+}
+
+class _CustomerPickerModal extends StatefulWidget {
+  const _CustomerPickerModal();
+
+  @override
+  State<_CustomerPickerModal> createState() => _CustomerPickerModalState();
+}
+
+class _CustomerPickerModalState extends State<_CustomerPickerModal> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CustomerModel>().refresh();
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.9,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Text(
+                    'Select Customer',
+                    style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) => context.read<CustomerModel>().setSearchQuery(value),
+                decoration: const InputDecoration(
+                  hintText: 'Search by name or phone...',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: Consumer<CustomerModel>(
+                builder: (context, model, _) {
+                  if (model.isLoading && model.customers.isEmpty) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  
+                  if (model.customers.isEmpty) {
+                    return const Center(child: Text('No customers found'));
+                  }
+
+                  return ListView.builder(
+                    controller: scrollController,
+                    itemCount: model.customers.length,
+                    itemBuilder: (context, index) {
+                      final c = model.customers[index];
+                      return ListTile(
+                        leading: CircleAvatar(child: Text(c.initialsLetter)),
+                        title: Text(c.name),
+                        subtitle: Text(c.phone),
+                        onTap: () {
+                          context.read<SalesModel>().setSelectedCustomer(c);
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

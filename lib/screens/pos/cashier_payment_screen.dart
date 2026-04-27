@@ -601,8 +601,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthModel>();
     final usePosBackend = auth.canSubmitPosSales;
-    final showZeelOption =
-        usePosBackend && auth.staffAccess.allowsKhariltsagch;
+    final showZeelOption = true;
 
     return Scaffold(
       appBar: AppBar(

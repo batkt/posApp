@@ -4,6 +4,7 @@ import '../data/payment_display_config.dart';
 import '../payment/pos_payment_core.dart';
 import '../utils/buunii_une_helper.dart';
 import 'cart_model.dart';
+import 'customer_model.dart';
 import 'inventory_model.dart';
 
 class SaleItem {
@@ -132,6 +133,14 @@ class CompletedSale {
 class SalesModel extends ChangeNotifier {
   final List<SaleItem> _currentSale = [];
   final List<CompletedSale> _salesHistory = [];
+  Customer? _selectedCustomer;
+
+  Customer? get selectedCustomer => _selectedCustomer;
+
+  void setSelectedCustomer(Customer? customer) {
+    _selectedCustomer = customer;
+    notifyListeners();
+  }
 
   /// Matches web POS `guilgeeniiDugaar` from `POST /zakhialgiinDugaarAvya`.
   String? _guilgeeniiDugaar;
@@ -388,6 +397,7 @@ class SalesModel extends ChangeNotifier {
   void clearSale() {
     _currentSale.clear();
     _guilgeeniiDugaar = null;
+    _selectedCustomer = null;
     notifyListeners();
   }
 

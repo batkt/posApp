@@ -27,6 +27,12 @@ abstract final class PaymentDisplayConfig {
       labelMn: 'Данс',
       icon: Icons.account_balance_outlined,
     ),
+    PaymentDisplayMethodOption(
+      id: PosPaymentCore.methodCredit,
+      label: 'Credit',
+      labelMn: 'Зээл',
+      icon: Icons.schedule_outlined,
+    ),
   ];
 
   static const String defaultCheckoutMethodId = PosPaymentCore.methodCash;
