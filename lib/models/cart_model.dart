@@ -23,6 +23,8 @@ class Product {
   final String? baiguullagiinId;
   final String? salbariinId;
   final String? angilal;
+  /// Web `aguulakh.boginoNer` — short name.
+  final String? boginoNer;
   final String? khemjikhNegj;
   final double? urtugUne;
   final bool? shirkheglekhEsekh;
@@ -72,6 +74,7 @@ class Product {
     this.baiguullagiinId,
     this.salbariinId,
     this.angilal,
+    this.boginoNer,
     this.khemjikhNegj,
     this.urtugUne,
     this.shirkheglekhEsekh,
@@ -185,6 +188,7 @@ class Product {
       baiguullagiinId: json['baiguullagiinId'],
       salbariinId: json['salbariinId'],
       angilal: json['angilal'],
+      boginoNer: _asOptionalString(json['boginoNer']),
       khemjikhNegj: _asOptionalString(json['khemjikhNegj']),
       urtugUne: _asDouble(json['urtugUne']),
       shirkheglekhEsekh: _asNullableBool(json['shirkheglekhEsekh']),
@@ -330,6 +334,7 @@ class Product {
       'baiguullagiinId': baiguullagiinId,
       'salbariinId': salbariinId ?? fallbackSalbariinId,
       'angilal': angilal ?? category,
+      'boginoNer': boginoNer,
       'khemjikhNegj': khemjikhNegj,
       'niitUne': niitUne ?? price,
       'urtugUne': urtugUne ?? costPrice,

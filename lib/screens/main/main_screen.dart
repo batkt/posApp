@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/drawer_branch_switch.dart';
 import 'dashboard_screen.dart';
 import 'inventory_screen.dart';
 import 'toololt_screen.dart';
@@ -412,8 +411,6 @@ class _MainScreenState extends State<MainScreen> {
                 ],
               ),
             ),
-
-            const DrawerBranchSwitchSection(),
 
             const SizedBox(height: 8),
 

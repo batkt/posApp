@@ -8,8 +8,62 @@ import '../../models/pos_session.dart';
 import '../../services/category_service.dart';
 import '../../services/pos_settings_service.dart';
 import '../../models/category_model.dart';
+import '../../utils/mongolian_date_formatter.dart';
 
 /// Web parity: `pages/khyanalt/tokhirgoo` — profile + org/branch settings.
+
+DateTime? _tryParseStaffDate(dynamic v) {
+  if (v == null) return null;
+  if (v is DateTime) return v;
+  if (v is String) {
+    final t = DateTime.tryParse(v);
+    if (t != null) return t;
+  }
+  if (v is int) {
+    if (v > 2000000000000) return DateTime.fromMillisecondsSinceEpoch(v);
+  }
+  if (v is Map) {
+    final o = v[r'$date'] ?? v['date'];
+    if (o is int) return DateTime.fromMillisecondsSinceEpoch(o);
+    if (o is String) return DateTime.tryParse(o);
+  }
+  return null;
+}
+
+IconData _posSettingsIcon(PosSettingsSection s) {
+  switch (s) {
+    case PosSettingsSection.personal:
+      return Icons.person_outlined;
+    case PosSettingsSection.baraa:
+      return Icons.inventory_2_outlined;
+    case PosSettingsSection.categories:
+      return Icons.category_outlined;
+    case PosSettingsSection.notifications:
+      return Icons.notifications_outlined;
+    case PosSettingsSection.ebarimt:
+      return Icons.receipt_long_outlined;
+    case PosSettingsSection.dans:
+      return Icons.account_balance_outlined;
+    case PosSettingsSection.bonus:
+      return Icons.card_giftcard_outlined;
+    case PosSettingsSection.door:
+      return Icons.door_front_door_outlined;
+    case PosSettingsSection.branches:
+      return Icons.storefront_outlined;
+  }
+}
+
+String? _resolveBranchNer(Map<String, dynamic>? org, String salbariinId) {
+  if (org == null) return null;
+  final list = org['salbaruud'];
+  if (list is! List) return null;
+  for (final e in list) {
+    if (e is Map && e['_id']?.toString() == salbariinId) {
+      return e['ner']?.toString();
+    }
+  }
+  return null;
+}
 class PosSettingsHubScreen extends StatefulWidget {
   const PosSettingsHubScreen({super.key, this.showAppBar = true});
 
@@ -70,13 +124,12 @@ class _PosSettingsHubScreenState extends State<PosSettingsHubScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthModel>();
     final l10n = AppLocalizations.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final sections = auth.staffAccess.hasFullAccess
-        ? const [PosSettingsSection.personal, PosSettingsSection.door]
-        : PosSettingsSection.values;
+    // Admins must see every section (web `tokhirgoo` for `albanTushaal === "Admin"`);
+    // the old logic showed only 2 items for `hasFullAccess`, which hid org settings.
+    final sections = List<PosSettingsSection>.of(PosSettingsSection.values);
 
     if (!sections.contains(_section)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -103,60 +156,117 @@ class _PosSettingsHubScreenState extends State<PosSettingsHubScreen> {
               ? const Center(child: CircularProgressIndicator())
               : _error != null && _baiguullaga == null
                   ? Center(child: Text(l10n.tr(_error!)))
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        final wide = constraints.maxWidth >= 720;
-                        if (wide) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              SizedBox(
-                                width: 200,
-                                child: Material(
-                                  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                                  child: ListView(
-                                    children: [
-                                      for (final s in sections)
-                                        _RailTile(
-                                          label: posSettingsSectionLabel(l10n, s),
-                                          selected: _section == s,
-                                          onTap: () => setState(() => _section = s),
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_session != null && _baiguullaga != null)
+                          _SettingsContextBar(
+                            l10n: l10n,
+                            orgName: _baiguullaga!['ner']?.toString(),
+                            branchNer: _resolveBranchNer(
+                              _baiguullaga,
+                              _session!.salbariinId,
+                            ),
+                            colorScheme: colorScheme,
+                            textTheme: textTheme,
+                          ),
+                        Expanded(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final wide = constraints.maxWidth >= 720;
+                              if (wide) {
+                                return Row(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    SizedBox(
+                                      width: 240,
+                                      child: Material(
+                                        color: colorScheme
+                                            .surfaceContainerHighest
+                                            .withValues(alpha: 0.5),
+                                        child: ListView(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 8,
+                                          ),
+                                          children: [
+                                            for (final s in sections)
+                                              _RailTile(
+                                                icon: _posSettingsIcon(s),
+                                                label: posSettingsSectionLabel(
+                                                    l10n, s),
+                                                selected: _section == s,
+                                                onTap: () => setState(
+                                                    () => _section = s),
+                                              ),
+                                          ],
                                         ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              Expanded(child: _buildPanel(l10n, textTheme, colorScheme)),
-                            ],
-                          );
-                        }
-                        return Column(
-                          children: [
-                            SizedBox(
-                              height: 52,
-                              child: ListView(
-                                scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                                children: [
-                                  for (final s in sections)
-                                    Padding(
-                                      padding: const EdgeInsets.only(right: 6),
-                                      child: ChoiceChip(
-                                        label: Text(
-                                          posSettingsSectionLabel(l10n, s),
-                                          style: textTheme.labelLarge,
-                                        ),
-                                        selected: _section == s,
-                                        onSelected: (_) => setState(() => _section = s),
                                       ),
                                     ),
+                                    Expanded(
+                                      child: _buildPanel(
+                                        l10n,
+                                        textTheme,
+                                        colorScheme,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }
+                              return Column(
+                                children: [
+                                  SizedBox(
+                                    height: 52,
+                                    child: ListView(
+                                      scrollDirection: Axis.horizontal,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 6,
+                                      ),
+                                      children: [
+                                        for (final s in sections)
+                                          Padding(
+                                            padding:
+                                                const EdgeInsets.only(right: 6),
+                                            child: FilterChip(
+                                              showCheckmark: false,
+                                              selectedColor: colorScheme
+                                                  .primaryContainer
+                                                  .withValues(alpha: 0.6),
+                                              avatar: Icon(
+                                                _posSettingsIcon(s),
+                                                size: 18,
+                                                color: _section == s
+                                                    ? colorScheme.onPrimaryContainer
+                                                    : colorScheme
+                                                        .onSurfaceVariant,
+                                              ),
+                                              label: Text(
+                                                posSettingsSectionLabel(
+                                                    l10n, s),
+                                                style: textTheme.labelLarge,
+                                              ),
+                                              selected: _section == s,
+                                              onSelected: (_) => setState(
+                                                () => _section = s,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _buildPanel(
+                                      l10n,
+                                      textTheme,
+                                      colorScheme,
+                                    ),
+                                  ),
                                 ],
-                              ),
-                            ),
-                            Expanded(child: _buildPanel(l10n, textTheme, colorScheme)),
-                          ],
-                        );
-                      },
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
     );
   }
@@ -249,13 +359,82 @@ String posSettingsSectionLabel(AppLocalizations l10n, PosSettingsSection s) {
   }
 }
 
+class _SettingsContextBar extends StatelessWidget {
+  const _SettingsContextBar({
+    required this.l10n,
+    required this.orgName,
+    required this.branchNer,
+    required this.colorScheme,
+    required this.textTheme,
+  });
+
+  final AppLocalizations l10n;
+  final String? orgName;
+  final String? branchNer;
+  final ColorScheme colorScheme;
+  final TextTheme textTheme;
+
+  @override
+  Widget build(BuildContext context) {
+    if ((orgName == null || orgName!.isEmpty) &&
+        (branchNer == null || branchNer!.isEmpty)) {
+      return const SizedBox.shrink();
+    }
+    return Material(
+      color: colorScheme.surfaceContainerHigh.withValues(alpha: 0.55),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Icon(
+              Icons.apartment_rounded,
+              size: 22,
+              color: colorScheme.primary,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (orgName != null && orgName!.isNotEmpty)
+                    Text(
+                      orgName!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  if (branchNer != null && branchNer!.isNotEmpty)
+                    Text(
+                      '${l10n.tr('pos_settings_current_branch')}: $branchNer',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RailTile extends StatelessWidget {
   const _RailTile({
+    required this.icon,
     required this.label,
     required this.selected,
     required this.onTap,
   });
 
+  final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
@@ -264,10 +443,22 @@ class _RailTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      leading: Icon(
+        icon,
+        size: 22,
+        color: selected
+            ? colorScheme.primary
+            : colorScheme.onSurfaceVariant,
+      ),
       selected: selected,
-      title: Text(label),
+      title: Text(
+        label,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
       onTap: onTap,
-      selectedTileColor: colorScheme.primaryContainer.withValues(alpha: 0.5),
+      selectedTileColor: colorScheme.primaryContainer.withValues(alpha: 0.4),
     );
   }
 }
@@ -280,12 +471,42 @@ class _PlaceholderPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: colorScheme.primary,
+              ),
+        ),
         const SizedBox(height: 12),
-        Text(body, style: Theme.of(context).textTheme.bodyMedium),
+        Card(
+          margin: EdgeInsets.zero,
+          elevation: 0,
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  color: colorScheme.primary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    body,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -396,46 +617,209 @@ class _PersonalSettingsPanelState extends State<_PersonalSettingsPanel> {
     }
   }
 
+  InputDecoration _decor(String label) {
+    return InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(),
+      isDense: true,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = widget.l10n;
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    final w = MediaQuery.sizeOf(context).width;
+    final twoCol = w >= 500;
+    final hireDate = _tryParseStaffDate(
+        widget.pos.ajiltan['ajildOrsonOgnoo']);
+    final hireText = hireDate == null
+        ? '—'
+        : MongolianDateFormatter.formatShortDate(
+            DateTime(
+              hireDate.year,
+              hireDate.month,
+              hireDate.day,
+            ),
+          );
+
+    Widget twoFields(Widget a, Widget b) {
+      if (twoCol) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: a),
+            const SizedBox(width: 12),
+            Expanded(child: b),
+          ],
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [a, const SizedBox(height: 10), b],
+      );
+    }
+
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
-        Text(l10n.tr('pos_settings_personal_head'), style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          l10n.tr('pos_settings_personal_head'),
+          style: textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: colorScheme.primary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          l10n.tr('pos_settings_photo_hint'),
+          style: textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          l10n.tr('pos_settings_sub_basic'),
+          style: textTheme.labelLarge?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 8),
-        Text(l10n.tr('pos_settings_photo_hint'),
-            style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: 16),
-        TextField(controller: _ovog, decoration: InputDecoration(labelText: l10n.tr('pos_settings_ovog'))),
-        TextField(controller: _ner, decoration: InputDecoration(labelText: l10n.tr('pos_settings_ner'))),
-        TextField(controller: _register, decoration: InputDecoration(labelText: l10n.tr('pos_settings_register'))),
-        TextField(
-          controller: _utas,
-          decoration: InputDecoration(labelText: l10n.tr('pos_settings_utas')),
-          keyboardType: TextInputType.phone,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(8)],
-        ),
-        TextField(controller: _mail, decoration: InputDecoration(labelText: l10n.tr('pos_settings_mail'))),
-        TextField(controller: _khayag, decoration: InputDecoration(labelText: l10n.tr('pos_settings_khayag')), maxLines: 3),
-        const SizedBox(height: 16),
-        Text(l10n.tr('pos_settings_pw_hint'), style: Theme.of(context).textTheme.labelMedium),
-        TextField(
-          controller: _nuutsUg,
-          decoration: InputDecoration(labelText: l10n.tr('pos_settings_pw_new')),
-          obscureText: true,
-        ),
-        TextField(
-          controller: _nuutsUgDavtan,
-          decoration: InputDecoration(labelText: l10n.tr('pos_settings_pw_repeat')),
-          obscureText: true,
+        Card(
+          margin: EdgeInsets.zero,
+          elevation: 0,
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                twoFields(
+                  TextField(
+                    controller: _ovog,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: _decor(l10n.tr('pos_settings_ovog')),
+                  ),
+                  TextField(
+                    controller: _ner,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: _decor(l10n.tr('pos_settings_ner')),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                twoFields(
+                  TextField(
+                    controller: _register,
+                    decoration: _decor(l10n.tr('pos_settings_register')),
+                  ),
+                  InputDecorator(
+                    decoration: _decor(l10n.tr('pos_settings_hire_date')),
+                    child: Text(
+                      hireText,
+                      style: textTheme.bodyLarge,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
         const SizedBox(height: 20),
-        FilledButton(
+        Text(
+          l10n.tr('pos_settings_sub_password'),
+          style: textTheme.labelLarge?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          l10n.tr('pos_settings_pw_hint'),
+          style: textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          margin: EdgeInsets.zero,
+          elevation: 0,
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _nuutsUg,
+                  decoration: _decor(l10n.tr('pos_settings_pw_new')),
+                  obscureText: true,
+                  autocorrect: false,
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _nuutsUgDavtan,
+                  decoration: _decor(l10n.tr('pos_settings_pw_repeat')),
+                  obscureText: true,
+                  autocorrect: false,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          l10n.tr('pos_settings_sub_contact'),
+          style: textTheme.labelLarge?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          margin: EdgeInsets.zero,
+          elevation: 0,
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _utas,
+                  decoration: _decor(l10n.tr('pos_settings_utas')),
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(8),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _mail,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: _decor(l10n.tr('pos_settings_mail')),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _khayag,
+                  decoration: _decor(l10n.tr('pos_settings_khayag')),
+                  maxLines: 3,
+                  minLines: 1,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        FilledButton.icon(
           onPressed: _saving ? null : _save,
-          child: _saving
-              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
-              : Text(l10n.tr('save')),
+          icon: _saving
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.save_outlined, size: 20),
+          label: Text(l10n.tr('save')),
         ),
       ],
     );

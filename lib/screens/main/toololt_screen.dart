@@ -12,7 +12,7 @@ import '../../services/product_service.dart';
 import '../../services/toololt_service.dart';
 import '../../utils/app_date_range_picker.dart';
 import '../../utils/mnt_amount_formatter.dart';
-import '../../utils/mongolian_date_formatter.dart';
+import '../../widgets/app_date_range_filter_button.dart';
 import '../../widgets/barcode_scan_sheet.dart';
 
 /// Holds dialog search string across [StatefulBuilder] rebuilds.
@@ -1078,9 +1078,24 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
       cancelText: l10n.tr('date_picker_cancel'),
       confirmText: l10n.tr('date_picker_confirm'),
     );
-    if (picked != null) {
-      setState(() => _range = picked);
-    }
+    if (picked == null || !mounted) return;
+    setState(() {
+      _range = DateTimeRange(
+        start: DateTime(
+          picked.start.year,
+          picked.start.month,
+          picked.start.day,
+        ),
+        end: DateTime(
+          picked.end.year,
+          picked.end.month,
+          picked.end.day,
+          23,
+          59,
+          59,
+        ),
+      );
+    });
   }
 
   Future<void> _pickProducts() async {
@@ -1354,31 +1369,16 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
               ),
             ),
             const SizedBox(height: 12),
-            Card(
-              margin: EdgeInsets.zero,
-              clipBehavior: Clip.antiAlias,
-              child: ListTile(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                title: Text(
-                  l10n.tr('toololt_start_dates'),
-                  style: textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                subtitle: Text(
-                  MongolianDateFormatter.formatDateRangeLine(
-                    _range.start,
-                    _range.end,
-                  ),
-                  style: textTheme.bodyMedium,
-                ),
-                trailing: Icon(
-                  Icons.date_range_rounded,
-                  color: scheme.primary,
-                ),
-                onTap: _pickRange,
+            Text(
+              l10n.tr('toololt_start_dates'),
+              style: textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
               ),
+            ),
+            const SizedBox(height: 6),
+            AppDateRangeFilterButton(
+              range: _range,
+              onPressed: _pickRange,
             ),
             const SizedBox(height: 12),
             InputDecorator(

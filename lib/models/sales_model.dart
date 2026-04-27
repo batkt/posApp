@@ -391,6 +391,18 @@ class SalesModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replace cart with parked-sale lines and restore receipt number (web `huleelgeesHudaldahruuZakhialgaKhiiy`).
+  void restoreParkedSale(
+    List<SaleItem> lines, {
+    required String guilgeeniiDugaar,
+  }) {
+    _currentSale
+      ..clear()
+      ..addAll(lines);
+    _guilgeeniiDugaar = guilgeeniiDugaar;
+    notifyListeners();
+  }
+
   // Complete sale and add to history
   CompletedSale completeSale(
     String paymentMethod, {

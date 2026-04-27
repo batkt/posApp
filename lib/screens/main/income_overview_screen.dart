@@ -7,7 +7,7 @@ import '../../services/hynalt_tailan_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_date_range_picker.dart';
 import '../../utils/mnt_amount_formatter.dart';
-import '../../utils/mongolian_date_formatter.dart';
+import '../../widgets/app_date_range_filter_button.dart';
 
 /// Web parity: `/khyanalt/hynalt` — summary cards + “Их зарагдсан” table (Орлого column).
 class IncomeOverviewScreen extends StatefulWidget {
@@ -133,15 +133,9 @@ class _IncomeOverviewScreenState extends State<IncomeOverviewScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            OutlinedButton.icon(
+            AppDateRangeFilterButton(
+              range: _range,
               onPressed: _pickRange,
-              icon: const Icon(Icons.date_range_rounded),
-              label: Text(
-                MongolianDateFormatter.formatDateRangeLine(
-                  _range.start,
-                  _range.end,
-                ),
-              ),
             ),
             const SizedBox(height: 16),
             if (_loading)

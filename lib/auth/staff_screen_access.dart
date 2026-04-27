@@ -19,6 +19,7 @@ class StaffScreenAccess {
     required this.allowsEbarimt,
     required this.allowsHynalt,
     required this.allowsTailan,
+    required this.allowsBaraaEdit,
   });
 
   /// Only `AdminEsekh` — used for unrestricted UI (e.g. CAdmin) and legacy “see all”.
@@ -61,6 +62,9 @@ class StaffScreenAccess {
 
   /// Web `/khyanalt/tailan/*` — Тайлан (reports).
   final bool allowsTailan;
+
+  /// `tsonkhniiTokhirgoo['baraaZasakh']` or admin — бараа засах (app-only key, see staff editor).
+  final bool allowsBaraaEdit;
 
   /// Same as [allowsBarimtiinJagsaalt] — barcode/receipt history screen guard.
   bool get allowsSalesHistory => allowsBarimtiinJagsaalt;
@@ -147,6 +151,8 @@ class StaffScreenAccess {
         match('/khyanalt/hynalt') ||
         match('khyanalt/hynalt');
     final tailan = full || match('khyanalt/tailan');
+    final baraaZasakh = full ||
+        (map != null && (_truthy(map['baraaZasakh']) || _truthy(map['baraa_zasakh'])));
 
     return StaffScreenAccess(
       hasFullAccess: full,
@@ -163,6 +169,7 @@ class StaffScreenAccess {
       allowsEbarimt: ebarimt,
       allowsHynalt: hynalt,
       allowsTailan: tailan,
+      allowsBaraaEdit: baraaZasakh,
     );
   }
 
@@ -181,6 +188,7 @@ class StaffScreenAccess {
     allowsEbarimt: false,
     allowsHynalt: false,
     allowsTailan: false,
+    allowsBaraaEdit: false,
   );
 
   static bool _truthy(dynamic v) {

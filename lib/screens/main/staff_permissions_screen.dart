@@ -412,6 +412,22 @@ class _StaffPermissionEditorScreenState extends State<StaffPermissionEditorScree
                       ),
                     ),
                     const SizedBox(height: 20),
+                    _SectionTitle(text: l10n.tr('staff_section_baraa')),
+                    Card(
+                      child: SwitchListTile(
+                        title: Text(l10n.tr('staff_baraa_edit_title')),
+                        subtitle: Text(
+                          l10n.tr('staff_baraa_edit_subtitle'),
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        value: _truthy(_tokhirgoo['baraaZasakh']),
+                        onChanged: (v) =>
+                            setState(() => _tokhirgoo['baraaZasakh'] = v),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                     _SectionTitle(text: l10n.tr('staff_section_window')),
                     const SizedBox(height: 8),
                     for (final block in _blocks) ...[

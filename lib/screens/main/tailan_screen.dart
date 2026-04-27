@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../services/tailan_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/app_date_range_picker.dart';
 import '../../utils/mnt_amount_formatter.dart';
+import '../../widgets/app_date_range_filter_button.dart';
 
 /// Single consolidated “closing” report: totals by payment method for the period.
 /// Uses `POST /borluulaltiinTailanKhelbereerAvya` (same as web POS).
@@ -49,11 +50,15 @@ class _TailanScreenState extends State<TailanScreen> {
   }
 
   Future<void> _pickRange() async {
-    final picked = await showDateRangePicker(
+    final l10n = AppLocalizations.of(context);
+    final picked = await showAppDateRangePicker(
       context: context,
       firstDate: DateTime(2018),
       lastDate: DateTime.now().add(const Duration(days: 365)),
       initialDateRange: _range,
+      helpText: l10n.tr('date_picker_range_help'),
+      cancelText: l10n.tr('date_picker_cancel'),
+      confirmText: l10n.tr('date_picker_confirm'),
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -81,7 +86,6 @@ class _TailanScreenState extends State<TailanScreen> {
     final l10n = AppLocalizations.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final df = DateFormat.yMMMd();
 
     return Scaffold(
       appBar: widget.showAppBar
@@ -101,15 +105,10 @@ class _TailanScreenState extends State<TailanScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: OutlinedButton.icon(
+            child: AppDateRangeFilterButton(
+              range: _range,
               onPressed: _pickRange,
-              icon: const Icon(Icons.date_range_rounded),
-              label: Text(
-                '${df.format(_range.start)} – ${df.format(_range.end)}',
-                style: textTheme.bodySmall,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
+              padding: EdgeInsets.zero,
             ),
           ),
           Expanded(

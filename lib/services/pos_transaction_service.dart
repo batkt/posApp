@@ -176,31 +176,12 @@ class PosTransactionService {
     return data.toString();
   }
 
-  /// Same payload shape as `tulburTuluhModal.js` → `POST /guilgeeniiTuukhKhadgalya`.
-  Future<dynamic> submitGuilgeeniiTuukh({
+  List<Map<String, dynamic>> _buildGuilgeeBaraanuud({
     required PosSession session,
-    required SalesModel sales,
-    required String paymentTurul,
-    required double niitUne,
-    required double tulsunDun,
-    required double hariult,
-    required double hungulsunDun,
-    required double noatiinDun,
-    required double noatguiDun,
-    required double nhatiinDun,
-    required String guilgeeniiDugaar,
-    bool baraaNUATModalOpen = false,
-    Map<String, dynamic>? khariltsagch,
-    /// Web `tulburTuluhModal`: `tulbur[]` with `turul: "zeel"` must include `khariltsagchiinId`
-    /// for `guilgeeRoute` receivable (`avlagaGuilgeeKhadgalya`).
-    String? zeelKhariltsagchiinId,
-
-    /// When set (cashier POS), НӨАТ/НХАТ per line matches web `posSystem/index.js`.
+    required List<SaleItem> items,
     PosWebTaxContext? webTaxContext,
     double cashierDiscountMnt = 0,
-  }) async {
-    final items = sales.currentSaleItems;
-
+  }) {
     List<PosWebLineTax>? webSplits;
     if (webTaxContext != null && items.isNotEmpty) {
       webSplits = PosPaymentCore.computeLineTaxesForCart(
@@ -239,6 +220,68 @@ class PosTransactionService {
         'salbariinId': p.salbariinId ?? session.salbariinId,
       });
     }
+    return baraanuud;
+  }
+
+  Future<dynamic> _postGuilgeeniiTuukhKhadgalya(Map<String, dynamic> body) async {
+    body.removeWhere((k, v) => v == null);
+
+    final safeBody = _sanitizeJson(body);
+    var encodedBody = jsonEncode(safeBody);
+    encodedBody = encodedBody
+        .replaceAll('"NaN"', '"0"')
+        .replaceAll('"nan"', '"0"')
+        .replaceAll('"Infinity"', '"0"')
+        .replaceAll('"-Infinity"', '"0"')
+        .replaceAll('"infinity"', '"0"')
+        .replaceAll('"-infinity"', '"0"');
+    if (kDebugMode && encodedBody.toLowerCase().contains('nan')) {
+      debugPrint('[guilgeeniiTuukhKhadgalya] encoded body still had NaN token');
+    }
+    final uri = Uri.parse('${ApiConfig.posBaseUrl}/guilgeeniiTuukhKhadgalya');
+    final res = await _http
+        .post(uri, headers: _headers(), body: encodedBody)
+        .timeout(ApiConfig.timeout);
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw PosTransactionException(
+        _messageFromErrorBody(res.body) ?? 'Гүйлгээ хадгалахад алдаа',
+        statusCode: res.statusCode,
+      );
+    }
+
+    return _decodeBody(res.body);
+  }
+
+  /// Same payload shape as `tulburTuluhModal.js` → `POST /guilgeeniiTuukhKhadgalya`.
+  Future<dynamic> submitGuilgeeniiTuukh({
+    required PosSession session,
+    required SalesModel sales,
+    required String paymentTurul,
+    required double niitUne,
+    required double tulsunDun,
+    required double hariult,
+    required double hungulsunDun,
+    required double noatiinDun,
+    required double noatguiDun,
+    required double nhatiinDun,
+    required String guilgeeniiDugaar,
+    bool baraaNUATModalOpen = false,
+    Map<String, dynamic>? khariltsagch,
+    /// Web `tulburTuluhModal`: `tulbur[]` with `turul: "zeel"` must include `khariltsagchiinId`
+    /// for `guilgeeRoute` receivable (`avlagaGuilgeeKhadgalya`).
+    String? zeelKhariltsagchiinId,
+
+    /// When set (cashier POS), НӨАТ/НХАТ per line matches web `posSystem/index.js`.
+    PosWebTaxContext? webTaxContext,
+    double cashierDiscountMnt = 0,
+  }) async {
+    final baraanuud = _buildGuilgeeBaraanuud(
+      session: session,
+      items: sales.currentSaleItems,
+      webTaxContext: webTaxContext,
+      cashierDiscountMnt: cashierDiscountMnt,
+    );
 
     // Web `tulbur`: `[{ turul, une, khariltsagchiinId? }]`
     // Cash: `une` = төлсөн дүн minus хариулт; card/dans/zeel: full `tulsunDun`.
@@ -280,33 +323,50 @@ class PosTransactionService {
       'ajiltan': session.ajiltanPayload,
     };
 
-    body.removeWhere((k, v) => v == null);
+    return _postGuilgeeniiTuukhKhadgalya(body);
+  }
 
-    final safeBody = _sanitizeJson(body);
-    var encodedBody = jsonEncode(safeBody);
-    encodedBody = encodedBody
-        .replaceAll('"NaN"', '"0"')
-        .replaceAll('"nan"', '"0"')
-        .replaceAll('"Infinity"', '"0"')
-        .replaceAll('"-Infinity"', '"0"')
-        .replaceAll('"infinity"', '"0"')
-        .replaceAll('"-infinity"', '"0"');
-    if (kDebugMode && encodedBody.toLowerCase().contains('nan')) {
-      debugPrint('[guilgeeniiTuukhKhadgalya] encoded body still had NaN token');
-    }
-    final uri = Uri.parse('${ApiConfig.posBaseUrl}/guilgeeniiTuukhKhadgalya');
-    final res = await _http
-        .post(uri, headers: _headers(), body: encodedBody)
-        .timeout(ApiConfig.timeout);
+  /// Web POS `huleelgey()` → `POST /guilgeeniiTuukhKhadgalya` with `tulbur: []` so `tuluv` stays 0.
+  Future<dynamic> parkGuilgeeniiTuukh({
+    required PosSession session,
+    required SalesModel sales,
+    required String guilgeeniiDugaar,
+    required double niitUne,
+    required double hungulsunDun,
+    required double noatiinDun,
+    required double noatguiDun,
+    required double nhatiinDun,
+    PosWebTaxContext? webTaxContext,
+    double cashierDiscountMnt = 0,
+    Map<String, dynamic>? khariltsagch,
+  }) async {
+    final baraanuud = _buildGuilgeeBaraanuud(
+      session: session,
+      items: sales.currentSaleItems,
+      webTaxContext: webTaxContext,
+      cashierDiscountMnt: cashierDiscountMnt,
+    );
 
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw PosTransactionException(
-        _messageFromErrorBody(res.body) ?? 'Гүйлгээ хадгалахад алдаа',
-        statusCode: res.statusCode,
-      );
-    }
+    final body = <String, dynamic>{
+      'baiguullagiinId': session.baiguullagiinId,
+      'salbariinId': session.salbariinId,
+      'turul': 'pos',
+      'tulsunDun': 0,
+      'hungulsunDun': _fixed2Num(hungulsunDun),
+      'noatiinDun': _fixed2Num(noatiinDun),
+      'noatguiDun': _fixed2Num(noatguiDun),
+      'nhatiinDun': _fixed2Num(nhatiinDun),
+      'hariult': 0,
+      'niitUne': _fixed2Num(niitUne),
+      if (khariltsagch != null) 'khariltsagch': khariltsagch,
+      'guilgeeniiDugaar': guilgeeniiDugaar,
+      'baraaNUATModalOpen': false,
+      'baraanuud': baraanuud,
+      'tulbur': <Map<String, dynamic>>[],
+      'ajiltan': session.ajiltanPayload,
+    };
 
-    return _decodeBody(res.body);
+    return _postGuilgeeniiTuukhKhadgalya(body);
   }
 
   /// Parses [submitGuilgeeniiTuukh] response: plain id string or `{ guilgeeniiId }`.

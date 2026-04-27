@@ -4,6 +4,7 @@ import '../models/auth_model.dart';
 import '../models/branch_option.dart';
 import '../models/pos_session.dart';
 import 'baiguullaga_service.dart';
+import 'pos_settings_service.dart';
 
 UserRole _roleHintFromAccess(StaffScreenAccess access) {
   if (access.hasFullAccess) return UserRole.admin;
@@ -50,6 +51,35 @@ class AuthService {
       salbariinId: resolved,
       ajiltan: base.ajiltan,
     );
+  }
+
+  /// Branch picker: 2+ IDs on [userData.salbaruud], or for **AdminEsekh** 2+ салбар
+  /// on the [baiguullaga] document (via [PosSettingsService.fetchSalbaruud]).
+  /// Admins often have 0–1 `salbaruud` on the staff row while the org has many.
+  Future<List<BranchOption>?> _resolveBranchOptionsAfterLogin(
+    Map<String, dynamic>? userData,
+    PosSession? posSession,
+  ) async {
+    if (userData == null) return null;
+    final fromEmployee = BranchOption.parseList(userData['salbaruud']);
+    if (fromEmployee.length > 1) {
+      return List<BranchOption>.from(fromEmployee);
+    }
+    if (userData['AdminEsekh'] == true) {
+      final bid = (posSession?.baiguullagiinId ??
+              userData['baiguullagiinId']?.toString() ??
+              '')
+          .trim();
+      if (bid.isEmpty) return null;
+      final settings = PosSettingsService(api: _apiService);
+      final orgRows = await settings.fetchSalbaruud(bid);
+      if (orgRows.isEmpty) return null;
+      final fromOrg = BranchOption.parseList(orgRows);
+      if (fromOrg.length > 1) {
+        return fromOrg;
+      }
+    }
+    return null;
   }
 
   /// Login with username and password
@@ -107,9 +137,10 @@ class AuthService {
           );
 
           final posSession = await _resolvePosSession(userData);
-          final branches = BranchOption.parseList(userData?['salbaruud']);
-          final branchOptions =
-              branches.length > 1 ? List<BranchOption>.from(branches) : null;
+          final branchOptions = await _resolveBranchOptionsAfterLogin(
+            userData,
+            posSession,
+          );
 
           return AuthResult.success(
             user: user,
@@ -180,9 +211,10 @@ class AuthService {
                 )
               : null;
           final posSession = await _resolvePosSession(userData);
-          final branches = BranchOption.parseList(userData?['salbaruud']);
-          final branchOptions =
-              branches.length > 1 ? List<BranchOption>.from(branches) : null;
+          final branchOptions = await _resolveBranchOptionsAfterLogin(
+            userData,
+            posSession,
+          );
 
           return AuthResult.success(
             user: user,
@@ -335,7 +367,8 @@ class AuthResult {
   final List<Map<String, dynamic>>? organizations;
   final PosSession? posSession;
   final StaffScreenAccess? staffAccess;
-  /// When the staff has more than one салбар in `salbaruud`, client must pick before POS.
+  /// When the staff (or admin + org) has more than one салбар to pick, client shows
+  /// [BranchSelectScreen] before POS.
   final List<BranchOption>? branchOptions;
 
   const AuthResult._({

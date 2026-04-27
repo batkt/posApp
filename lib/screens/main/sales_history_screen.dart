@@ -10,6 +10,7 @@ import '../../services/guilgee_service.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../widgets/completed_sale_detail_sheet.dart';
+import '../../widgets/parked_guilgee_sheet.dart';
 import '../../widgets/sale_year_month_filter_bar.dart';
 
 String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
@@ -88,13 +89,77 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     );
   }
 
-  Widget _bodyWithDateFilter(AppLocalizations l10n, Widget inner) {
+  Widget _bodyWithDateFilter(
+    AppLocalizations l10n,
+    Widget inner, {
+    Widget? belowFilter,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _dateFilterBar(l10n),
+        if (belowFilter != null) belowFilter,
         Expanded(child: inner),
       ],
+    );
+  }
+
+  Widget? _parkedQueueBanner(
+    BuildContext context,
+    AuthModel auth,
+    AppLocalizations l10n,
+    ColorScheme colorScheme,
+    TextTheme textTheme,
+  ) {
+    if (!auth.canSubmitPosSales || auth.posSession == null) return null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Material(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => showParkedGuilgeeSheet(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.inventory_2_outlined,
+                  color: colorScheme.primary,
+                  size: 26,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.tr('pos_park_queue'),
+                        style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        l10n.tr('pos_park_queue_banner_hint'),
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -185,6 +250,12 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
               ),
               centerTitle: true,
               actions: [
+                if (auth.canSubmitPosSales && auth.posSession != null)
+                  IconButton(
+                    tooltip: l10n.tr('pos_park_queue'),
+                    onPressed: () => showParkedGuilgeeSheet(context),
+                    icon: const Icon(Icons.inventory_2_outlined),
+                  ),
                 if (canRemote)
                   IconButton(
                     tooltip: l10n.tr('sales_history_refresh'),
@@ -215,6 +286,9 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     SalesModel sales,
     bool canRemote,
   ) {
+    final parkedBanner =
+        _parkedQueueBanner(context, auth, l10n, colorScheme, textTheme);
+
     if (!auth.staffAccess.allowsSalesHistory) {
       final raw = sales.salesHistory;
       final filtered = _applyDateFilter(raw);
@@ -230,6 +304,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
           onRefresh: null,
           sourceCountBeforeFilter: raw.length,
         ),
+        belowFilter: parkedBanner,
       );
     }
     if (auth.posSession == null || _remoteFuture == null) {
@@ -280,6 +355,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
             ),
           ],
         ),
+        belowFilter: parkedBanner,
       );
     }
 
@@ -383,6 +459,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
           );
         },
       ),
+      belowFilter: parkedBanner,
     );
   }
 

@@ -26,7 +26,13 @@ class InventoryItem {
     this.lastRestocked,
   });
 
-  bool get isLowStock => currentStock <= minStockLevel;
+  /// Цөөн үлдсэн: үлдэгдэл 1…[minStockLevel] (жишээ нь 1–10 нь `minStockLevel == 10` үед).
+  /// 0 үлдэгдэлтэй барааг энд оруулахгүй — тэдгээр нь [isOutOfStock].
+  bool get isLowStock =>
+      currentStock > 0 &&
+      minStockLevel > 0 &&
+      currentStock <= minStockLevel;
+
   bool get isOutOfStock => currentStock <= 0;
 
   double get stockValue => (costPrice ?? product.price * 0.6) * currentStock;
@@ -136,7 +142,7 @@ class InventoryModel extends ChangeNotifier {
         _inventory.addAll(productResult.products.map((product) => InventoryItem(
               product: product,
               currentStock: product.uldegdel ?? product.stock,
-              minStockLevel: 5,
+              minStockLevel: 10,
               costPrice: product.urtugUne,
               lastRestocked: product.createdAt,
             )));

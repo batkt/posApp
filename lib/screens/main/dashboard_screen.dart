@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/auth_model.dart';
 import '../../models/inventory_model.dart';
 import '../../models/locale_model.dart';
 import '../../models/sales_model.dart';
+import '../../services/guilgee_service.dart';
+import '../../services/hynalt_tailan_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
@@ -12,8 +15,129 @@ import 'out_of_stock_baraa_screen.dart';
 
 String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 
-class DashboardScreen extends StatelessWidget {
+String? _ajiltanNerFromSale(CompletedSale s) {
+  final a = s.ajiltan;
+  if (a == null) return null;
+  final n = a['ner'] ?? a['name'];
+  final t = n?.toString().trim() ?? '';
+  if (t.isEmpty) return null;
+  return t;
+}
+
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final HynaltTailanService _hynalt = HynaltTailanService();
+  final GuilgeeService _guilgee = GuilgeeService();
+
+  String? _sessionKey;
+  bool _loading = true;
+  String? _loadError;
+  DashboardMedeelelResult? _monthDash;
+  DashboardMedeelelResult? _todayDash;
+  List<CompletedSale> _recentBranch = const [];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final s = context.read<AuthModel>().posSession;
+    final k = s == null ? null : '${s.baiguullagiinId}\t${s.salbariinId}';
+    if (k == _sessionKey) return;
+    _sessionKey = k;
+    if (k == null) {
+      if (_loading || _monthDash != null || _loadError != null) {
+        setState(() {
+          _loading = false;
+          _monthDash = null;
+          _todayDash = null;
+          _recentBranch = const [];
+          _loadError = null;
+        });
+      }
+    } else {
+      _load();
+    }
+  }
+
+  DateTimeRange _currentMonthLocal() {
+    final n = DateTime.now();
+    return DateTimeRange(
+      start: DateTime(n.year, n.month, 1),
+      end: DateTime(n.year, n.month + 1, 0, 23, 59, 59),
+    );
+  }
+
+  DateTimeRange _todayLocal() {
+    final n = DateTime.now();
+    return DateTimeRange(
+      start: DateTime(n.year, n.month, n.day),
+      end: DateTime(n.year, n.month, n.day, 23, 59, 59),
+    );
+  }
+
+  Future<void> _load() async {
+    final session = context.read<AuthModel>().posSession;
+    if (session == null) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _loadError = null;
+        });
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+
+    final month = _currentMonthLocal();
+    final day = _todayLocal();
+    final ba = session.baiguullagiinId;
+    final sal = session.salbariinId;
+
+    final m = await _hynalt.fetchDashboardMedeelel(
+      baiguullagiinId: ba,
+      salbariinId: sal,
+      ekhlekh: month.start,
+      duusakh: month.end,
+    );
+    final d = await _hynalt.fetchDashboardMedeelel(
+      baiguullagiinId: ba,
+      salbariinId: sal,
+      ekhlekh: day.start,
+      duusakh: day.end,
+    );
+    final list = await _guilgee.listGuilgeeniiTuukh(
+      baiguullagiinId: ba,
+      salbariinId: sal,
+      page: 1,
+      pageSize: 5,
+    );
+
+    if (!mounted) return;
+    String? err;
+    if (!m.ok) {
+      err = m.error;
+    } else if (!d.ok) {
+      err = d.error;
+    } else if (!list.success) {
+      err = list.error;
+    }
+    setState(() {
+      _loading = false;
+      _monthDash = m;
+      _todayDash = d;
+      _loadError = err;
+      _recentBranch = list.success ? list.sales : const [];
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,101 +145,126 @@ class DashboardScreen extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final l10n = AppLocalizations.of(context);
 
+    final monthOk = _monthDash?.ok == true;
+    final todayOk = _todayDash?.ok == true;
+    final monthBorl = monthOk ? _monthDash!.borluulalt : 0.0;
+    final monthN = monthOk ? _monthDash!.guilgeeShirheg : 0;
+    final todayBorl = todayOk ? _todayDash!.borluulalt : 0.0;
+    final todayN = todayOk ? _todayDash!.guilgeeShirheg : 0;
+
     return Scaffold(
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            // Total recorded revenue (local history)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: Consumer<SalesModel>(
-                  builder: (context, sales, _) {
-                    return Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            colorScheme.primary,
-                            colorScheme.primary.withValues(alpha: 0.85),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: colorScheme.primary.withValues(alpha: 0.35),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
-                          ),
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          colorScheme.primary,
+                          colorScheme.primary.withValues(alpha: 0.85),
                         ],
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.savings_rounded,
-                                color: colorScheme.onPrimary,
-                                size: 22,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.tr('dashboard_total_recorded'),
-                                  style: textTheme.titleSmall?.copyWith(
-                                    color: colorScheme.onPrimary
-                                        .withValues(alpha: 0.95),
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colorScheme.primary.withValues(alpha: 0.35),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.savings_rounded,
+                              color: colorScheme.onPrimary,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                l10n.tr('dashboard_total_recorded'),
+                                style: textTheme.titleSmall?.copyWith(
+                                  color: colorScheme.onPrimary
+                                      .withValues(alpha: 0.95),
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (_loading && _monthDash == null)
+                          SizedBox(
+                            height: 40,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: CircularProgressIndicator(
+                                color: colorScheme.onPrimary,
+                                strokeWidth: 2,
+                              ),
+                            ),
+                          )
+                        else
                           Text(
-                            _fmtMnt(sales.totalRecordedRevenue),
+                            _loadError != null && !monthOk
+                                ? '—'
+                                : _fmtMnt(monthBorl),
                             style: textTheme.headlineMedium?.copyWith(
                               color: colorScheme.onPrimary,
                               fontWeight: FontWeight.w900,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
+                              fontFeatures: const [FontFeature.tabularFigures()],
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            l10n
-                                .tr('dashboard_sale_count')
-                                .replaceAll(
-                                  '{n}',
-                                  '${sales.totalRecordedSaleCount}',
-                                ),
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onPrimary
-                                  .withValues(alpha: 0.9),
+                        const SizedBox(height: 6),
+                        Text(
+                          l10n
+                              .tr('dashboard_sale_count')
+                              .replaceAll('{n}', '$monthN'),
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onPrimary
+                                .withValues(alpha: 0.9),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          l10n.tr('dashboard_total_recorded_hint'),
+                          style: textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onPrimary
+                                .withValues(alpha: 0.75),
+                          ),
+                        ),
+                        if (_loadError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              _loadError!,
+                              style: textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onPrimary
+                                    .withValues(alpha: 0.9),
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            l10n.tr('dashboard_total_recorded_hint'),
-                            style: textTheme.labelSmall?.copyWith(
-                              color: colorScheme.onPrimary
-                                  .withValues(alpha: 0.75),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
 
-            // Today's Summary
+            // Today's Summary (branch-wide from API)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -123,37 +272,41 @@ class DashboardScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Өнөөдрийн гүйлгээ',
+                      l10n.tr('dashboard_today_title'),
                       style: textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Consumer<SalesModel>(
-                      builder: (context, sales, child) {
-                        return Row(
-                          children: [
-                            Expanded(
-                              child: _StatCard(
-                                label: 'Орлого',
-                                value: _fmtMnt(sales.todayRevenue),
-                                icon: Icons.attach_money,
-                                color: AppColors.success,
-                              ),
+                    if (_loading && _todayDash == null)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(12),
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                    else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _StatCard(
+                              label: l10n.tr('dashboard_today_income'),
+                              value: !todayOk ? '—' : _fmtMnt(todayBorl),
+                              icon: Icons.attach_money,
+                              color: AppColors.success,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _StatCard(
-                                label: 'Гүйлгээ',
-                                value: sales.todayTransactions.toString(),
-                                icon: Icons.receipt,
-                                color: colorScheme.primary,
-                              ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _StatCard(
+                              label: l10n.tr('dashboard_today_tx'),
+                              value: '$todayN',
+                              icon: Icons.receipt,
+                              color: colorScheme.primary,
                             ),
-                          ],
-                        );
-                      },
-                    ),
+                          ),
+                        ],
+                      ),
                   ],
                 ),
               ),
@@ -265,41 +418,47 @@ class DashboardScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Consumer<SalesModel>(
-                      builder: (context, sales, child) {
-                        final recentSales = sales.salesHistory.take(5).toList();
-
-                        if (recentSales.isEmpty) {
-                          return _InfoCard(
-                            icon: Icons.receipt_outlined,
-                            message: 'No sales recorded yet',
-                            color: colorScheme.outline,
+                    if (_loading && _recentBranch.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Center(
+                          child: SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      )
+                    else if (_recentBranch.isEmpty)
+                      _InfoCard(
+                        icon: Icons.receipt_outlined,
+                        message: l10n.tr('dashboard_no_recent'),
+                        color: colorScheme.outline,
+                      )
+                    else
+                      Column(
+                        children: _recentBranch.map((sale) {
+                          final pieces = sale.items
+                              .fold<int>(0, (sum, i) => sum + i.quantity);
+                          return _SaleListTile(
+                            saleId: sale.id,
+                            amount: sale.total,
+                            time: sale.timestamp,
+                            pieceCount: pieces,
+                            lineCount: sale.items.length,
+                            l10n: l10n,
+                            cashierName: _ajiltanNerFromSale(sale),
                           );
-                        }
-
-                        return Column(
-                          children: recentSales.map((sale) {
-                            final pieces = sale.items
-                                .fold<int>(0, (sum, i) => sum + i.quantity);
-                            return _SaleListTile(
-                              saleId: sale.id,
-                              amount: sale.total,
-                              time: sale.timestamp,
-                              pieceCount: pieces,
-                              lineCount: sale.items.length,
-                              l10n: l10n,
-                            );
-                          }).toList(),
-                        );
-                      },
-                    ),
+                        }).toList(),
+                      ),
                   ],
                 ),
               ),
             ),
 
             const SliverToBoxAdapter(child: SizedBox(height: 32)),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -448,6 +607,7 @@ class _SaleListTile extends StatelessWidget {
   final int pieceCount;
   final int lineCount;
   final AppLocalizations l10n;
+  final String? cashierName;
 
   const _SaleListTile({
     required this.saleId,
@@ -456,6 +616,7 @@ class _SaleListTile extends StatelessWidget {
     required this.pieceCount,
     required this.lineCount,
     required this.l10n,
+    this.cashierName,
   });
 
   @override
@@ -466,6 +627,7 @@ class _SaleListTile extends StatelessWidget {
         .tr('receipt_qty_summary')
         .replaceAll('{pieces}', '$pieceCount')
         .replaceAll('{lines}', '$lineCount');
+    final cName = cashierName;
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -501,6 +663,17 @@ class _SaleListTile extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                if (cName != null && cName.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    cName,
+                    style: textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
                 Text(
                   '$qtyLine · ${MongolianDateFormatter.formatTime(time)}',
                   style: textTheme.bodySmall?.copyWith(

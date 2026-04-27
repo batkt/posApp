@@ -57,6 +57,20 @@ class MongolianDateFormatter {
     return '${formatDateYmdWords(start)} — ${formatDateYmdWords(end)}';
   }
 
+  /// Narrow filter label: `2026-04-05` (year–month–day only).
+  static String formatDateYmdCompact(DateTime date) {
+    final local = date.toLocal();
+    final y = local.year.toString().padLeft(4, '0');
+    final m = local.month.toString().padLeft(2, '0');
+    final d = local.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
+  /// Same as [formatDateRangeLine] but compact Latin digits — for date filter buttons.
+  static String formatDateRangeCompact(DateTime start, DateTime end) {
+    return '${formatDateYmdCompact(start)} — ${formatDateYmdCompact(end)}';
+  }
+
   /// Section title for sales history (weekday + calendar date in Mongolian).
   static String formatSalesHistorySectionDate(DateTime date) {
     final local = date.toLocal();

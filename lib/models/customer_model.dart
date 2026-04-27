@@ -209,8 +209,10 @@ class CustomerModel extends ChangeNotifier {
   }
 
   /// `POST /khariltsagchBurtgeye` — same as web `khariltsagchNemekhModal`.
-  /// [turul] must be `Иргэн` or `ААН` (server convention).
+  /// [khariltsagchiinTurul] is `Иргэн` or `ААН`. [turul] is `Худалдан авагч` /
+  /// `Нийлүүлэгч` or `Ажилтан`.
   Future<String?> registerCustomer({
+    required String khariltsagchiinTurul,
     required String turul,
     String? ovog,
     required String ner,
@@ -226,6 +228,7 @@ class CustomerModel extends ChangeNotifier {
     final res = await _service.registerBurtgeye(
       baiguullagiinId: session.baiguullagiinId,
       salbariinId: session.salbariinId,
+      khariltsagchiinTurul: khariltsagchiinTurul,
       turul: turul,
       ovog: ovog,
       ner: ner,

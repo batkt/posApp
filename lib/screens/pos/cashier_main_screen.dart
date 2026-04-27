@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../widgets/kiosk_drawer.dart';
+import '../../widgets/parked_guilgee_sheet.dart';
 import '../../widgets/kiosk_terminal_pay_signal_listener.dart';
 import '../main/khaalt_screen.dart';
 import 'pos_screen.dart';
@@ -68,6 +69,12 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
           ],
         ),
         actions: [
+          if (auth.canSubmitPosSales && auth.posSession != null)
+            IconButton(
+              tooltip: l10n.tr('pos_park_queue'),
+              onPressed: () => showParkedGuilgeeSheet(context),
+              icon: const Icon(Icons.inventory_2_outlined),
+            ),
           if (auth.canSubmitPosSales)
             IconButton(
               tooltip: l10n.tr('menu_khaalt'),

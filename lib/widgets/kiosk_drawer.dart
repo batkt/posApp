@@ -20,7 +20,24 @@ import '../utils/pos_native_debug_log.dart';
 import '../services/printer_service.dart';
 import '../services/terminal_hardware_service.dart';
 import '../utils/pos_shell_reset.dart';
-import 'drawer_branch_switch.dart';
+
+/// EPOS sync (with dump dialog), terminal routing report, PAX test print — set `true` for engineering builds only.
+const bool _showKioskDrawerTerminalDebugMenu = false;
+
+/// Closes the kiosk drawer, then pops [KioskDrawerStackedPage] when it is on the stack
+/// (same as the old top-right **Борлуулалт** menu action). On the POS shell only, this
+/// just closes the drawer.
+void kioskDrawerGoToCurrentSale(BuildContext context) {
+  resetCashierPosShellState(context);
+  Navigator.of(context).maybePop();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!context.mounted) return;
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      nav.pop();
+    }
+  });
+}
 
 /// Side menu for kiosk / mobile POS — same visual design as [MainScreen] drawer.
 class KioskDrawer extends StatelessWidget {
@@ -40,6 +57,11 @@ class KioskDrawer extends StatelessWidget {
     final drawerShell = mobileStaffShell;
 
     final menuActions = <_KioskMenuAction>[
+      _KioskMenuAction(
+        icon: Icons.point_of_sale_rounded,
+        labelKey: 'current_sale',
+        onTap: (ctx) => kioskDrawerGoToCurrentSale(ctx),
+      ),
       if (access.allowsDashboard)
         _KioskMenuAction(
           icon: Icons.dashboard_outlined,
@@ -161,7 +183,7 @@ class KioskDrawer extends StatelessWidget {
             titleKey: 'menu_pos_settings',
           ),
         ),
-      if (access.allowsEbarimt)
+      if (_showKioskDrawerTerminalDebugMenu && access.allowsEbarimt)
         _KioskMenuAction(
           icon: Icons.sync_problem_rounded,
           labelKey: 'epos_sync',
@@ -276,7 +298,7 @@ class KioskDrawer extends StatelessWidget {
             }
           },
         ),
-      if (access.allowsEbarimt)
+      if (_showKioskDrawerTerminalDebugMenu && access.allowsEbarimt)
         _KioskMenuAction(
           icon: Icons.info_outline_rounded,
           labelKey: 'menu_terminal_routing_debug',
@@ -344,7 +366,7 @@ class KioskDrawer extends StatelessWidget {
             );
           },
         ),
-      if (access.allowsEbarimt)
+      if (_showKioskDrawerTerminalDebugMenu && access.allowsEbarimt)
         _KioskMenuAction(
           icon: Icons.print_outlined,
           labelKey: 'pax_test_print',
@@ -575,7 +597,6 @@ class KioskDrawer extends StatelessWidget {
                 ],
               ),
             ),
-            const DrawerBranchSwitchSection(),
             const SizedBox(height: 8),
             Expanded(
               child: menuActions.isEmpty
@@ -802,12 +823,6 @@ class _KioskDrawerStackedPageState extends State<KioskDrawerStackedPage> {
           tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
           onPressed: () => _scaffoldKey.currentState?.openDrawer(),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(l10n.tr('current_sale')),
-          ),
-        ],
       ),
       body: widget.body,
     );

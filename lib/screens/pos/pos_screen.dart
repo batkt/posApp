@@ -16,6 +16,9 @@ import '../../widgets/test_image_widget.dart';
 import '../../widgets/authenticated_image.dart';
 import '../../widgets/box_line_pieces_sheet.dart';
 import '../../services/terminal_tulbur_signal_service.dart';
+import '../../services/pos_transaction_service.dart';
+import '../../services/pos_settings_service.dart';
+import '../../payment/pos_payment_core.dart';
 
 /// How many of this product are in the current sale (0 = not in cart).
 int _saleQtyForProduct(SalesModel sales, String productId) {
@@ -111,6 +114,141 @@ class _POSScreenState extends State<POSScreen> {
       inventory.restock(line.product.id, line.quantity);
     }
     sales.clearSale();
+  }
+
+  Future<void> _parkCurrentSale(BuildContext context) async {
+    final auth = context.read<AuthModel>();
+    final sales = context.read<SalesModel>();
+    final l10n = AppLocalizations.of(context);
+    if (!auth.canSubmitPosSales) return;
+    if (sales.isSaleEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.tr('pos_park_empty_cart'))),
+      );
+      return;
+    }
+    final session = auth.posSession!;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: Center(
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final svc = PosTransactionService();
+      var orderNo = sales.guilgeeniiDugaar;
+      if (orderNo == null || orderNo.isEmpty) {
+        final d = await svc.fetchZakhialgiinDugaar(
+          baiguullagiinId: session.baiguullagiinId,
+        );
+        if (d == null || d.isEmpty) {
+          throw PosTransactionException('Захиалгын дугаар авах боломжгүй');
+        }
+        orderNo = d;
+        sales.setGuilgeeniiDugaar(d);
+      }
+
+      if (widget.cashierMode) {
+        final taxCtx = await posSettingsService.loadPosWebTaxContext(
+          baiguullagiinId: session.baiguullagiinId,
+          salbariinId: session.salbariinId,
+        );
+        final totals = PosPaymentCore.calculateCashierTotalsWeb(
+          lineGrossAmounts:
+              sales.currentSaleItems.map((e) => e.total.toDouble()).toList(),
+          noatBodohPerLine: sales.currentSaleItems
+              .map((e) => e.product.noatBodohEsekh == true)
+              .toList(),
+          nhatBodohPerLine: sales.currentSaleItems
+              .map((e) => e.product.nhatBodohEsekh == true)
+              .toList(),
+          discountMnt: 0,
+          ctx: taxCtx,
+        );
+        await svc.parkGuilgeeniiTuukh(
+          session: session,
+          sales: sales,
+          guilgeeniiDugaar: orderNo,
+          niitUne: totals.total,
+          hungulsunDun: totals.cappedDiscount,
+          noatiinDun: totals.vat,
+          noatguiDun: totals.net,
+          nhatiinDun: totals.nhhat,
+          webTaxContext: taxCtx,
+          cashierDiscountMnt: 0,
+        );
+      } else {
+        final std = PosPaymentCore.calculateStandardSaleTotals(sales.subtotal);
+        await svc.parkGuilgeeniiTuukh(
+          session: session,
+          sales: sales,
+          guilgeeniiDugaar: orderNo,
+          niitUne: std.total,
+          hungulsunDun: 0,
+          noatiinDun: std.vat,
+          noatguiDun: std.net,
+          nhatiinDun: 0,
+          webTaxContext: null,
+          cashierDiscountMnt: 0,
+        );
+      }
+
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      if (!context.mounted) return;
+      _clearSaleAndRestock(context, sales);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.tr('pos_park_success'))),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e is PosTransactionException
+                  ? posPaymentErrorUserMessage(e)
+                  : l10n.tr('pos_park_failed'),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildParkSaleActions(BuildContext context, SalesModel sales) {
+    final auth = context.read<AuthModel>();
+    if (!auth.canSubmitPosSales) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: sales.isSaleEmpty ? null : () => _parkCurrentSale(context),
+          icon: const Icon(Icons.pause_circle_outline_rounded, size: 22),
+          label: Text(
+            l10n.tr('pos_park_put'),
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
+    );
   }
 
   void _showBulkPricingSheet(BuildContext context, SaleItem item) {
@@ -1241,6 +1379,8 @@ class _POSScreenState extends State<POSScreen> {
             isTotal: true,
           ),
           SizedBox(height: context.spacing),
+          _buildParkSaleActions(context, sales),
+          SizedBox(height: context.spacing),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
@@ -1323,6 +1463,8 @@ class _POSScreenState extends State<POSScreen> {
                 ],
               ),
               const SizedBox(height: 18),
+              _buildParkSaleActions(context, sales),
+              const SizedBox(height: 10),
               FilledButton.icon(
                 onPressed: sales.isSaleEmpty
                     ? null

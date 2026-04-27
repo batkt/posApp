@@ -34,6 +34,7 @@ class HynaltTailanService {
           ashig: _toDouble(m['ashig']),
           avlaga: _toDouble(m['avlaga']),
           uglug: _toDouble(m['uglug']),
+          guilgeeShirheg: _toInt(m['guilgeeShirheg']),
         );
       }
       return DashboardMedeelelResult.fail(response.message ?? 'Алдаа');
@@ -92,6 +93,13 @@ class HynaltTailanService {
     if (v is num) return v.toDouble();
     return double.tryParse(v.toString()) ?? 0;
   }
+
+  static int _toInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString()) ?? 0;
+  }
 }
 
 class DashboardMedeelelResult {
@@ -101,6 +109,7 @@ class DashboardMedeelelResult {
     this.ashig = 0,
     this.avlaga = 0,
     this.uglug = 0,
+    this.guilgeeShirheg = 0,
     this.error,
   });
 
@@ -109,6 +118,8 @@ class DashboardMedeelelResult {
   final double ashig;
   final double avlaga;
   final double uglug;
+  /// Баримтын тоо (гүйлгээний тоо) — same date range as [borluulalt].
+  final int guilgeeShirheg;
   final String? error;
 
   factory DashboardMedeelelResult.ok({
@@ -116,6 +127,7 @@ class DashboardMedeelelResult {
     required double ashig,
     required double avlaga,
     required double uglug,
+    int guilgeeShirheg = 0,
   }) =>
       DashboardMedeelelResult._(
         ok: true,
@@ -123,6 +135,7 @@ class DashboardMedeelelResult {
         ashig: ashig,
         avlaga: avlaga,
         uglug: uglug,
+        guilgeeShirheg: guilgeeShirheg,
       );
 
   factory DashboardMedeelelResult.fail(String message) =>

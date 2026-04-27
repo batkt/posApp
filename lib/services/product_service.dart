@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'api_service.dart';
 import '../models/cart_model.dart';
 
@@ -32,9 +34,26 @@ class ProductService {
         '/aguulakh',
         queryParams: {
           // No `uldegdel` filter: show zero-stock items in POS (tap can still block sale).
-          'query':
-              '{\"\$or\":[{\"ner\":{\"\$regex\":\"$search\",\"\$options\":\"i\"}},{\"barCode\":{\"\$regex\":\"$search\",\"\$options\":\"i\"}},{\"code\":{\"\$regex\":\"$search\",\"\$options\":\"i\"}},{\"boginoNer\":{\"\$regex\":\"$search\",\"\$options\":\"i\"}}],\"idevkhteiEsekh\":{\"\$ne\":false},\"baiguullagiinId\":\"$baiguullagiinId\",\"salbariinId\":\"$salbariinId\"}',
-          'order': '{"createdAt":-1}',
+          'query': jsonEncode({
+            r'$or': [
+              {
+                'ner': {r'$regex': search, r'$options': 'i'}
+              },
+              {
+                'barCode': {r'$regex': search, r'$options': 'i'}
+              },
+              {
+                'code': {r'$regex': search, r'$options': 'i'}
+              },
+              {
+                'boginoNer': {r'$regex': search, r'$options': 'i'}
+              },
+            ],
+            'idevkhteiEsekh': {r'$ne': false},
+            'baiguullagiinId': baiguullagiinId,
+            'salbariinId': salbariinId,
+          }),
+          'order': jsonEncode({r'createdAt': -1}),
           _khuudasniiDugaar: page.toString(),
           _khuudasniiKhemjee: limit.toString(),
           'baiguullagiinId': baiguullagiinId,
@@ -195,6 +214,44 @@ class ProductService {
       baiguullagiinId: baiguullagiinId,
       salbariinId: salbariinId,
     );
+  }
+
+  /// `PUT /aguulakh/:id` — same as web inventory edit (posBack `crud`).
+  /// [fields] are merged on the server; always include [baiguullagiinId] and [salbariinId] for scoping.
+  Future<({bool success, String? error})> updateAguulakh(
+    String id, {
+    required Map<String, dynamic> fields,
+  }) async {
+    final oid = id.trim();
+    if (oid.isEmpty) {
+      return (success: false, error: 'ID хоосон');
+    }
+    try {
+      final response = await _apiService.put<dynamic>(
+        '/aguulakh/$oid',
+        body: fields,
+        parser: (d) => d,
+      );
+      final ok = response.success;
+      if (ok) {
+        final d = response.data;
+        if (d == 'Amjilttai' || (d is String && d.toString().contains('Amjilttai'))) {
+          return (success: true, error: null);
+        }
+        if (d == null && response.statusCode == 200) {
+          return (success: true, error: null);
+        }
+        return (success: true, error: null);
+      }
+      return (
+        success: false,
+        error: response.message ?? 'Хадгалах амжилтгүй',
+      );
+    } on ApiException catch (e) {
+      return (success: false, error: e.message);
+    } catch (e) {
+      return (success: false, error: e.toString());
+    }
   }
 }
 

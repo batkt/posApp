@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'api_service.dart';
 import '../models/category_model.dart';
 
@@ -19,12 +21,19 @@ class CategoryService {
     int limit = 100,
   }) async {
     try {
+      // Match web `BaraaniiAngilal` list: org filter; optional `angilal` search.
+      // The old `$or` string was invalid JSON (second array item was not an object), so
+      // the API often returned an empty `jagsaalt` and category-based тооллого could not start.
+      final s = search.trim();
+      final query = <String, dynamic>{
+        'baiguullagiinId': baiguullagiinId,
+        if (s.isNotEmpty) 'angilal': {r'$regex': s, r'$options': 'i'},
+      };
       final response = await _apiService.get<Map<String, dynamic>>(
         '/BaraaniiAngilal',
         queryParams: {
-          'query':
-              '{\"\$or\":[{\"angilal\":{\"\$regex\":\"$search\",\"\$options\":\"i\"}},\"baiguullagiinId\":\"$baiguullagiinId\"]}',
-          'order': '{"createdAt":-1}',
+          'query': jsonEncode(query),
+          'order': jsonEncode({r'createdAt': -1}),
           _khuudasniiDugaar: page.toString(),
           _khuudasniiKhemjee: limit.toString(),
           'baiguullagiinId': baiguullagiinId,

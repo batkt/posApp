@@ -8,6 +8,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/app_date_range_picker.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
+import '../../widgets/app_date_range_filter_button.dart';
 
 /// Web parity: `barimtiinJagsaalt` tab **Худалдан авалт** (`/orlogoZarlagiinTuukh`).
 class PurchaseListScreen extends StatefulWidget {
@@ -168,15 +169,10 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: OutlinedButton.icon(
+            child: AppDateRangeFilterButton(
+              range: _range,
               onPressed: _pickRange,
-              icon: const Icon(Icons.date_range_rounded),
-              label: Text(
-                MongolianDateFormatter.formatDateRangeLine(
-                  _range.start,
-                  _range.end,
-                ),
-              ),
+              padding: EdgeInsets.zero,
             ),
           ),
           Expanded(

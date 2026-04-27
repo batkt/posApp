@@ -264,7 +264,10 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
   final _mail = TextEditingController();
   final _khayag = TextEditingController();
 
-  String _turul = 'Иргэн';
+  /// `ААН` | `Иргэн` — matches web [khariltsagchiinTurul].
+  String _khariltsagchiinTurul = 'ААН';
+  /// `Худалдан авагч` | `Нийлүүлэгч` | `Ажилтан` — matches web [turul].
+  String _businessTurul = 'Худалдан авагч';
   bool _submitting = false;
 
   @override
@@ -294,8 +297,11 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
     final model = context.read<CustomerModel>();
     setState(() => _submitting = true);
     final msg = await model.registerCustomer(
-      turul: _turul,
-      ovog: _ovog.text.trim().isEmpty ? null : _ovog.text.trim(),
+      khariltsagchiinTurul: _khariltsagchiinTurul,
+      turul: _businessTurul,
+      ovog: _khariltsagchiinTurul == 'Иргэн' && _ovog.text.trim().isNotEmpty
+          ? _ovog.text.trim()
+          : null,
       ner: _ner.text.trim(),
       utas: _utas.text.trim(),
       register: _register.text.trim().isEmpty ? null : _register.text.trim(),
@@ -367,6 +373,13 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        Text(
+                          l10n.tr('customer_legal_type_heading'),
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         SegmentedButton<String>(
                           segments: [
                             ButtonSegment(
@@ -386,21 +399,79 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
                               ),
                             ),
                           ],
-                          selected: {_turul},
+                          selected: {_khariltsagchiinTurul},
                           onSelectionChanged: (s) {
-                            setState(() => _turul = s.first);
+                            setState(() {
+                              _khariltsagchiinTurul = s.first;
+                              if (s.first == 'ААН') {
+                                _ovog.clear();
+                              }
+                            });
                           },
                         ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _ovog,
-                          decoration: InputDecoration(
-                            labelText: l10n.tr('customer_field_ovog'),
-                            filled: true,
-                            border: const OutlineInputBorder(),
+                        const SizedBox(height: 16),
+                        Text(
+                          l10n.tr('customer_business_turul_label'),
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 8),
+                        InputDecorator(
+                          decoration: const InputDecoration(
+                            filled: true,
+                            border: OutlineInputBorder(),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _businessTurul,
+                              isExpanded: true,
+                              items: [
+                                DropdownMenuItem(
+                                  value: 'Худалдан авагч',
+                                  child: Text(
+                                    l10n.tr('customer_turul_khudaldan'),
+                                  ),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'Нийлүүлэгч',
+                                  child: Text(
+                                    l10n.tr('customer_turul_niiluulegch'),
+                                  ),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'Ажилтан',
+                                  child: Text(
+                                    l10n.tr('customer_turul_ajiltan'),
+                                  ),
+                                ),
+                              ],
+                              onChanged: (v) {
+                                if (v != null) {
+                                  setState(() => _businessTurul = v);
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (_khariltsagchiinTurul == 'Иргэн') ...[
+                          TextFormField(
+                            controller: _ovog,
+                            decoration: InputDecoration(
+                              labelText: l10n.tr('customer_field_ovog'),
+                              filled: true,
+                              border: const OutlineInputBorder(),
+                            ),
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'Заавал';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 10),
+                        ],
                         TextFormField(
                           controller: _ner,
                           decoration: InputDecoration(

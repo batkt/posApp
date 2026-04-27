@@ -59,9 +59,12 @@ class KhariltsagchService {
   }
 
   /// Web parity: `POST /khariltsagchBurtgeye` (`khariltsagchNemekhModal.js`).
+  /// [khariltsagchiinTurul] is `ААН` or `Иргэн`; [turul] is `Худалдан авагч` /
+  /// `Нийлүүлэгч` or `Ажилтан` (must not be conflated).
   Future<KhariltsagchRegisterResult> registerBurtgeye({
     required String baiguullagiinId,
     required String salbariinId,
+    required String khariltsagchiinTurul,
     required String turul,
     String? ovog,
     required String ner,
@@ -74,7 +77,7 @@ class KhariltsagchService {
       'baiguullagiinId': baiguullagiinId,
       'salbariinId': salbariinId,
       'turul': turul,
-      'khariltsagchiinTurul': turul,
+      'khariltsagchiinTurul': khariltsagchiinTurul,
       'ner': ner.trim(),
       'utas': utas.map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
       'khunglukhEsekh': false,
