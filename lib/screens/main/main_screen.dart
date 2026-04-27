@@ -165,6 +165,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
       );
     }
+    /*
     if (access.allowsHynalt) {
       push(
         const IncomeOverviewScreen(showAppBar: false),
@@ -177,7 +178,9 @@ class _MainScreenState extends State<MainScreen> {
         ),
       );
     }
+    */
     if (access.allowsBarimtiinJagsaalt) {
+      /*
       push(
         const PurchaseListScreen(showAppBar: false),
         _MenuItem(
@@ -188,6 +191,7 @@ class _MainScreenState extends State<MainScreen> {
           index: 0,
         ),
       );
+      */
       push(
         const SalesHistoryScreen(showAppBar: false),
         _MenuItem(

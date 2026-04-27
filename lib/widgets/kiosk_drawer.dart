@@ -103,6 +103,7 @@ class KioskDrawer extends StatelessWidget {
             titleKey: 'ebarimt',
           ),
         ),
+      /*
       if (access.allowsHynalt)
         _KioskMenuAction(
           icon: Icons.trending_up_rounded,
@@ -114,6 +115,7 @@ class KioskDrawer extends StatelessWidget {
             titleKey: 'menu_orlogo',
           ),
         ),
+      */
       if (access.allowsTailan)
         _KioskMenuAction(
           icon: Icons.insert_chart_outlined,
@@ -125,6 +127,7 @@ class KioskDrawer extends StatelessWidget {
             titleKey: 'tailan_menu',
           ),
         ),
+      /*
       if (access.allowsBarimtiinJagsaalt)
         _KioskMenuAction(
           icon: Icons.shopping_cart_outlined,
@@ -136,6 +139,7 @@ class KioskDrawer extends StatelessWidget {
             titleKey: 'menu_hudaldan_avalt',
           ),
         ),
+      */
       if (access.allowsBarimtiinJagsaalt)
         _KioskMenuAction(
           icon: Icons.history_rounded,
