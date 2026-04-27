@@ -13,7 +13,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
   final _newPasswordController = TextEditingController();
   
@@ -23,7 +23,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _phoneController.dispose();
     _codeController.dispose();
     _newPasswordController.dispose();
     super.dispose();
@@ -35,7 +35,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
 
     final auth = context.read<AuthModel>();
-    final success = await auth.resetPassword(_usernameController.text.trim());
+    final success = await auth.resetPassword(_phoneController.text.trim());
 
     setState(() => _isLoading = false);
 
@@ -47,7 +47,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content:
-              Text('Хэрэглэгчийн нэр олдсонгүй. Шалгаад дахин оролдоно уу.'),
+              Text('Утасны дугаар олдсонгүй. Шалгаад дахин оролдоно уу.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -60,7 +60,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
     final auth = context.read<AuthModel>();
     final success = await auth.confirmPasswordReset(
-      _usernameController.text.trim(),
+      _phoneController.text.trim(),
       _codeController.text.trim(),
       _newPasswordController.text,
     );
@@ -140,18 +140,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
                   // Phone Field
                   TextFormField(
-                    controller: _usernameController,
-                    keyboardType: TextInputType.text,
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
                     textInputAction: TextInputAction.done,
                     onFieldSubmitted: (_) => _sendResetRequest(),
                     decoration: const InputDecoration(
-                      labelText: 'Хэрэглэгчийн нэр',
-                      hintText: 'admin',
-                      prefixIcon: Icon(Icons.person_outline),
+                      labelText: 'Утасны дугаар',
+                      hintText: '88xxxxxx',
+                      prefixIcon: Icon(Icons.phone_android_outlined),
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'Хэрэглэгчийн нэр оруулна уу';
+                        return 'Утасны дугаар оруулна уу';
                       }
                       return null;
                     },
@@ -204,7 +204,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${_usernameController.text} хэрэглэгчид SMS илгээлээ.',
+                    '${_phoneController.text} дугаарт SMS илгээлээ.',
                     style: textTheme.bodyLarge?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),

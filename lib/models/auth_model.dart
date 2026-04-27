@@ -272,13 +272,13 @@ class AuthModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> resetPassword(String username) async {
-    return await authService.requestPasswordReset(username.trim());
+  Future<bool> resetPassword(String phone) async {
+    return await authService.requestPasswordReset(phone.trim());
   }
 
-  Future<bool> confirmPasswordReset(String username, String code, String newPassword) async {
+  Future<bool> confirmPasswordReset(String phone, String code, String newPassword) async {
     return await authService.resetPassword(
-      username: username.trim(),
+      phone: phone.trim(),
       code: code.trim(),
       newPassword: newPassword,
     );

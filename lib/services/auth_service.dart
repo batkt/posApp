@@ -318,12 +318,12 @@ class AuthService {
   }
 
   /// Request password reset
-  Future<bool> requestPasswordReset(String username) async {
+  Future<bool> requestPasswordReset(String phone) async {
     try {
       final response = await _apiService.post<Map<String, dynamic>>(
         '/nuutsUgMartasan',
         body: {
-          'burtgeliinDugaar': username,
+          'utas': phone,
         },
         parser: (data) => data as Map<String, dynamic>,
       );
@@ -336,17 +336,17 @@ class AuthService {
 
   /// Reset password with code
   Future<bool> resetPassword({
-    required String username,
+    required String phone,
     required String code,
     required String newPassword,
   }) async {
     try {
       final response = await _apiService.post<Map<String, dynamic>>(
-        '/nuutsUgShinechlehKod',
+        '/nuutsUgMartasanBatalgaajuulakh',
         body: {
-          'burtgeliinDugaar': username,
-          'batalgaajuulakhKod': code,
-          'shineNuutsUg': newPassword,
+          'utas': phone,
+          'otp': code,
+          'nuutsUg': newPassword,
         },
         parser: (data) => data as Map<String, dynamic>,
       );
