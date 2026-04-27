@@ -1230,39 +1230,133 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
       );
       return;
     }
+    final searchCtrl = TextEditingController();
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSt) {
-          final angilaluud = res.categories
+          final allAngilaluud = res.categories
               .map((cat) => cat.angilal.trim())
               .where((a) => a.isNotEmpty)
               .toSet()
               .toList()
             ..sort();
+          final query = searchCtrl.text.trim().toLowerCase();
+          final angilaluud = query.isEmpty
+              ? allAngilaluud
+              : allAngilaluud
+                  .where((a) => a.toLowerCase().contains(query))
+                  .toList();
+          final allSelected =
+              allAngilaluud.isNotEmpty &&
+              allAngilaluud.every((a) => picked.contains(a));
+
           return AlertDialog(
-            title: Text(widget.l10n.tr('toololt_pick_categories')),
+            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title row with count badge + select-all button
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(widget.l10n.tr('toololt_pick_categories')),
+                    ),
+                    if (picked.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(right: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Theme.of(ctx).colorScheme.primary,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${picked.length}',
+                          style: Theme.of(ctx)
+                              .textTheme
+                              .labelSmall
+                              ?.copyWith(
+                                color:
+                                    Theme.of(ctx).colorScheme.onPrimary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                      ),
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () {
+                        setSt(() {
+                          if (allSelected) {
+                            picked.clear();
+                          } else {
+                            picked.addAll(allAngilaluud);
+                          }
+                        });
+                      },
+                      child: Text(
+                        allSelected
+                            ? widget.l10n.tr('toololt_deselect_all')
+                            : widget.l10n.tr('toololt_select_all'),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: allSelected
+                              ? Theme.of(ctx).colorScheme.error
+                              : Theme.of(ctx).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Search field
+                TextField(
+                  controller: searchCtrl,
+                  decoration: InputDecoration(
+                    hintText: widget.l10n.tr('baraa_catalog_search_hint'),
+                    prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                    isDense: true,
+                    border: const OutlineInputBorder(),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                  ),
+                  onChanged: (_) => setSt(() {}),
+                ),
+              ],
+            ),
             content: SizedBox(
               width: double.maxFinite,
-              height: 360,
-              child: ListView(
-                children: angilaluud.map((a) {
-                  final sel = picked.contains(a);
-                  return CheckboxListTile(
-                    value: sel,
-                    onChanged: (v) {
-                      setSt(() {
-                        if (v == true) {
-                          picked.add(a);
-                        } else {
-                          picked.remove(a);
-                        }
-                      });
-                    },
-                    title: Text(a),
-                  );
-                }).toList(),
-              ),
+              height: 300,
+              child: angilaluud.isEmpty
+                  ? Center(
+                      child: Text(widget.l10n.tr('baraa_catalog_empty')),
+                    )
+                  : ListView.builder(
+                      itemCount: angilaluud.length,
+                      itemBuilder: (_, i) {
+                        final a = angilaluud[i];
+                        final sel = picked.contains(a);
+                        return CheckboxListTile(
+                          dense: true,
+                          value: sel,
+                          onChanged: (v) {
+                            setSt(() {
+                              if (v == true) {
+                                picked.add(a);
+                              } else {
+                                picked.remove(a);
+                              }
+                            });
+                          },
+                          title: Text(a),
+                        );
+                      },
+                    ),
             ),
             actions: [
               TextButton(
@@ -1287,6 +1381,7 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
         },
       ),
     );
+    searchCtrl.dispose();
   }
 
   Future<void> _submit() async {
@@ -1378,7 +1473,7 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
             const SizedBox(height: 6),
             AppDateRangeFilterButton(
               range: _range,
-              onPressed: _pickRange,
+              onPressed: (picked) => setState(() => _range = picked),
             ),
             const SizedBox(height: 12),
             InputDecorator(

@@ -65,7 +65,7 @@ class AuthService {
     if (fromEmployee.length > 1) {
       return List<BranchOption>.from(fromEmployee);
     }
-    if (userData['AdminEsekh'] == true) {
+    if (userData['AdminEsekh'] == true || userData['adminEsekh'] == true) {
       final bid = (posSession?.baiguullagiinId ??
               userData['baiguullagiinId']?.toString() ??
               '')

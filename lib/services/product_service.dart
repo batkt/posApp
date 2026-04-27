@@ -216,6 +216,36 @@ class ProductService {
     );
   }
 
+  /// `POST /aguulakh` — same as web inventory add (posBack `crud`).
+  Future<({bool success, String? error, String? insertedId})> createAguulakh({
+    required Map<String, dynamic> fields,
+  }) async {
+    try {
+      final response = await _apiService.post<dynamic>(
+        '/aguulakh',
+        body: fields,
+        parser: (d) => d,
+      );
+      final ok = response.success;
+      if (ok) {
+        final d = response.data;
+        if (d is Map<String, dynamic> && d['insertedId'] != null) {
+          return (success: true, error: null, insertedId: d['insertedId'].toString());
+        }
+        return (success: true, error: null, insertedId: null);
+      }
+      return (
+        success: false,
+        error: response.message ?? 'Нэмэх амжилтгүй',
+        insertedId: null,
+      );
+    } on ApiException catch (e) {
+      return (success: false, error: e.message, insertedId: null);
+    } catch (e) {
+      return (success: false, error: e.toString(), insertedId: null);
+    }
+  }
+
   /// `PUT /aguulakh/:id` — same as web inventory edit (posBack `crud`).
   /// [fields] are merged on the server; always include [baiguullagiinId] and [salbariinId] for scoping.
   Future<({bool success, String? error})> updateAguulakh(
@@ -246,6 +276,31 @@ class ProductService {
       return (
         success: false,
         error: response.message ?? 'Хадгалах амжилтгүй',
+      );
+    } on ApiException catch (e) {
+      return (success: false, error: e.message);
+    } catch (e) {
+      return (success: false, error: e.toString());
+    }
+  }
+
+  /// `DELETE /aguulakh/:id` — delete product
+  Future<({bool success, String? error})> deleteAguulakh(String id) async {
+    final oid = id.trim();
+    if (oid.isEmpty) {
+      return (success: false, error: 'ID хоосон');
+    }
+    try {
+      final response = await _apiService.delete<dynamic>(
+        '/aguulakh/$oid',
+        parser: (d) => d,
+      );
+      if (response.success) {
+        return (success: true, error: null);
+      }
+      return (
+        success: false,
+        error: response.message ?? 'Устгах амжилтгүй',
       );
     } on ApiException catch (e) {
       return (success: false, error: e.message);

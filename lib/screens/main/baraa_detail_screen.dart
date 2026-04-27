@@ -28,9 +28,10 @@ class _BuuniiTierCtrls {
 }
 
 class BaraaDetailScreen extends StatefulWidget {
-  const BaraaDetailScreen({super.key, required this.item});
+  const BaraaDetailScreen({super.key, required this.item, this.startEditing = false});
 
   final InventoryItem item;
+  final bool startEditing;
 
   @override
   State<BaraaDetailScreen> createState() => _BaraaDetailScreenState();
@@ -65,6 +66,7 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
   void initState() {
     super.initState();
     _item = widget.item;
+    _editing = widget.startEditing;
     _ner = TextEditingController();
     _bogino = TextEditingController();
     _code = TextEditingController();

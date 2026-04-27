@@ -135,7 +135,10 @@ class _IncomeOverviewScreenState extends State<IncomeOverviewScreen> {
           children: [
             AppDateRangeFilterButton(
               range: _range,
-              onPressed: _pickRange,
+              onPressed: (picked) async {
+                setState(() => _range = picked);
+                await _load();
+              },
             ),
             const SizedBox(height: 16),
             if (_loading)

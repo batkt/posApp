@@ -107,7 +107,12 @@ class _TailanScreenState extends State<TailanScreen> {
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: AppDateRangeFilterButton(
               range: _range,
-              onPressed: _pickRange,
+              onPressed: (picked) {
+                setState(() {
+                  _range = picked;
+                  _future = _load();
+                });
+              },
               padding: EdgeInsets.zero,
             ),
           ),

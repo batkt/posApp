@@ -23,6 +23,7 @@ class PosSession {
       'mail',
       'utas',
       'AdminEsekh',
+      'adminEsekh',
       'zurgiinId',
     ]) {
       final v = ajiltan[k];

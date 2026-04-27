@@ -385,9 +385,13 @@ class InventoryModel extends ChangeNotifier {
     }
   }
 
-  void deleteProduct(String productId) {
-    _inventory.removeWhere((item) => item.product.id == productId);
-    notifyListeners();
+  Future<({bool success, String? error})> deleteProduct(String productId) async {
+    final result = await _productService.deleteAguulakh(productId);
+    if (result.success) {
+      _inventory.removeWhere((item) => item.product.id == productId);
+      notifyListeners();
+    }
+    return result;
   }
 
   InventoryItem? getInventoryItem(String productId) {

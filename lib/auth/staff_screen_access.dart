@@ -81,7 +81,7 @@ class StaffScreenAccess {
   /// (missing, empty, or all-`false` counts as unconfigured for login).
   static bool isPermissionConfigurationMissing(Map<String, dynamic>? data) {
     if (data == null) return true;
-    if (data['AdminEsekh'] == true) return false;
+    if (data['AdminEsekh'] == true || data['adminEsekh'] == true) return false;
     final raw = data['tsonkhniiTokhirgoo'];
     if (raw == null) return true;
     if (raw is! Map || raw.isEmpty) return true;
@@ -93,7 +93,7 @@ class StaffScreenAccess {
     if (data == null) {
       return denied;
     }
-    final admin = data['AdminEsekh'] == true;
+    final admin = data['AdminEsekh'] == true || data['adminEsekh'] == true;
     final raw = data['tsonkhniiTokhirgoo'];
     Map<String, dynamic>? map;
     if (raw is Map) {

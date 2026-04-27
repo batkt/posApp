@@ -365,6 +365,8 @@ class AppLocalizations {
       'toololt_start_prefill_counts': 'Prefill counted qty from current stock',
       'toololt_pick_products': 'Select products',
       'toololt_pick_categories': 'Select categories',
+      'toololt_select_all': 'Select all',
+      'toololt_deselect_all': 'Deselect all',
       'toololt_selected_n': '{n} selected',
       'toololt_no_active_hint':
           'There is no count in progress. Start a new count to align on-hand stock with the system.',
@@ -581,6 +583,7 @@ class AppLocalizations {
       'sales_history_time': 'Time',
       'sales_history_staff': 'Staff',
       'sales_history_lines_count': '{n} line(s)',
+      'sales_history_items': 'Items',
       'sales_filter_year': 'Year',
       'sales_filter_month': 'Month',
       'sales_filter_all_years': 'All years',
@@ -951,6 +954,8 @@ class AppLocalizations {
       'toololt_start_prefill_counts': 'Тоолсон дээр үлдэгдэл харуулах',
       'toololt_pick_products': 'Бараа сонгох',
       'toololt_pick_categories': 'Ангилал сонгох',
+      'toololt_select_all': 'Бүгдийг сонгох',
+      'toololt_deselect_all': 'Бүгдийг арилгах',
       'toololt_selected_n': '{n} сонгогдсон',
       'toololt_no_active_hint':
           'Одоо явагдаж буй тооллого байхгүй. Агуулахын үлдэгдлийг системийн бүртгэлтэй тааруулахын тулд шинээр тооллого эхлүүлнэ үү.',
@@ -1168,6 +1173,7 @@ class AppLocalizations {
       'sales_history_time': 'Цаг',
       'sales_history_staff': 'Ажилтан',
       'sales_history_lines_count': '{n} төрөл',
+      'sales_history_items': 'Бараа',
       'sales_filter_year': 'Он',
       'sales_filter_month': 'Сар',
       'sales_filter_all_years': 'Бүх он',

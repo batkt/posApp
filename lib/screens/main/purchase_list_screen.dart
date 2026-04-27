@@ -171,7 +171,13 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: AppDateRangeFilterButton(
               range: _range,
-              onPressed: _pickRange,
+              onPressed: (picked) async {
+                setState(() {
+                  _range = picked;
+                  _page = 1;
+                });
+                await _load(reset: true);
+              },
               padding: EdgeInsets.zero,
             ),
           ),

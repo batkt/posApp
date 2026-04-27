@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/authenticated_image.dart';
 import '../../widgets/barcode_scan_sheet.dart';
+import 'baraa_add_screen.dart';
 import 'baraa_detail_screen.dart';
 import 'low_stock_baraa_screen.dart';
 
@@ -232,41 +233,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   void _showAddProductDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Шинэ бүтээгдэхүүн нэмэх'),
-        content: const Text('Бүтээгдэхүүн үүсгэх маягт энд байна'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Болих'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Нэмэх'),
-          ),
-        ],
-      ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const BaraaAddScreen()),
     );
   }
 
   void _showEditProductDialog(BuildContext context, InventoryItem item) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('${item.product.name} засварлах'),
-        content: const Text('Бүтээгдэхүүн засварлах маягт энд байна'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Болих'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Өөрчлөлт хадгалах'),
-          ),
-        ],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BaraaDetailScreen(item: item, startEditing: true),
       ),
     );
   }
@@ -284,11 +261,29 @@ class _InventoryScreenState extends State<InventoryScreen> {
             child: const Text('Болих'),
           ),
           FilledButton(
-            onPressed: () {
-              context
-                  .read<InventoryModel>()
-                  .deleteProduct(item.product.id);
-              Navigator.pop(context);
+            onPressed: () async {
+              final model = context.read<InventoryModel>();
+              final nav = Navigator.of(context);
+              final scaffold = ScaffoldMessenger.of(context);
+              
+              final result = await model.deleteProduct(item.product.id);
+              nav.pop();
+              
+              if (result.success) {
+                scaffold.showSnackBar(
+                  const SnackBar(
+                    content: Text('Амжилттай устгагдлаа'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              } else {
+                scaffold.showSnackBar(
+                  SnackBar(
+                    content: Text(result.error ?? 'Устгах үед алдаа гарлаа'),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+              }
             },
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.error,

@@ -11,7 +11,7 @@ import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../widgets/completed_sale_detail_sheet.dart';
 import '../../widgets/parked_guilgee_sheet.dart';
-import '../../widgets/sale_year_month_filter_bar.dart';
+import '../../widgets/app_date_range_filter_button.dart';
 
 String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 
@@ -55,36 +55,32 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
   Future<GuilgeeListResult>? _remoteFuture;
   String? _lastSessionKey;
   int _refreshGen = 0;
-  int? _filterYear;
-  int? _filterMonth;
 
-  void _onDateFilter(int? year, int? month) {
-    setState(() {
-      _filterYear = year;
-      _filterMonth = year == null ? null : month;
-    });
+  late DateTimeRange _range = _defaultRange();
+
+  static DateTimeRange _defaultRange() {
+    final n = DateTime.now();
+    return DateTimeRange(
+      start: DateTime(n.year, n.month, 1),
+      end: DateTime(n.year, n.month + 1, 0, 23, 59, 59),
+    );
+  }
+
+  bool _inRange(DateTime ts) {
+    final d = ts.toLocal();
+    return !d.isBefore(_range.start) && !d.isAfter(_range.end);
   }
 
   List<CompletedSale> _applyDateFilter(List<CompletedSale> list) {
-    return list
-        .where(
-          (s) => saleMatchesYearMonthFilter(
-            s.timestamp,
-            _filterYear,
-            _filterMonth,
-          ),
-        )
-        .toList();
+    return list.where((s) => _inRange(s.timestamp)).toList();
   }
 
   Widget _dateFilterBar(AppLocalizations l10n) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      child: SaleYearMonthFilterBar(
-        l10n: l10n,
-        selectedYear: _filterYear,
-        selectedMonth: _filterMonth,
-        onFilterChanged: _onDateFilter,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: AppDateRangeFilterButton(
+        range: _range,
+        onPressed: (picked) => setState(() => _range = picked),
       ),
     );
   }
@@ -474,8 +470,7 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
     required int sourceCountBeforeFilter,
   }) {
     final filteredEmpty = list.isEmpty &&
-        sourceCountBeforeFilter > 0 &&
-        (_filterYear != null);
+        sourceCountBeforeFilter > 0;
     if (list.isEmpty) {
       final empty = _emptyState(
         colorScheme,
@@ -685,6 +680,23 @@ class _SaleCard extends StatelessWidget {
   int get _pieceCount =>
       sale.items.fold<int>(0, (sum, item) => sum + item.quantity);
 
+  Color _paymentColor(String method, ColorScheme cs) {
+    switch (method) {
+      case 'cash':
+        return const Color(0xFF91C713);
+      case 'card':
+        return const Color(0xFF1E637C);
+      case 'qpay':
+        return const Color(0xFFF59E0B);
+      case 'account':
+        return const Color(0xFF1E637C);
+      case 'credit':
+        return const Color(0xFFF59E0B);
+      default:
+        return cs.primary;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -698,6 +710,8 @@ class _SaleCard extends StatelessWidget {
         .tr('sales_history_lines_count')
         .replaceAll('{n}', '${sale.items.length}');
     final staffCaption = _saleStaffCaption(sale.ajiltan);
+    final payColor = _paymentColor(sale.paymentMethod, colorScheme);
+    final relTime = _formatRelativeTime(sale.timestamp);
 
     return Material(
       color: colorScheme.surface,
@@ -705,133 +719,252 @@ class _SaleCard extends StatelessWidget {
       shadowColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.6)),
+        side: BorderSide(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.65),
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => showPOSCompletedSaleSheet(context, sale, l10n),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer.withValues(alpha: 0.65),
-                      borderRadius: BorderRadius.circular(12),
+              // ── Top section ──────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // POS icon with payment-tinted bg
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: payColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      child: Icon(
+                        Icons.point_of_sale_rounded,
+                        color: payColor,
+                        size: 24,
+                      ),
                     ),
-                    child: Icon(
-                      Icons.point_of_sale_rounded,
-                      color: colorScheme.primary,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          sale.id,
-                          style: textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.2,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${l10n.tr('sales_history_time')}: ${MongolianDateFormatter.formatTime(sale.timestamp, seconds: true)}',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        if (staffCaption != null) ...[
-                          const SizedBox(height: 2),
+                    const SizedBox(width: 12),
+                    // Order ID + time
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            '${l10n.tr('sales_history_staff')}: $staffCaption',
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w500,
+                            sale.id,
+                            style: textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.2,
+                              color: colorScheme.onSurface,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        _fmtMnt(sale.total),
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: colorScheme.primary,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            paymentIcon,
-                            size: 15,
-                            color: colorScheme.onSurfaceVariant,
+                          const SizedBox(height: 4),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.access_time_rounded,
+                                size: 12,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                MongolianDateFormatter.formatTime(
+                                    sale.timestamp,
+                                    seconds: true),
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurface,
+                                  fontWeight: FontWeight.w600,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures()
+                                  ],
+                                ),
+                              ),
+                              if (relTime.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    relTime,
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            paymentLabel,
-                            style: textTheme.labelMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
+                          if (staffCaption != null) ...[
+                            const SizedBox(height: 3),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.person_outline_rounded,
+                                  size: 12,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: 3),
+                                Expanded(
+                                  child: Text(
+                                    staffCaption,
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    // Amount + payment method
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        Text(
+                          _fmtMnt(sale.total),
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: colorScheme.primary,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures()
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: payColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                paymentIcon,
+                                size: 11,
+                                color: payColor,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                paymentLabel,
+                                style: textTheme.labelSmall?.copyWith(
+                                  color: payColor,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (sale.ebarimtAvsan) ...[
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primaryContainer
+                                  .withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.receipt_rounded,
+                                  size: 10,
+                                  color: colorScheme.primary,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  'eBarimt',
+                                  style: textTheme.labelSmall?.copyWith(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              Divider(height: 1, color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Icon(
-                    Icons.inventory_2_outlined,
-                    size: 16,
-                    color: colorScheme.onSurfaceVariant,
+
+              // ── Bottom strip ─────────────────────────────────────────
+              Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerLowest,
+                  border: Border(
+                    top: BorderSide(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                      width: 1,
+                    ),
                   ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      '$linesLabel · $_pieceCount ${l10n.tr('items_count')}',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w500,
+                ),
+                padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.shopping_bag_outlined,
+                      size: 14,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        '$linesLabel · $_pieceCount ${l10n.tr('items_count')}',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: () => showPOSCompletedSaleSheet(context, sale, l10n),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    TextButton.icon(
+                      onPressed: () =>
+                          showPOSCompletedSaleSheet(context, sale, l10n),
+                      icon: const Icon(Icons.chevron_right_rounded, size: 16),
+                      label: Text(l10n.tr('view_details')),
+                      style: TextButton.styleFrom(
+                        iconColor: colorScheme.primary,
+                        foregroundColor: colorScheme.primary,
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 10),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        textStyle: textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
-                    child: Text(l10n.tr('view_details')),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -840,4 +973,13 @@ class _SaleCard extends StatelessWidget {
     );
   }
 
+}
+
+String _formatRelativeTime(DateTime timestamp) {
+  final diff = DateTime.now().difference(timestamp.toLocal());
+  if (diff.inSeconds < 60) return '${diff.inSeconds}с өмнө';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}м өмнө';
+  if (diff.inHours < 24) return '${diff.inHours}ц өмнө';
+  if (diff.inDays < 7) return '${diff.inDays}х өмнө';
+  return '';
 }

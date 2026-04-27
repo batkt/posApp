@@ -7,7 +7,7 @@ import '../../services/guilgee_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
-import '../../widgets/sale_year_month_filter_bar.dart';
+import '../../widgets/app_date_range_filter_button.dart';
 import 'sales_history_screen.dart';
 
 String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
@@ -26,14 +26,15 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
   Future<GuilgeeListResult>? _future;
   String? _sessionKey;
   int _refreshGen = 0;
-  int? _filterYear;
-  int? _filterMonth;
 
-  void _onDateFilter(int? year, int? month) {
-    setState(() {
-      _filterYear = year;
-      _filterMonth = year == null ? null : month;
-    });
+  late DateTimeRange _range = _defaultRange();
+
+  static DateTimeRange _defaultRange() {
+    final n = DateTime.now();
+    return DateTimeRange(
+      start: DateTime(n.year, n.month, 1),
+      end: DateTime(n.year, n.month + 1, 0, 23, 59, 59),
+    );
   }
 
   static String? _resolveAjiltanId(AuthModel auth) {
@@ -57,6 +58,13 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
         await _future;
       } catch (_) {}
     }
+  }
+
+  bool _inRange(DateTime ts) {
+    final d = ts.toLocal();
+    final start = _range.start;
+    final end = _range.end;
+    return !d.isBefore(start) && !d.isAfter(end);
   }
 
   @override
@@ -119,20 +127,24 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
                 }
                 final withEbarimt =
                     result.sales.where((s) => s.ebarimtAvsan).toList();
-                final filtered = withEbarimt
-                    .where(
-                      (s) => saleMatchesYearMonthFilter(
-                        s.timestamp,
-                        _filterYear,
-                        _filterMonth,
-                      ),
-                    )
-                    .toList();
+                final filtered =
+                    withEbarimt.where((s) => _inRange(s.timestamp)).toList();
+
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // ── Unified date range picker ──────────────────────────
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: AppDateRangeFilterButton(
+                        range: _range,
+                        onPressed: (picked) =>
+                            setState(() => _range = picked),
+                      ),
+                    ),
+
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
                       child: Text(
                         l10n.tr('ebarimt_recent_list_title'),
                         style: textTheme.titleMedium?.copyWith(
@@ -140,15 +152,7 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
                         ),
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                      child: SaleYearMonthFilterBar(
-                        l10n: l10n,
-                        selectedYear: _filterYear,
-                        selectedMonth: _filterMonth,
-                        onFilterChanged: _onDateFilter,
-                      ),
-                    ),
+
                     Expanded(
                       child: withEbarimt.isEmpty
                           ? Center(
@@ -258,13 +262,26 @@ class _EbarimtMenuScreenState extends State<EbarimtMenuScreen> {
                                                     ),
                                                   ),
                                                   const SizedBox(height: 4),
-                                                  Text(
-                                                    '${MongolianDateFormatter.formatShortDate(sale.timestamp)} · ${MongolianDateFormatter.formatTime(sale.timestamp)}',
-                                                    style: textTheme.bodySmall
-                                                        ?.copyWith(
-                                                      color: colorScheme
-                                                          .onSurfaceVariant,
-                                                    ),
+                                                  Row(
+                                                    children: [
+                                                      Icon(
+                                                        Icons.access_time_rounded,
+                                                        size: 12,
+                                                        color: colorScheme.primary
+                                                            .withValues(alpha: 0.75),
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      Text(
+                                                        '${MongolianDateFormatter.formatShortDate(sale.timestamp)} · ${MongolianDateFormatter.formatTime(sale.timestamp, seconds: true)}',
+                                                        style: textTheme.bodySmall
+                                                            ?.copyWith(
+                                                          color: colorScheme
+                                                              .onSurfaceVariant,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
                                                 ],
                                               ),

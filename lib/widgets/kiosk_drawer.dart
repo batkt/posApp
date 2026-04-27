@@ -32,10 +32,7 @@ void kioskDrawerGoToCurrentSale(BuildContext context) {
   Navigator.of(context).maybePop();
   WidgetsBinding.instance.addPostFrameCallback((_) {
     if (!context.mounted) return;
-    final nav = Navigator.of(context);
-    if (nav.canPop()) {
-      nav.pop();
-    }
+    Navigator.of(context).popUntil((route) => route.isFirst);
   });
 }
 
@@ -838,14 +835,23 @@ void kioskDrawerLeavePosForPage(
 }) {
   resetCashierPosShellState(context);
   final nav = Navigator.of(context);
+  // Close the drawer
   nav.pop();
-  nav.push<void>(
-    MaterialPageRoute<void>(
-      builder: (_) => KioskDrawerStackedPage(
-        mobileStaffShell: mobileStaffShell,
-        titleKey: titleKey,
-        body: page,
-      ),
+
+  final isFirst = !nav.canPop();
+  final route = MaterialPageRoute<void>(
+    builder: (_) => KioskDrawerStackedPage(
+      mobileStaffShell: mobileStaffShell,
+      titleKey: titleKey,
+      body: page,
     ),
   );
+
+  if (!isFirst) {
+    // If not on the root POS screen, replace the current page (flat drawer navigation)
+    nav.pushReplacement(route);
+  } else {
+    // If on the root POS screen, push normally
+    nav.push(route);
+  }
 }
