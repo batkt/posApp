@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../utils/app_snackbar.dart';
@@ -20,11 +21,21 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _biometricAvailable = false;
+  String _appVersion = '';
 
   @override
   void initState() {
     super.initState();
     _loadBiometricAvailability();
+    _loadAppVersion();
+  }
+
+  Future<void> _loadAppVersion() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    setState(() {
+      _appVersion = 'Version ${packageInfo.version}';
+    });
   }
 
   Future<void> _loadBiometricAvailability() async {
@@ -353,6 +364,28 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   );
                 }),
+                const SizedBox(height: 32),
+                // Version Info
+                Center(
+                  child: Column(
+                    children: [
+                      Text(
+                        'Powered by Zevtabs',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurface.withOpacity(0.5),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _appVersion,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurface.withOpacity(0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
                       ],
                     ),
                   ),

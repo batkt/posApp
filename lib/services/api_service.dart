@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 
 class ApiConfig {
   // Production
-  static const String baseUrl = 'https://pos.zevtabs.mn/api1';
+  static const String baseUrl = 'https://pos.zevtabs.mn/api';
   static const String posBaseUrl = 'https://pos.zevtabs.mn/api';
   static const String socketUrl = 'wss://pos.zevtabs.mn/';
 

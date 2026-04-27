@@ -15,6 +15,11 @@ import 'screens/main/login_screen.dart';
 import 'screens/main/two_factor_auth_screen.dart';
 import 'screens/main/branch_select_screen.dart';
 import 'theme/app_theme.dart';
+import 'services/version_service.dart';
+import 'services/api_service.dart';
+import 'dart:io';
+import 'package:url_launcher/url_launcher.dart';
+
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -107,10 +112,69 @@ class AuthWrapper extends StatefulWidget {
 
 class _AuthWrapperState extends State<AuthWrapper> {
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkUpdate();
+    });
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Warm up the logo cache before LoginScreen is built
     precacheImage(const AssetImage('assets/images/poslogo.png'), context);
+  }
+
+  Future<void> _checkUpdate() async {
+    final platform = Theme.of(context).platform == TargetPlatform.iOS ? 'ios' : 'android';
+    final latest = await versionService.checkUpdate(
+      'PosEase', 
+      platform, 
+      ApiConfig.baseUrl,
+    );
+
+    if (latest != null && mounted) {
+      _showUpdateDialog(latest);
+    }
+  }
+
+  void _showUpdateDialog(Map<String, dynamic> versionData) {
+    final isForce = versionData['isForceUpdate'] == true;
+    showDialog(
+      context: context,
+      barrierDismissible: !isForce,
+      builder: (context) => PopScope(
+        canPop: !isForce,
+        child: AlertDialog(
+          title: Text(isForce ? 'Шинэчлэлт заавал хийнэ үү' : 'Шинэ хувилбар гарлаа'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Хувилбар: ${versionData['version']}'),
+              const SizedBox(height: 8),
+              Text(versionData['message'] ?? 'Та апп-аа шинэчилж хамгийн сүүлийн үеийн боломжуудыг ашиглана уу.'),
+            ],
+          ),
+          actions: [
+            if (!isForce)
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Дараа'),
+              ),
+            FilledButton(
+              onPressed: () async {
+                final url = Uri.parse(versionData['updateUrl'] ?? '');
+                if (await canLaunchUrl(url)) {
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                }
+              },
+              child: const Text('Шинэчлэх'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override

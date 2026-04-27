@@ -351,7 +351,7 @@ Main Domain https://pos.zevtabs.mn
 Socket/WS wss://pos.zevtabs.mn/
 API Endpoints
 Service Environment Variable Production URL
-Main API NEXT_PUBLIC_API_URL https://pos.zevtabs.mn/api1
+Main API NEXT_PUBLIC_API_URL https://pos.zevtabs.mn/api
 POS API NEXT_PUBLIC_POS_API_URL https://pos.zevtabs.mn/api
 Socket.IO NEXT_PUBLIC_SOCKET wss://pos.zevtabs.mn/
 Local Development IPs (Commented Out)

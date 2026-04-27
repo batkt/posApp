@@ -7,6 +7,8 @@ import '../../models/locale_model.dart';
 import '../../models/pos_session.dart';
 import '../../services/category_service.dart';
 import '../../services/pos_settings_service.dart';
+import '../../services/version_service.dart';
+import '../../services/api_service.dart';
 import '../../models/category_model.dart';
 import '../../utils/mongolian_date_formatter.dart';
 
@@ -1474,6 +1476,130 @@ class _BranchesPanelState extends State<_BranchesPanel> {
               ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+class _VersionControlPanel extends StatefulWidget {
+  const _VersionControlPanel({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  State<_VersionControlPanel> createState() => _VersionControlPanelState();
+}
+
+class _VersionControlPanelState extends State<_VersionControlPanel> {
+  final _platformController = TextEditingController(text: 'android');
+  final _versionController = TextEditingController();
+  final _updateUrlController = TextEditingController();
+  final _messageController = TextEditingController();
+  bool _isForceUpdate = false;
+  String _selectedProject = 'Zevtabs';
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _platformController.dispose();
+    _versionController.dispose();
+    _updateUrlController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    const baseUrl = ApiConfig.baseUrl; 
+
+    if (_versionController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter version')),
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
+
+    final ok = await versionService.postVersion(
+      baseUrl: baseUrl,
+      project: _selectedProject,
+      platform: _platformController.text.trim(),
+      version: _versionController.text.trim(),
+      isForceUpdate: _isForceUpdate,
+      updateUrl: _updateUrlController.text.trim(),
+      message: _messageController.text.trim(),
+    );
+
+    if (!mounted) return;
+    setState(() => _saving = false);
+
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.l10n.tr('pos_settings_saved'))),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.l10n.tr('pos_settings_save_failed'))),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text('App Version Control', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          value: _selectedProject,
+          decoration: const InputDecoration(labelText: 'Project'),
+          items: const [
+            DropdownMenuItem(value: 'Zevtabs', child: Text('Zevtabs')),
+            DropdownMenuItem(value: 'Amarhome', child: Text('Amarhome')),
+          ],
+          onChanged: (v) => setState(() => _selectedProject = v!),
+        ),
+        const Divider(height: 32),
+        DropdownButtonFormField<String>(
+          value: _platformController.text,
+          decoration: const InputDecoration(labelText: 'Platform'),
+          items: const [
+            DropdownMenuItem(value: 'android', child: Text('Android')),
+            DropdownMenuItem(value: 'ios', child: Text('iOS')),
+          ],
+          onChanged: (v) => setState(() => _platformController.text = v!),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _versionController,
+          decoration: const InputDecoration(labelText: 'Version (e.g. 2.1.3)', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _updateUrlController,
+          decoration: const InputDecoration(labelText: 'Update URL', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _messageController,
+          maxLines: 3,
+          decoration: const InputDecoration(labelText: 'Message', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 12),
+        SwitchListTile(
+          title: const Text('Force Update'),
+          value: _isForceUpdate,
+          onChanged: (v) => setState(() => _isForceUpdate = v),
+        ),
+        const SizedBox(height: 24),
+        FilledButton.icon(
+          onPressed: _saving ? null : _save,
+          icon: _saving 
+            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            : const Icon(Icons.cloud_upload_outlined),
+          label: const Text('Save Version'),
+        ),
       ],
     );
   }
