@@ -18,10 +18,12 @@ import 'theme/app_theme.dart';
 import 'services/version_service.dart';
 import 'services/api_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'services/network_usage_service.dart';
 
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await networkUsageService.init();
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -74,6 +76,7 @@ class POSApp extends StatelessWidget {
           },
         ),
         ChangeNotifierProvider(create: (_) => TransactionModel()),
+        ChangeNotifierProvider.value(value: networkUsageService),
       ],
       child: Consumer<LocaleModel>(
         builder: (context, localeModel, child) {

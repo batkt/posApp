@@ -250,6 +250,9 @@ class AppLocalizations {
       'pos_settings_nav_bonus': 'Bonus',
       'pos_settings_nav_door': 'Lock',
       'pos_settings_nav_branches': 'Branches',
+      'network_usage': 'Network Usage',
+      'network_usage_daily': 'Daily Internet Usage',
+      'network_usage_hint': 'Data used by this app today.',
       'menu_khaalt': 'Cash close',
       'khaalt_title': 'Cash register close',
       'khaalt_disabled':
@@ -841,6 +844,9 @@ class AppLocalizations {
       'pos_settings_nav_bonus': 'Бонус',
       'pos_settings_nav_door': 'Хаалт',
       'pos_settings_nav_branches': 'Салбар',
+      'network_usage': 'Интернэт хэрэглээ',
+      'network_usage_daily': 'Өдрийн интернэт хэрэглээ',
+      'network_usage_hint': 'Энэ апп-ын өнөөдөр ашигласан дата.',
       'menu_khaalt': 'Хаалт',
       'khaalt_title': 'Касс хаалт',
       'khaalt_disabled':

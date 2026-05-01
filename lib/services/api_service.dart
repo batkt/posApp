@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:http/http.dart' as http;
+import 'network_usage_service.dart';
 
 class ApiConfig {
   // Production
@@ -96,11 +97,16 @@ class ApiService {
     return headers;
   }
 
-  void _logHttp(String method, Uri uri, http.Response response) {
+  void _logHttp(String method, Uri uri, http.Response response, {int? requestSize}) {
     if (!kDebugMode) return;
-    final len = response.body.length;
-    final head = '[PosHTTP] $method $uri → ${response.statusCode} (${len}b)';
-    if (len <= 900) {
+    final resLen = response.body.length;
+    final reqLen = requestSize ?? 0;
+    
+    // Track usage
+    networkUsageService.addUsage(reqLen + resLen); 
+
+    final head = '[PosHTTP] $method $uri → ${response.statusCode} (req: ${reqLen}b, res: ${resLen}b)';
+    if (resLen <= 900) {
       debugPrint('$head\n${response.body}');
       return;
     }
@@ -121,7 +127,7 @@ class ApiService {
           .get(uri, headers: _getHeaders())
           .timeout(ApiConfig.timeout);
 
-      _logHttp('GET', uri, response);
+      _logHttp('GET', uri, response, requestSize: 0);
       return _handleResponse(response, parser);
     } on ApiException {
       rethrow;
@@ -149,15 +155,16 @@ class ApiService {
     try {
       final uri = Uri.parse('$baseUrl$endpoint');
 
+      final encodedBody = jsonEncode(body);
       final response = await http
           .post(
             uri,
             headers: _getHeaders(),
-            body: jsonEncode(body),
+            body: encodedBody,
           )
           .timeout(timeout ?? ApiConfig.timeout);
 
-      _logHttp('POST', uri, response);
+      _logHttp('POST', uri, response, requestSize: encodedBody.length);
       return _handleResponse(response, parser);
     } on ApiException {
       rethrow;

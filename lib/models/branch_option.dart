@@ -21,7 +21,14 @@ class BranchOption {
             e['salbariinNer'] ??
             e['boginoNer'] ??
             e['hayag'];
-        final label = raw?.toString().trim();
+        String? label;
+        if (raw is Map) {
+          label = (raw['mn'] ?? raw['mon'] ?? raw['en'] ?? raw.values.firstOrNull)
+              ?.toString();
+        } else {
+          label = raw?.toString();
+        }
+        label = label?.trim();
         out.add(BranchOption(
           id: id,
           label: (label != null && label.isNotEmpty) ? label : id,

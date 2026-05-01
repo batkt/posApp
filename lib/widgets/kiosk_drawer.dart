@@ -20,6 +20,7 @@ import '../utils/pos_native_debug_log.dart';
 import '../services/printer_service.dart';
 import '../services/terminal_hardware_service.dart';
 import '../utils/pos_shell_reset.dart';
+import '../services/network_usage_service.dart';
 
 /// EPOS sync (with dump dialog), terminal routing report, PAX test print — set `true` for engineering builds only.
 const bool _showKioskDrawerTerminalDebugMenu = false;
@@ -184,6 +185,11 @@ class KioskDrawer extends StatelessWidget {
             titleKey: 'menu_pos_settings',
           ),
         ),
+      _KioskMenuAction(
+        icon: Icons.data_usage_rounded,
+        labelKey: 'network_usage',
+        onTap: (ctx) => _showNetworkUsageDialog(ctx),
+      ),
       if (_showKioskDrawerTerminalDebugMenu && access.allowsEbarimt)
         _KioskMenuAction(
           icon: Icons.sync_problem_rounded,
@@ -767,6 +773,72 @@ class KioskDrawer extends StatelessWidget {
             const SizedBox(height: 16),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showNetworkUsageDialog(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    showDialog(
+      context: context,
+      builder: (context) => ListenableBuilder(
+        listenable: networkUsageService,
+        builder: (context, _) {
+          return AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.data_usage_rounded, color: colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    l10n.tr('network_usage'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.tr('network_usage_daily'),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${networkUsageService.dailyMB.toStringAsFixed(2)} MB',
+                  style: TextStyle(
+                    fontSize: 24,
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  l10n.tr('network_usage_hint'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => networkUsageService.resetUsage(),
+                child: Text(l10n.tr('clear')),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(l10n.tr('baraa_tailan_detail_close')),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

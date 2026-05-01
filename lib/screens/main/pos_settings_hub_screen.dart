@@ -55,13 +55,20 @@ IconData _posSettingsIcon(PosSettingsSection s) {
   }
 }
 
+String _fmtMap(dynamic v) {
+  if (v is Map) {
+    return (v['mn'] ?? v['mon'] ?? v['en'] ?? v.values.firstOrNull)?.toString() ?? '';
+  }
+  return v?.toString() ?? '';
+}
+
 String? _resolveBranchNer(Map<String, dynamic>? org, String salbariinId) {
   if (org == null) return null;
   final list = org['salbaruud'];
   if (list is! List) return null;
   for (final e in list) {
     if (e is Map && e['_id']?.toString() == salbariinId) {
-      return e['ner']?.toString();
+      return _fmtMap(e['ner']);
     }
   }
   return null;
@@ -1469,10 +1476,10 @@ class _BranchesPanelState extends State<_BranchesPanel> {
         for (final b in _rows)
           Card(
             child: ListTile(
-              title: Text(b['ner']?.toString() ?? '—'),
+              title: Text(_fmtMap(b['ner'])),
               subtitle: Text(
-                '${l10n.tr('pos_settings_utas')}: ${b['utas'] ?? '—'}\n'
-                '${l10n.tr('pos_settings_khayag')}: ${b['khayag'] ?? '—'}',
+                '${l10n.tr('pos_settings_utas')}: ${_fmtMap(b['utas'])}\n'
+                '${l10n.tr('pos_settings_khayag')}: ${_fmtMap(b['khayag'])}',
               ),
             ),
           ),
