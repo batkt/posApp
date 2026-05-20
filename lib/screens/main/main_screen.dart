@@ -15,6 +15,7 @@ import 'ebarimt_menu_screen.dart';
 import 'staff_permissions_screen.dart';
 import 'pos_settings_hub_screen.dart';
 import 'tailan_screen.dart';
+import 'support_chat_page.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key, this.initialSection});
@@ -536,6 +537,68 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
 
+            // Support Chat Button
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    Navigator.pop(context); // close drawer
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SupportChatPage()),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(14),
+                  splashColor: colorScheme.primaryContainer.withOpacity(0.2),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.contact_support_outlined,
+                            color: colorScheme.primary,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            'Тусламж & Дэмжлэг',
+                            style: textTheme.bodyLarge?.copyWith(
+                              color: colorScheme.onSurface,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 14,
+                          color: colorScheme.onSurfaceVariant.withOpacity(0.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
             // Logout Button - Enhanced
             Container(
               margin: const EdgeInsets.all(16),
@@ -634,6 +697,19 @@ class _MainScreenState extends State<MainScreen> {
         index: entries.isEmpty ? 0 : safeIndex,
         children:
             entries.isEmpty ? [const SizedBox.shrink()] : entries.map((e) => e.screen).toList(),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SupportChatPage()),
+          );
+        },
+        backgroundColor: colorScheme.primary,
+        foregroundColor: Colors.white,
+        elevation: 6,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.support_agent_rounded, size: 28),
       ),
     );
   }

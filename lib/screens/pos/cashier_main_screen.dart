@@ -9,6 +9,8 @@ import '../../widgets/kiosk_terminal_pay_signal_listener.dart';
 import '../main/khaalt_screen.dart';
 import 'pos_screen.dart';
 
+import '../main/support_chat_page.dart';
+
 /// Kiosk POS (`/khyanalt/kiosk`): same [POSScreen] as full app, plus drawer; electronic pay is **карт** (UniPOS CARD, not QPay).
 class CashierMainScreen extends StatefulWidget {
   const CashierMainScreen({super.key});
@@ -87,6 +89,19 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
         child: KioskTerminalPaySignalListener(
           child: POSScreen(cashierMode: true),
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SupportChatPage()),
+          );
+        },
+        backgroundColor: colorScheme.primary,
+        foregroundColor: Colors.white,
+        elevation: 6,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.support_agent_rounded, size: 28),
       ),
     );
   }

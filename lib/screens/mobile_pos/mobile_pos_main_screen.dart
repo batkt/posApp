@@ -8,6 +8,8 @@ import '../../widgets/parked_guilgee_sheet.dart';
 import '../main/khaalt_screen.dart';
 import '../pos/pos_screen.dart';
 
+import '../main/support_chat_page.dart';
+
 /// Staff with only `/khyanalt/mobile` in `tsonkhniiTokhirgoo`: same sale flow as kiosk
 /// but no side drawer, two-step layout, and Бэлэн / **Карт** (UniPOS) / Данс.
 class MobilePosMainScreen extends StatefulWidget {
@@ -88,6 +90,19 @@ class _MobilePosMainScreenState extends State<MobilePosMainScreen> {
           cashierMode: true,
           mobileStaffMode: true,
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SupportChatPage()),
+          );
+        },
+        backgroundColor: colorScheme.primary,
+        foregroundColor: Colors.white,
+        elevation: 6,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.support_agent_rounded, size: 28),
       ),
     );
   }

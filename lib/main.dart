@@ -19,10 +19,12 @@ import 'services/version_service.dart';
 import 'services/api_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'services/network_usage_service.dart';
+import 'package:media_kit/media_kit.dart';
 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
   await networkUsageService.init();
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
