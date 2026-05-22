@@ -5,6 +5,7 @@ import '../models/branch_option.dart';
 import '../models/pos_session.dart';
 import 'baiguullaga_service.dart';
 import 'pos_settings_service.dart';
+import 'terminal_hardware_service.dart';
 
 UserRole _roleHintFromAccess(StaffScreenAccess access) {
   if (access.hasFullAccess) return UserRole.admin;
@@ -90,12 +91,18 @@ class AuthService {
     bool rememberMe = false,
   }) async {
     try {
+      final hw = await TerminalHardwareInfo.probe();
+      final isTerminal = hw.kind != TerminalHardwareKind.unknown ||
+          hw.manufacturer.toLowerCase().contains('pax') ||
+          hw.manufacturer.toLowerCase().contains('sunmi');
+
       final response = await _apiService.post<Map<String, dynamic>>(
         '/ajiltanNevtrey',
         body: {
           'burtgeliinDugaar': username,
           'nuutsUg': password,
           'namaigsana': rememberMe,
+          'device': isTerminal ? 'terminal' : 'mobile',
         },
         parser: (data) => data as Map<String, dynamic>,
       );
