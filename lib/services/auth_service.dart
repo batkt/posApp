@@ -92,7 +92,8 @@ class AuthService {
   }) async {
     try {
       final hw = await TerminalHardwareInfo.probe();
-      final isTerminal = hw.kind != TerminalHardwareKind.unknown ||
+      final isTerminal = (hw.kind == TerminalHardwareKind.eposOpenInApp ||
+              hw.kind == TerminalHardwareKind.neptunePax) ||
           hw.manufacturer.toLowerCase().contains('pax') ||
           hw.manufacturer.toLowerCase().contains('sunmi');
 
