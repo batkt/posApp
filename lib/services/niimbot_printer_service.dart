@@ -431,8 +431,10 @@ class NiimbotPrinterService {
         // MTU actually got negotiated (on either platform) instead of assuming the
         // request above succeeded. Chunking writes larger than this silently drops data.
         await Future.delayed(const Duration(milliseconds: 150));
-        final negotiatedMtu = device.mtuNow;
-        _currentChunkSize = (negotiatedMtu - 3).clamp(20, 500);
+        final isIOSDevice = defaultTargetPlatform == TargetPlatform.iOS;
+        _currentChunkSize = isIOSDevice
+            ? (negotiatedMtu - 3).clamp(20, 150)
+            : (negotiatedMtu - 3).clamp(20, 500);
         debugPrint('[NiimbotPrinterService] Negotiated MTU: $negotiatedMtu -> write chunk size: $_currentChunkSize');
 
         final services = await device.discoverServices();
@@ -461,12 +463,14 @@ class NiimbotPrinterService {
               if (uuid.contains('ffe1') || uuid.contains('fff2') || uuid.contains('bef8d6c9')) {
                 _cachedWriteChars.add(c);
                 debugPrint('[NiimbotPrinterService] Discovered Niimbot Print Char: $uuid');
+                break;
               }
             }
           }
+          if (_cachedWriteChars.isNotEmpty) break;
         }
       } else {
-        debugPrint('[NiimbotPrinterService] Reusing active BLE connection across ${_cachedWriteChars.length} characteristics!');
+        debugPrint('[NiimbotPrinterService] Reusing active BLE connection with ${_cachedWriteChars.first.uuid}!');
       }
 
       if (_cachedWriteChars.isEmpty) {
@@ -481,7 +485,11 @@ class NiimbotPrinterService {
       final rows = imageToMonochromeRows(imageBytes, invertBits: invertBits);
       final totalLines = rows.length;
 
-      // Fast B1 Print Sequence sent to all writable characteristics:
+      final isIOS = defaultTargetPlatform == TargetPlatform.iOS;
+      final batchLines = isIOS ? 2 : 4;
+      final lineDelayMs = isIOS ? 22 : 12;
+
+      // Fast B1 Print Sequence sent to primary characteristic:
       await _sendBytesToAll(NiimbotPacketEncoder.cmdConnect());
       await Future.delayed(const Duration(milliseconds: 30));
 
@@ -507,20 +515,20 @@ class NiimbotPrinterService {
         );
         await Future.delayed(const Duration(milliseconds: 20));
 
-        // Ultra-Fast Batch Line Streaming (4 lines per BLE write)
+        // Line Streaming (adaptive batching & pacing for iOS vs Android)
         final List<int> lineBatchBuffer = [];
         for (int i = 0; i < totalLines; i++) {
           final linePacket = NiimbotPacketEncoder.cmdRasterLine(i, rows[i]);
           lineBatchBuffer.addAll(linePacket);
 
-          if ((i + 1) % 4 == 0 || i == totalLines - 1) {
+          if ((i + 1) % batchLines == 0 || i == totalLines - 1) {
             await _sendBytesToAll(Uint8List.fromList(lineBatchBuffer));
             lineBatchBuffer.clear();
 
             if (onProgress != null && totalLines > 0) {
               onProgress(((q * totalLines + i + 1) / (quantity * totalLines)).clamp(0.0, 1.0));
             }
-            await Future.delayed(const Duration(milliseconds: 12));
+            await Future.delayed(Duration(milliseconds: lineDelayMs));
           }
 
           // Heartbeat every 24 lines
