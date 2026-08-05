@@ -299,6 +299,11 @@ class NiimbotPrinterService {
 
   static final List<BluetoothCharacteristic> _cachedWriteChars = [];
 
+  /// BLE write chunk size, derived from the actually-negotiated MTU (see [printLabel]).
+  /// Starts conservative (20 bytes - the guaranteed-safe minimum ATT payload) until a
+  /// connection tells us it's safe to go bigger.
+  static int _currentChunkSize = 20;
+
   /// Reassembles 0x55 0x55 ... 0xAA 0xAA frames out of raw BLE notify chunks
   /// (a single frame can be split across multiple notify events, or several
   /// frames can arrive concatenated in one event).
@@ -415,11 +420,20 @@ class NiimbotPrinterService {
         _rxBuffer.clear();
 
         try {
+          // Android-only: iOS negotiates MTU automatically and has no request API.
           await device.requestMtu(247);
           await Future.delayed(const Duration(milliseconds: 60));
         } catch (e) {
           debugPrint('[NiimbotPrinterService] requestMtu notice: $e');
         }
+
+        // Give iOS's automatic negotiation a moment to settle, then read back whatever
+        // MTU actually got negotiated (on either platform) instead of assuming the
+        // request above succeeded. Chunking writes larger than this silently drops data.
+        await Future.delayed(const Duration(milliseconds: 150));
+        final negotiatedMtu = device.mtuNow;
+        _currentChunkSize = (negotiatedMtu - 3).clamp(20, 500);
+        debugPrint('[NiimbotPrinterService] Negotiated MTU: $negotiatedMtu -> write chunk size: $_currentChunkSize');
 
         final services = await device.discoverServices();
         for (final s in services) {
@@ -536,6 +550,7 @@ class NiimbotPrinterService {
     } catch (e, st) {
       debugPrint('[NiimbotPrinterService] BLE Print error: $e\n$st');
       _cachedWriteChars.clear();
+      _currentChunkSize = 20;
       try {
         await device.disconnect();
       } catch (_) {}
@@ -558,10 +573,11 @@ class NiimbotPrinterService {
   static Future<void> _sendBytes(
     BluetoothCharacteristic char,
     Uint8List data, {
-    int chunkSize = 200,
+    int? chunkSize,
   }) async {
-    for (int i = 0; i < data.length; i += chunkSize) {
-      final end = (i + chunkSize < data.length) ? i + chunkSize : data.length;
+    final size = chunkSize ?? _currentChunkSize;
+    for (int i = 0; i < data.length; i += size) {
+      final end = (i + size < data.length) ? i + size : data.length;
       final chunk = data.sublist(i, end);
 
       final allowWithoutResp = char.properties.writeWithoutResponse;
