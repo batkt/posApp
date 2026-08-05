@@ -56,5 +56,9 @@
 	<string>PosEase POS-д нэвтрэхэд Face ID ашиглана.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Баркод уншихын тулд камер ашиглана.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>NIIMBOT B1 шошго хэвлэгчтэй Bluetooth-ээр холбогдоно.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>NIIMBOT B1 шошго хэвлэгчтэй Bluetooth-ээр холбогдоно.</string>
 </dict>
 </plist>

@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../widgets/authenticated_image.dart';
+import '../../widgets/niimbot_printer_dialog.dart';
 
 /// One row of web `Form.List` / `aguulakh.buuniiUneJagsaalt` (`buuniiToo`, `buuniiUne`).
 class _BuuniiTierCtrls {
@@ -399,6 +400,20 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
               ),
             ),
             actions: [
+              IconButton(
+                onPressed: () {
+                  final p = _item.product;
+                  final priceText = MntAmountFormatter.format(p.price);
+                  NiimbotPrinterDialog.show(
+                    context,
+                    productName: p.name,
+                    priceText: priceText,
+                    barcodeOrSku: p.barCode ?? p.code,
+                  );
+                },
+                icon: const Icon(Icons.print_outlined),
+                tooltip: 'NIIMBOT B1 Шошго хэвлэх',
+              ),
               if (canEdit && !_editing)
                 TextButton(
                   onPressed: () => setState(() => _editing = true),

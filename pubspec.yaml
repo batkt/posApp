@@ -38,7 +38,8 @@ dependencies:
   media_kit: ^1.2.6
   media_kit_video: ^2.0.1
   media_kit_libs_video: ^1.0.7
-
+  flutter_blue_plus: ^1.32.0
+  image: ^4.2.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

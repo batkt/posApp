@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../services/printer_service.dart';
+import '../../widgets/niimbot_printer_dialog.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mongolian_date_formatter.dart';
 class ProfileScreen extends StatefulWidget {
@@ -283,8 +284,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 _ActionTile(
                   icon: Icons.print_outlined,
-                  title: 'Тест хэвлэх',
+                  title: 'Тест хэвлэх (Терминал)',
                   onTap: _runTestPrint,
+                ),
+                const SizedBox(height: 8),
+
+                _ActionTile(
+                  icon: Icons.qr_code_2_rounded,
+                  title: 'NIIMBOT B1 Шошго хэвлэх',
+                  onTap: () {
+                    NiimbotPrinterDialog.show(
+                      context,
+                      productName: 'Тест Бараа 350мл',
+                      priceText: '₮ 15,000',
+                      barcodeOrSku: '8650001234567',
+                    );
+                  },
                 ),
                 const SizedBox(height: 8),
 
