@@ -431,6 +431,7 @@ class NiimbotPrinterService {
         // MTU actually got negotiated (on either platform) instead of assuming the
         // request above succeeded. Chunking writes larger than this silently drops data.
         await Future.delayed(const Duration(milliseconds: 150));
+        final negotiatedMtu = device.mtuNow;
         final isIOSDevice = defaultTargetPlatform == TargetPlatform.iOS;
         _currentChunkSize = isIOSDevice
             ? (negotiatedMtu - 3).clamp(20, 150)
