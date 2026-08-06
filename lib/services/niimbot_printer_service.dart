@@ -178,6 +178,32 @@ class NiimbotPrinterService {
   /// B1 thermal printhead max dots width = 384 pixels (~48mm width at 203 DPI)
   static const int maxPrintWidthDots = 384;
 
+  static final List<String> _sessionLogs = [];
+
+  /// Returns full accumulated log text for copying on physical device
+  static String getSessionLogs() {
+    if (_sessionLogs.isEmpty) {
+      return 'Лог хоосон байна. (No logs recorded yet)';
+    }
+    return _sessionLogs.join('\n');
+  }
+
+  /// Clear logged session messages
+  static void clearSessionLogs() {
+    _sessionLogs.clear();
+  }
+
+  static void _log(String msg) {
+    final now = DateTime.now();
+    final timeStr = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}.${now.millisecond.toString().padLeft(3, '0')}";
+    final line = '[$timeStr] $msg';
+    _sessionLogs.add(line);
+    if (_sessionLogs.length > 500) {
+      _sessionLogs.removeAt(0);
+    }
+    debugPrint(line);
+  }
+
   /// Scan for nearby Bluetooth Niimbot devices
   static Stream<List<ScanResult>> scanForPrinters({Duration timeout = const Duration(seconds: 5)}) {
     FlutterBluePlus.startScan(
@@ -281,7 +307,8 @@ class NiimbotPrinterService {
           // Perceived brightness (0 = dark/black, 255 = light/white)
           final brightness = (r * 0.299 + g * 0.587 + b * 0.114);
 
-          final isDark = brightness < 140;
+          // Threshold at 185 to capture anti-aliased font edges and thin barcode lines for high contrast
+          final isDark = brightness < 185;
           final setBit = invertBits ? !isDark : isDark;
 
           if (setBit) {
@@ -411,12 +438,12 @@ class NiimbotPrinterService {
     void Function(double progress)? onProgress,
   }) async {
     try {
-      debugPrint('[NiimbotPrinterService] === PRINT START === Device: ${device.platformName} (${device.remoteId.str}) | Density: $density | LabelType: $labelType | Invert: $invertBits');
+      _log('[NiimbotPrinterService] === PRINT START === Device: ${device.platformName} (${device.remoteId.str}) | Density: $density | LabelType: $labelType | Invert: $invertBits');
 
       if (!device.isConnected || _cachedWriteChars.isEmpty) {
-        debugPrint('[NiimbotPrinterService] Connecting to BLE device...');
+        _log('[NiimbotPrinterService] Connecting to BLE device...');
         await device.connect(timeout: const Duration(seconds: 6));
-        debugPrint('[NiimbotPrinterService] STEP 1: Connected');
+        _log('[NiimbotPrinterService] STEP 1: Connected');
         _rxBuffer.clear();
 
         try {
@@ -424,7 +451,7 @@ class NiimbotPrinterService {
           await device.requestMtu(247);
           await Future.delayed(const Duration(milliseconds: 60));
         } catch (e) {
-          debugPrint('[NiimbotPrinterService] requestMtu notice: $e');
+          _log('[NiimbotPrinterService] requestMtu notice: $e');
         }
 
         // Give iOS's automatic negotiation a moment to settle, then read back whatever
@@ -436,7 +463,7 @@ class NiimbotPrinterService {
         _currentChunkSize = isIOSDevice
             ? (negotiatedMtu - 3).clamp(20, 150)
             : (negotiatedMtu - 3).clamp(20, 500);
-        debugPrint('[NiimbotPrinterService] Negotiated MTU: $negotiatedMtu -> write chunk size: $_currentChunkSize');
+        _log('[NiimbotPrinterService] Negotiated MTU: $negotiatedMtu -> write chunk size: $_currentChunkSize');
 
         final services = await device.discoverServices();
         for (final s in services) {
@@ -447,7 +474,7 @@ class NiimbotPrinterService {
                 c.lastValueStream.listen((value) {
                   if (value.isNotEmpty) {
                     final hex = value.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
-                    debugPrint('[NiimbotPrinterService] NOTIFY RESPONSE (${c.uuid}): [$hex]');
+                    _log('[NiimbotPrinterService] NOTIFY RESPONSE (${c.uuid}): [$hex]');
                     _feedRxBytes(value);
                   }
                 });
@@ -463,7 +490,7 @@ class NiimbotPrinterService {
               final uuid = c.uuid.toString().toLowerCase();
               if (uuid.contains('ffe1') || uuid.contains('fff2') || uuid.contains('bef8d6c9')) {
                 _cachedWriteChars.add(c);
-                debugPrint('[NiimbotPrinterService] Discovered Niimbot Print Char: $uuid');
+                _log('[NiimbotPrinterService] Discovered Niimbot Print Char: $uuid');
                 break;
               }
             }
@@ -471,11 +498,11 @@ class NiimbotPrinterService {
           if (_cachedWriteChars.isNotEmpty) break;
         }
       } else {
-        debugPrint('[NiimbotPrinterService] Reusing active BLE connection with ${_cachedWriteChars.first.uuid}!');
+        _log('[NiimbotPrinterService] Reusing active BLE connection with ${_cachedWriteChars.first.uuid}!');
       }
 
       if (_cachedWriteChars.isEmpty) {
-        debugPrint('[NiimbotPrinterService] ERROR: No writable characteristic found');
+        _log('[NiimbotPrinterService] ERROR: No writable characteristic found');
         return NiimbotPrintResult(
           success: false,
           message: 'Хэвлэгчээс бичих боломжтой Bluetooth суваг олдсонгүй',
@@ -505,6 +532,10 @@ class NiimbotPrinterService {
 
       for (int q = 0; q < quantity; q++) {
         await _sendBytesToAll(NiimbotPacketEncoder.cmdStartPage());
+        await Future.delayed(const Duration(milliseconds: 20));
+
+        // Re-apply max density after starting page to prevent firmware heat pulse reset
+        await _sendBytesToAll(NiimbotPacketEncoder.cmdSetDensity(density: density));
         await Future.delayed(const Duration(milliseconds: 20));
 
         await _sendBytesToAll(
@@ -545,11 +576,11 @@ class NiimbotPrinterService {
 
       final finished = await _waitForPrintFinished();
       if (!finished) {
-        debugPrint('[NiimbotPrinterService] WARNING: PrintStatus poll timed out waiting for printer to finish rendering - sending EndJob anyway');
+        _log('[NiimbotPrinterService] WARNING: PrintStatus poll timed out waiting for printer to finish rendering - sending EndJob anyway');
       }
 
       await _sendBytesToAll(NiimbotPacketEncoder.cmdEndJob());
-      debugPrint('[NiimbotPrinterService] === PRINT COMPLETE ===');
+      _log('[NiimbotPrinterService] === PRINT COMPLETE ===');
 
       return NiimbotPrintResult(
         success: true,
@@ -557,7 +588,7 @@ class NiimbotPrinterService {
         deviceName: device.platformName,
       );
     } catch (e, st) {
-      debugPrint('[NiimbotPrinterService] BLE Print error: $e\n$st');
+      _log('[NiimbotPrinterService] BLE Print error: $e\n$st');
       _cachedWriteChars.clear();
       _currentChunkSize = 20;
       try {

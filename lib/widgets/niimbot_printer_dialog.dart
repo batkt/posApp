@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../services/niimbot_printer_service.dart';
 import '../utils/niimbot_label_builder.dart';
@@ -238,6 +239,67 @@ class _NiimbotPrinterDialogState extends State<NiimbotPrinterDialog> {
     }
   }
 
+  void _showLogsModal() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final logs = NiimbotPrinterService.getSessionLogs();
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: const Row(
+            children: [
+              Icon(Icons.terminal, color: Colors.indigo),
+              SizedBox(width: 8),
+              Text('Хэвлэгчийн Лог (Logs)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 320,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade900,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  logs,
+                  style: const TextStyle(fontSize: 11, color: Colors.greenAccent, fontFamily: 'monospace'),
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                NiimbotPrinterService.clearSessionLogs();
+                Navigator.of(ctx).pop();
+                _showLogsModal();
+              },
+              child: const Text('Цэвэрлэх', style: TextStyle(color: Colors.red)),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: logs));
+                Navigator.of(ctx).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Хэвлэгчийн лог санамжид амжилттай хуулагдлаа!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white),
+              icon: const Icon(Icons.copy, size: 18),
+              label: const Text('Лог хуулах (Copy)'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -251,6 +313,11 @@ class _NiimbotPrinterDialogState extends State<NiimbotPrinterDialog> {
               'NIIMBOT B1 Шошго Хэвлэх',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.bug_report_outlined, color: Colors.indigo),
+            tooltip: 'Лог харах/хуулах',
+            onPressed: _showLogsModal,
           ),
           IconButton(
             icon: const Icon(Icons.close),
