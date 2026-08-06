@@ -273,11 +273,11 @@ class NiimbotPrinterService {
       throw Exception('Could not decode image bytes for printing');
     }
 
-    // Resize image maintaining aspect ratio to fit printhead width
+    // Resize image using nearest-neighbor interpolation to preserve sharp black/white text edges
     final scaled = img.copyResize(
       decoded,
       width: targetWidth,
-      interpolation: img.Interpolation.linear,
+      interpolation: img.Interpolation.nearest,
     );
 
     final height = scaled.height;
@@ -304,11 +304,11 @@ class NiimbotPrinterService {
             continue;
           }
 
-          // Perceived brightness (0 = dark/black, 255 = light/white)
+          // Perceived brightness (0 = dark/black, 255 = light/white).
+          // Background canvas is pure white (255). Any non-white pixel (< 235) is text/border.
           final brightness = (r * 0.299 + g * 0.587 + b * 0.114);
 
-          // Threshold at 185 to capture anti-aliased font edges and thin barcode lines for high contrast
-          final isDark = brightness < 185;
+          final isDark = brightness < 235;
           final setBit = invertBits ? !isDark : isDark;
 
           if (setBit) {
