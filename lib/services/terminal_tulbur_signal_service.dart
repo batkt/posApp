@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 
 import 'api_service.dart';
 
+import 'socket_service.dart';
+
 class TerminalTulburSignalException implements Exception {
   TerminalTulburSignalException(this.message, {this.statusCode});
   final String message;
@@ -70,7 +72,7 @@ class TerminalTulburSignalService {
     return null;
   }
 
-  Future<void> createRequest({
+  Future<TerminalPaySignalItem?> createRequest({
     required String salbariinId,
     required double amountMnt,
     String tailbar = '',
@@ -100,6 +102,21 @@ class TerminalTulburSignalService {
         statusCode: res.statusCode,
       );
     }
+
+    if (decoded is Map && decoded['data'] is Map) {
+      final item = TerminalPaySignalItem.tryParse(Map<String, dynamic>.from(decoded['data']));
+      if (item != null) {
+        SocketService.instance.notifyLocalPayRequest({
+          'id': item.id,
+          'amountMnt': item.amountMnt,
+          'initiatorNer': item.initiatorNer,
+          'initiatorAjiltanId': item.initiatorAjiltanId,
+          'tailbar': item.tailbar,
+        });
+      }
+      return item;
+    }
+    return null;
   }
 
   Future<List<TerminalPaySignalItem>> fetchPending({

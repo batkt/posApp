@@ -22,6 +22,8 @@ class SocketService {
       StreamController<void>.broadcast();
   final StreamController<Map<String, dynamic>> _barimtKhuseeltController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _tulburKhuseeltController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   /// Debounced pulses when warehouse stock (`uldegdel`) changed for this branch.
   Stream<void> get uldegdelChanged => _uldegdelController.stream;
@@ -30,7 +32,25 @@ class SocketService {
   Stream<Map<String, dynamic>> get terminalBarimtKhuseeltStream =>
       _barimtKhuseeltController.stream;
 
+  /// Stream of real-time card payment requests received over Socket.IO (`terminalTulburKhuseelt`).
+  Stream<Map<String, dynamic>> get terminalTulburKhuseeltStream =>
+      _tulburKhuseeltController.stream;
+
   bool get isConnected => _socket?.connected == true;
+
+  /// Immediately dispatches a local print request to the listener without waiting for socket roundtrip.
+  void notifyLocalPrintRequest(Map<String, dynamic> data) {
+    if (!_barimtKhuseeltController.isClosed) {
+      _barimtKhuseeltController.add(data);
+    }
+  }
+
+  /// Immediately dispatches a local card payment request to the listener without waiting for socket roundtrip.
+  void notifyLocalPayRequest(Map<String, dynamic> data) {
+    if (!_tulburKhuseeltController.isClosed) {
+      _tulburKhuseeltController.add(data);
+    }
+  }
 
   /// Connect (or reconnect) when [session] and `posApiService.token` are set.
   void syncPosSession(PosSession? session) {
@@ -65,7 +85,7 @@ class SocketService {
         OptionBuilder()
             .enableForceNew()
             .setPath('/api/socket.io')
-            .setTransports(['websocket'])
+            .setTransports(['websocket', 'polling'])
             .enableAutoConnect()
             .setExtraHeaders({'Authorization': 'bearer $token'})
             .build(),
@@ -84,6 +104,11 @@ class SocketService {
       _socket!.on('terminalBarimtKhuseelt', (data) {
         if (data is Map && !_barimtKhuseeltController.isClosed) {
           _barimtKhuseeltController.add(Map<String, dynamic>.from(data));
+        }
+      });
+      _socket!.on('terminalTulburKhuseelt', (data) {
+        if (data is Map && !_tulburKhuseeltController.isClosed) {
+          _tulburKhuseeltController.add(Map<String, dynamic>.from(data));
         }
       });
 

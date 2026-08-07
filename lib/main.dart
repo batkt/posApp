@@ -19,6 +19,7 @@ import 'services/version_service.dart';
 import 'services/api_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'services/network_usage_service.dart';
+import 'services/background_watchdog_service.dart';
 import 'package:media_kit/media_kit.dart';
 
 
@@ -40,18 +41,26 @@ void main() async {
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
-  runApp(const POSApp());
+  final authModel = AuthModel();
+  // No-op unless a terminal previously logged in (see TerminalSessionStore) —
+  // lets a watchdog-triggered relaunch/reboot skip straight past LoginScreen.
+  await authModel.tryRestoreTerminalSession();
+  // Cheap: only registers the headless entrypoint + boot flag, starts nothing.
+  await BackgroundWatchdogService.instance.configure();
+  runApp(POSApp(authModel: authModel));
 }
 
 class POSApp extends StatelessWidget {
-  const POSApp({super.key});
+  const POSApp({super.key, required this.authModel});
+
+  final AuthModel authModel;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => LocaleModel()),
-        ChangeNotifierProvider(create: (_) => AuthModel()),
+        ChangeNotifierProvider.value(value: authModel),
         ChangeNotifierProvider(create: (_) => SalesModel()),
         ChangeNotifierProxyProvider<AuthModel, InventoryModel>(
           create: (_) => InventoryModel(),

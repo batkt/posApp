@@ -336,8 +336,10 @@ class MainActivity : FlutterFragmentActivity() {
         preferredPackage: String? = null,
     ) {
         if (pendingUniPosResult != null) {
-            result.error("BUSY", "UniPOS request already in progress", null)
-            return
+            try {
+                pendingUniPosResult?.error("CANCELLED", "Stale request replaced", null)
+            } catch (_: Throwable) {}
+            pendingUniPosResult = null
         }
         val targetPackage = resolveUniPosTargetPackage(preferredPackage)
         if (targetPackage == null) {
@@ -353,8 +355,8 @@ class MainActivity : FlutterFragmentActivity() {
             putExtra(Intent.EXTRA_TEXT, request)
             setPackage(targetPackage)
         }
-        val canResolve = intent.resolveActivity(packageManager) != null
-        if (!canResolve) {
+        val resolved = intent.resolveActivity(packageManager)
+        if (resolved == null) {
             result.error(
                 "UNIPOS_NOT_FOUND",
                 "Terminal package $targetPackage cannot handle payment intent.",
@@ -362,8 +364,9 @@ class MainActivity : FlutterFragmentActivity() {
             )
             return
         }
+        intent.component = resolved
         pendingUniPosResult = result
-        logCatLong(eposLogTag, "UniPOS launch", "package=$targetPackage request=$request")
+        logCatLong(eposLogTag, "UniPOS launch", "package=$targetPackage component=$resolved request=$request")
         @Suppress("DEPRECATION")
         startActivityForResult(intent, uniPosRequestCode)
     }
@@ -389,8 +392,10 @@ class MainActivity : FlutterFragmentActivity() {
         preferredPackage: String? = null,
     ) {
         if (pendingEposResult != null) {
-            result.error("BUSY", "EPOS request already in progress", null)
-            return
+            try {
+                pendingEposResult?.error("CANCELLED", "Stale request replaced", null)
+            } catch (_: Throwable) {}
+            pendingEposResult = null
         }
         val targetPackage = resolveEposTargetPackage(preferredPackage)
         if (targetPackage == null) {
@@ -406,8 +411,8 @@ class MainActivity : FlutterFragmentActivity() {
             putExtra(Intent.EXTRA_TEXT, request)
             setPackage(targetPackage)
         }
-        val canResolve = intent.resolveActivity(packageManager) != null
-        if (!canResolve) {
+        val resolved = intent.resolveActivity(packageManager)
+        if (resolved == null) {
             result.error(
                 "EPOS_NOT_FOUND",
                 "EPOS package $targetPackage cannot handle payment intent.",
@@ -415,8 +420,9 @@ class MainActivity : FlutterFragmentActivity() {
             )
             return
         }
+        intent.component = resolved
         pendingEposResult = result
-        logCatLong(eposLogTag, "EPOS launch", "package=$targetPackage EXTRA_TEXT=$request")
+        logCatLong(eposLogTag, "EPOS launch", "package=$targetPackage component=$resolved EXTRA_TEXT=$request")
         @Suppress("DEPRECATION")
         startActivityForResult(intent, eposRequestCode)
     }
@@ -676,6 +682,14 @@ class MainActivity : FlutterFragmentActivity() {
             try {
                 printerClass.getMethod("init").invoke(printer)
             } catch (_: Throwable) {}
+
+            try {
+                printerClass.getMethod("setGray", Int::class.javaPrimitiveType).invoke(printer, 10)
+            } catch (_: Throwable) {
+                try {
+                    printerClass.getMethod("setGray", Int::class.javaPrimitiveType).invoke(printer, 4)
+                } catch (_: Throwable) {}
+            }
 
             try {
                 printerClass.getMethod("printBitmap", Bitmap::class.java).invoke(printer, toPrint)

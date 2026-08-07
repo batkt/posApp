@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
+import '../../services/background_watchdog_service.dart';
 import '../../widgets/kiosk_drawer.dart';
 import '../../widgets/parked_guilgee_sheet.dart';
 import '../../widgets/kiosk_terminal_pay_signal_listener.dart';
@@ -22,6 +26,27 @@ class CashierMainScreen extends StatefulWidget {
 
 class _CashierMainScreenState extends State<CashierMainScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  void initState() {
+    super.initState();
+    // Only kiosk/terminal devices reach this screen (see PostLoginHome) — never
+    // started for a plain mobile-cashier install.
+    unawaited(_startBackgroundWatchdog());
+  }
+
+  Future<void> _startBackgroundWatchdog() async {
+    debugPrint('>>> [CashierMainScreen] starting background watchdog…');
+    try {
+      final notifStatus = await Permission.notification.request(); // no-op pre-Android-13
+      debugPrint('>>> [CashierMainScreen] notification permission: $notifStatus');
+      await BackgroundWatchdogService.instance.ensureStarted();
+      debugPrint('>>> [CashierMainScreen] background watchdog ensureStarted() done');
+    } catch (e, st) {
+      // Best-effort — terminal still prints normally while the app is open.
+      debugPrint('>>> [CashierMainScreen] background watchdog failed to start: $e\n$st');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

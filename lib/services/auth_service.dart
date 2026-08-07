@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import 'api_service.dart';
 import '../auth/staff_screen_access.dart';
 import '../models/auth_model.dart';
@@ -6,8 +8,9 @@ import '../models/pos_session.dart';
 import 'baiguullaga_service.dart';
 import 'pos_settings_service.dart';
 import 'terminal_hardware_service.dart';
+import 'terminal_session_store.dart';
 
-UserRole _roleHintFromAccess(StaffScreenAccess access) {
+UserRole roleHintFromAccess(StaffScreenAccess access) {
   if (access.hasFullAccess) return UserRole.admin;
   final narrowStaff = !access.allowsPosSystem &&
       !access.allowsAguulakh &&
@@ -83,6 +86,20 @@ class AuthService {
     return null;
   }
 
+  /// Terminal (kiosk) hardware vs. a plain phone — gates auto-login session
+  /// persistence in [TerminalSessionStore] (only terminals need to survive
+  /// [BackgroundWatchdogService]-triggered restarts / reboots without a human).
+  Future<bool> _isTerminalDevice() async {
+    final hw = await TerminalHardwareInfo.probe();
+    final result = (hw.kind == TerminalHardwareKind.eposOpenInApp ||
+            hw.kind == TerminalHardwareKind.neptunePax) ||
+        hw.manufacturer.toLowerCase().contains('pax') ||
+        hw.manufacturer.toLowerCase().contains('sunmi');
+    debugPrint(
+        '>>> [AuthService] _isTerminalDevice: kind=${hw.kind} manufacturer=${hw.manufacturer} model=${hw.model} -> $result');
+    return result;
+  }
+
   /// Login with username and password
   /// Corresponds to: newterya(khereglech: { burtgeliinDugaar, nuutsUg, namaigsana })
   Future<AuthResult> login({
@@ -91,11 +108,7 @@ class AuthService {
     bool rememberMe = false,
   }) async {
     try {
-      final hw = await TerminalHardwareInfo.probe();
-      final isTerminal = (hw.kind == TerminalHardwareKind.eposOpenInApp ||
-              hw.kind == TerminalHardwareKind.neptunePax) ||
-          hw.manufacturer.toLowerCase().contains('pax') ||
-          hw.manufacturer.toLowerCase().contains('sunmi');
+      final isTerminal = await _isTerminalDevice();
 
       final response = await _apiService.post<Map<String, dynamic>>(
         '/ajiltanNevtrey',
@@ -141,7 +154,7 @@ class AuthService {
                     userData?['createdAt'] ??
                     '') ??
                 DateTime.now(),
-            role: _roleHintFromAccess(staffAccess),
+            role: roleHintFromAccess(staffAccess),
           );
 
           final posSession = await _resolvePosSession(userData);
@@ -149,6 +162,15 @@ class AuthService {
             userData,
             posSession,
           );
+
+          if (isTerminal && posSession != null) {
+            await TerminalSessionStore.instance.persist(
+              token: token,
+              baiguullagiinId: posSession.baiguullagiinId,
+              salbariinId: posSession.salbariinId,
+              ajiltan: posSession.ajiltan,
+            );
+          }
 
           return AuthResult.success(
             user: user,
@@ -177,6 +199,8 @@ class AuthService {
     required String code,
   }) async {
     try {
+      final isTerminal = await _isTerminalDevice();
+
       final response = await _apiService.post<Map<String, dynamic>>(
         '/batalgaajuulalt2FA',
         body: {
@@ -215,7 +239,7 @@ class AuthService {
                           userData['createdAt'] ??
                           '') ??
                       DateTime.now(),
-                  role: _roleHintFromAccess(staffAccess),
+                  role: roleHintFromAccess(staffAccess),
                 )
               : null;
           final posSession = await _resolvePosSession(userData);
@@ -223,6 +247,15 @@ class AuthService {
             userData,
             posSession,
           );
+
+          if (isTerminal && posSession != null) {
+            await TerminalSessionStore.instance.persist(
+              token: token,
+              baiguullagiinId: posSession.baiguullagiinId,
+              salbariinId: posSession.salbariinId,
+              ajiltan: posSession.ajiltan,
+            );
+          }
 
           return AuthResult.success(
             user: user,

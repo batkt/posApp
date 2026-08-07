@@ -7,6 +7,7 @@ import '../auth/staff_screen_access.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/socket_service.dart';
+import '../services/terminal_session_store.dart';
 import 'branch_option.dart';
 import 'pos_session.dart';
 
@@ -151,6 +152,64 @@ class AuthModel extends ChangeNotifier {
       _posSession != null &&
       (posApiService.token != null && posApiService.token!.isNotEmpty);
 
+  /// Restores a terminal auto-login session persisted by [TerminalSessionStore]
+  /// (written on terminal login, see [AuthService.login]/[AuthService.verifyTwoFactor]).
+  /// Called once at cold start (`main.dart`), before any UI/socket depends on
+  /// [posSession] — lets a process restarted by `BackgroundWatchdogService` or a
+  /// device reboot land straight on [CashierMainScreen] with no human input.
+  /// Returns false (no-op) on a phone install or a terminal that never logged in.
+  Future<bool> tryRestoreTerminalSession() async {
+    final saved = await TerminalSessionStore.instance.restore();
+    if (saved == null) {
+      debugPrint('>>> [AuthModel] tryRestoreTerminalSession: nothing persisted');
+      return false;
+    }
+
+    final token = saved['token']?.toString();
+    final baiguullagiinId = saved['baiguullagiinId']?.toString();
+    final salbariinId = saved['salbariinId']?.toString();
+    final ajiltanRaw = saved['ajiltan'];
+    if (token == null ||
+        token.isEmpty ||
+        baiguullagiinId == null ||
+        baiguullagiinId.isEmpty ||
+        salbariinId == null ||
+        salbariinId.isEmpty ||
+        ajiltanRaw is! Map) {
+      debugPrint('>>> [AuthModel] tryRestoreTerminalSession: persisted session malformed');
+      return false;
+    }
+    final ajiltan = Map<String, dynamic>.from(ajiltanRaw);
+
+    posApiService.setToken(token);
+
+    final staffAccess = StaffScreenAccess.fromAjiltan(ajiltan);
+    _currentUser = User(
+      id: ajiltan['_id'] ?? ajiltan['id'] ?? '',
+      username: ajiltan['burtgeliinDugaar'] ?? '',
+      name: ajiltan['ner'] ?? ajiltan['name'] ?? '',
+      email: ajiltan['mail']?.toString() ?? ajiltan['email']?.toString(),
+      phone: ajiltan['utas'] ?? ajiltan['phone'],
+      isTwoFactorEnabled: ajiltan['isTwoFactorEnabled'] ?? false,
+      isBiometricEnabled: ajiltan['isBiometricEnabled'] ?? false,
+      createdAt: DateTime.tryParse(
+              ajiltan['burtgesenOgnoo'] ?? ajiltan['createdAt'] ?? '') ??
+          DateTime.now(),
+      role: roleHintFromAccess(staffAccess),
+    );
+    _posSession = PosSession(
+      baiguullagiinId: baiguullagiinId,
+      salbariinId: salbariinId,
+      ajiltan: ajiltan,
+    );
+    _staffAccess = staffAccess;
+    _isAuthenticated = true;
+    _lastAuthError = null;
+    debugPrint('>>> [AuthModel] tryRestoreTerminalSession: restored salbariinId=$salbariinId');
+    notifyListeners();
+    return true;
+  }
+
   Future<bool> login(String username, String password) async {
     // Call real API
     final result = await authService.login(
@@ -261,6 +320,7 @@ class AuthModel extends ChangeNotifier {
       // Offline or /garah failure — still end the session locally.
     }
     SocketService.instance.disconnect();
+    await TerminalSessionStore.instance.clear();
     _currentUser = null;
     _posSession = null;
     _pendingBranchOptions = null;

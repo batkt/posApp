@@ -1,17 +1,20 @@
 import 'dart:async';
 
+import 'package:android_intent_plus/android_intent.dart';
+import 'package:android_intent_plus/flag.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/auth_model.dart';
-import '../models/locale_model.dart';
-import '../services/pos_transaction_service.dart';
+import '../services/background_watchdog_service.dart';
+import '../services/socket_service.dart';
 import '../services/terminal_tulbur_signal_service.dart';
 import '../services/unipos_service.dart';
 import '../utils/mnt_amount_formatter.dart';
 
-/// While the kiosk POS screen is open, polls for mobile-initiated card requests
-/// and offers to open UniPOS on this device.
+/// Listens for mobile-initiated card payment requests (`terminalTulburKhuseelt`)
+/// and automatically opens UniPOS card payment terminal on this POS device.
 class KioskTerminalPaySignalListener extends StatefulWidget {
   const KioskTerminalPaySignalListener({super.key, required this.child});
 
@@ -23,58 +26,68 @@ class KioskTerminalPaySignalListener extends StatefulWidget {
 }
 
 class _KioskTerminalPaySignalListenerState
-    extends State<KioskTerminalPaySignalListener> {
-  static const _pollInterval = Duration(seconds: 4);
-  static const _snooze = Duration(minutes: 2);
-
+    extends State<KioskTerminalPaySignalListener>
+    with WidgetsBindingObserver {
   Timer? _timer;
+  StreamSubscription? _socketSub;
   final TerminalTulburSignalService _svc = TerminalTulburSignalService();
-  final Set<String> _sessionHandledIds = {};
-  final Map<String, DateTime> _snoozeUntil = {};
-  bool _dialogOpen = false;
+  final Set<String> _handledIds = {};
   bool _pollInFlight = false;
+  bool _isProcessingCardRequest = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _armTimer());
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _listenSocket();
+      _armTimer();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('>>> [KioskTerminalPaySignalListener] App RESUMED — checking pending card requests');
+      _poll();
+    }
+  }
+
+  void _listenSocket() {
+    _socketSub?.cancel();
+    _socketSub = SocketService.instance.terminalTulburKhuseeltStream.listen((data) {
+      final item = TerminalPaySignalItem.tryParse(data);
+      if (item != null && !_handledIds.contains(item.id) && !_isProcessingCardRequest) {
+        debugPrint('>>> [KioskTerminalPaySignalListener] Socket.IO card request received: ${item.id}');
+        _processPayRequest(item);
+      }
+    });
   }
 
   void _armTimer() {
     _timer?.cancel();
     if (!mounted) return;
     final auth = context.read<AuthModel>();
-    if (!auth.canSubmitPosSales ||
-        !auth.staffAccess.canPollTerminalPaySignals) {
-      return;
-    }
-    _timer = Timer.periodic(_pollInterval, (_) => _poll());
+    if (auth.posSession == null) return;
+    final pollInterval = SocketService.instance.isConnected
+        ? const Duration(seconds: 8)
+        : const Duration(seconds: 3);
+    _timer = Timer.periodic(pollInterval, (_) => _poll());
     _poll();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _socketSub?.cancel();
     _timer?.cancel();
     super.dispose();
   }
 
-  bool _canOffer(String id) {
-    if (_sessionHandledIds.contains(id)) return false;
-    final until = _snoozeUntil[id];
-    if (until != null && DateTime.now().isBefore(until)) return false;
-    _snoozeUntil.remove(id);
-    return true;
-  }
-
   Future<void> _poll() async {
-    if (!mounted || _dialogOpen || _pollInFlight) return;
+    if (!mounted || _pollInFlight || _isProcessingCardRequest) return;
     _pollInFlight = true;
     final auth = context.read<AuthModel>();
-    if (!auth.canSubmitPosSales ||
-        !auth.staffAccess.canPollTerminalPaySignals) {
-      _pollInFlight = false;
-      return;
-    }
     final session = auth.posSession;
     if (session == null) {
       _pollInFlight = false;
@@ -91,165 +104,113 @@ class _KioskTerminalPaySignalListenerState
       _pollInFlight = false;
       return;
     }
-    if (!mounted || _dialogOpen || list.isEmpty) {
+
+    if (!mounted || list.isEmpty) {
       _pollInFlight = false;
       return;
     }
 
-    TerminalPaySignalItem? pick;
     for (final item in list) {
-      if (_canOffer(item.id)) {
-        pick = item;
+      if (!_handledIds.contains(item.id) && !_isProcessingCardRequest) {
+        await _processPayRequest(item);
         break;
       }
     }
-    if (pick == null || !mounted) {
-      _pollInFlight = false;
+    _pollInFlight = false;
+  }
+
+  Future<void> _processPayRequest(TerminalPaySignalItem item) async {
+    if (_handledIds.contains(item.id) || _isProcessingCardRequest) {
+      debugPrint('>>> [KioskTerminalPaySignalListener] Skipping duplicate/concurrent card pay request: ${item.id}');
       return;
     }
+    _isProcessingCardRequest = true;
+    _handledIds.add(item.id); // Permanently remember to prevent infinite loops on resume!
+    debugPrint('>>> [KioskTerminalPaySignalListener] EXECUTING CARD PAY REQUEST: ${item.id} (${item.amountMnt}₮) from ${item.initiatorNer}');
 
-    final item = pick;
     final messenger = ScaffoldMessenger.of(context);
-    _dialogOpen = true;
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => _TerminalSignalDialog(
-        item: item,
-        onOpenUniPos: () async {
-          try {
-            final r = await UniPosService.purchase(amount: item.amountMnt);
-            UniPosService.requireSuccessfulTerminalCardPayment(r);
-          } on PosTransactionException catch (e) {
-            if (!ctx.mounted) return;
-            messenger.showSnackBar(
-              SnackBar(
-                content: Text(e.message),
-                behavior: SnackBarBehavior.floating,
+
+    // Protect active UniPOS transaction from watchdog disruption for 2 minutes
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        terminalWatchdogHeartbeatKey,
+        DateTime.now().add(const Duration(minutes: 2)).toIso8601String(),
+      );
+    } catch (_) {}
+    try {
+      // If app is currently backgrounded/minimized, bring MainActivity to foreground first
+      if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        debugPrint('>>> [KioskTerminalPaySignalListener] App backgrounded — bringing MainActivity to foreground before UniPOS launch');
+        try {
+          await const AndroidIntent(
+            action: 'android.intent.action.MAIN',
+            category: 'android.intent.category.LAUNCHER',
+            package: 'mn.posease.mobile.terminal.pos',
+            componentName: 'mn.posease.mobile.terminal.pos.MainActivity',
+            flags: <int>[
+              Flag.FLAG_ACTIVITY_NEW_TASK,
+              Flag.FLAG_ACTIVITY_CLEAR_TOP,
+              Flag.FLAG_ACTIVITY_SINGLE_TOP,
+            ],
+          ).launch();
+          await Future.delayed(const Duration(milliseconds: 600));
+        } catch (e) {
+          debugPrint('Failed to bring MainActivity to foreground: $e');
+        }
+      }
+
+      if (mounted && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        try {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                'Картын төлбөрийн хүсэлт (${MntAmountFormatter.formatTugrik(item.amountMnt)}) — UniPOS нээж байна...',
               ),
-            );
-            return;
-          }
-          if (!ctx.mounted) return;
-          try {
-            await _svc.markCompleted(item.id);
-            if (!ctx.mounted) return;
-            _sessionHandledIds.add(item.id);
-            Navigator.of(ctx).pop();
-            messenger.showSnackBar(
-              SnackBar(
-                content: Text(
-                  '${MntAmountFormatter.formatTugrik(item.amountMnt)} — UniPOS дууссан',
-                ),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          } on TerminalTulburSignalException catch (e) {
-            messenger.showSnackBar(SnackBar(content: Text(e.message)));
-          }
-        },
-        onLater: () {
-          _snoozeUntil[item.id] = DateTime.now().add(_snooze);
-          Navigator.of(ctx).pop();
-        },
-        onCancelServer: () async {
-          try {
-            await _svc.cancelRequest(item.id);
-            if (!ctx.mounted) return;
-            _sessionHandledIds.add(item.id);
-            Navigator.of(ctx).pop();
-          } on TerminalTulburSignalException catch (e) {
-            messenger.showSnackBar(SnackBar(content: Text(e.message)));
-          }
-        },
-      ),
-    );
-    if (mounted) _dialogOpen = false;
-    _pollInFlight = false;
-    if (mounted) {
-      unawaited(_poll());
+              duration: const Duration(seconds: 2),
+              backgroundColor: Colors.blue.shade800,
+            ),
+          );
+        } catch (_) {}
+      }
+
+      // Auto-launch UniPOS payment terminal
+      final res = await UniPosService.purchase(amount: item.amountMnt);
+      UniPosService.requireSuccessfulTerminalCardPayment(res);
+
+      await _svc.markCompleted(item.id);
+      debugPrint('>>> [KioskTerminalPaySignalListener] Card payment successfully completed for ${item.id}');
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '${MntAmountFormatter.formatTugrik(item.amountMnt)} — UniPOS гүйлгээ амжилттай дууслаа!',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } on Exception catch (e) {
+      debugPrint('>>> [KioskTerminalPaySignalListener] UniPOS transaction cancelled/failed: $e');
+      // Cancel on backend so it is marked cancelled instead of staying pending
+      try {
+        await _svc.cancelRequest(item.id);
+      } catch (_) {}
+
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text('Картын гүйлгээ цуцлагдлаа/алдаа гарлаа'),
+            backgroundColor: Colors.orange.shade800,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      _isProcessingCardRequest = false;
     }
   }
 
   @override
   Widget build(BuildContext context) => widget.child;
-}
-
-class _TerminalSignalDialog extends StatelessWidget {
-  const _TerminalSignalDialog({
-    required this.item,
-    required this.onOpenUniPos,
-    required this.onLater,
-    required this.onCancelServer,
-  });
-
-  final TerminalPaySignalItem item;
-  final Future<void> Function() onOpenUniPos;
-  final VoidCallback onLater;
-  final Future<void> Function() onCancelServer;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final cs = Theme.of(context).colorScheme;
-    return AlertDialog(
-      title: Text(l10n.tr('terminal_signal_kiosk_dialog_title')),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l10n.tr('terminal_signal_from_staff'),
-            style: TextStyle(
-              color: cs.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            item.initiatorNer.isEmpty ? '—' : item.initiatorNer,
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            l10n.tr('terminal_signal_amount'),
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-          ),
-          Text(
-            MntAmountFormatter.formatTugrik(item.amountMnt),
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: cs.primary,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-          if (item.tailbar.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              item.tailbar,
-              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
-            ),
-          ],
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: onLater,
-          child: Text(l10n.tr('terminal_signal_later')),
-        ),
-        TextButton(
-          onPressed: () => onCancelServer(),
-          child: Text(
-            l10n.tr('terminal_signal_cancel_req'),
-            style: TextStyle(color: cs.error),
-          ),
-        ),
-        FilledButton(
-          onPressed: () => onOpenUniPos(),
-          child: Text(l10n.tr('terminal_signal_open_unipos')),
-        ),
-      ],
-    );
-  }
 }

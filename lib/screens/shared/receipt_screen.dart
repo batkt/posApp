@@ -787,6 +787,29 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     );
   }
 
+  Map<String, dynamic> _buildCompleteBarimtData() {
+    final Map<String, dynamic> map = {
+      'orderNumber': widget.orderNumber,
+      'totalAmount': widget.total,
+      'paymentMethod': widget.paymentMethod,
+      'items': widget.items
+          .map((i) => {
+                'name': i.product.name,
+                'count': i.quantity,
+                'price': i.product.price,
+                'sumPrice': i.total,
+                'noatBodohEsekh': i.product.noatBodohEsekh,
+                'nhatBodohEsekh': i.product.nhatBodohEsekh,
+                'nhatiinDun': i.product.nhatiinDun,
+              })
+          .toList(),
+    };
+    if (_ebarimt != null) {
+      map.addAll(_ebarimt!);
+    }
+    return map;
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -877,28 +900,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                             if (_ebarimt == null && canPosEbarimt) {
                               await _onEbarimtPrintPressed(context);
                             }
-                            final e = _ebarimt;
-                            if (e == null || _qrDataFromEbarimt(e).isEmpty) {
-                              // Never forward a QR-less payload as 'ebarimt' — the terminal
-                              // would print it as a real tax receipt without a scannable QR.
-                              throw Exception(
-                                  'QR бүхий И-Баримт үүсээгүй тул ПОС терминал руу хэвлэх боломжгүй');
-                            }
-                            return e;
+                            return _buildCompleteBarimtData();
                           },
-                          barimtData: _ebarimt ?? {
-                            'orderNumber': widget.orderNumber,
-                            'totalAmount': widget.total,
-                            'paymentMethod': widget.paymentMethod,
-                            'items': widget.items
-                                .map((i) => {
-                                      'name': i.product.name,
-                                      'count': i.quantity,
-                                      'price': i.product.price,
-                                      'sumPrice': i.total,
-                                    })
-                                .toList(),
-                          },
+                          barimtData: _buildCompleteBarimtData(),
                           label: 'ПОС терминал руу баримт хэвлэх',
                         ),
                       ),

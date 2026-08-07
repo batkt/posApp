@@ -76,7 +76,7 @@ class TerminalBarimtSignalService {
     return null;
   }
 
-  Future<void> createRequest({
+  Future<TerminalBarimtSignalItem?> createRequest({
     required String salbariinId,
     String barimtType = 'ebarimt',
     required Map<String, dynamic> barimtData,
@@ -110,6 +110,10 @@ class TerminalBarimtSignalService {
         statusCode: res.statusCode,
       );
     }
+    if (decoded is Map && decoded['data'] is Map) {
+      return TerminalBarimtSignalItem.tryParse(Map<String, dynamic>.from(decoded['data']));
+    }
+    return null;
   }
 
   Future<List<TerminalBarimtSignalItem>> fetchPending({

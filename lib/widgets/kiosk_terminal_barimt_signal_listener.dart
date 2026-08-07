@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/auth_model.dart';
+import '../services/background_watchdog_service.dart';
 import '../services/socket_service.dart';
 import '../services/terminal_barimt_signal_service.dart';
 import 'visual_receipt_renderer.dart';
@@ -21,29 +23,38 @@ class KioskTerminalBarimtSignalListener extends StatefulWidget {
 }
 
 class _KioskTerminalBarimtSignalListenerState
-    extends State<KioskTerminalBarimtSignalListener> {
-  static const _pollInterval = Duration(seconds: 5);
-
+    extends State<KioskTerminalBarimtSignalListener>
+    with WidgetsBindingObserver {
   Timer? _timer;
   StreamSubscription? _socketSub;
   final TerminalBarimtSignalService _svc = TerminalBarimtSignalService();
   final Set<String> _handledIds = {};
   bool _pollInFlight = false;
+  bool _isProcessingPrintRequest = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _listenSocket();
       _armTimer();
     });
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('>>> [KioskTerminalBarimtSignalListener] App RESUMED — immediate poll for pending print requests');
+      _poll();
+    }
+  }
+
   void _listenSocket() {
     _socketSub?.cancel();
     _socketSub = SocketService.instance.terminalBarimtKhuseeltStream.listen((data) {
       final id = data['id']?.toString();
-      if (id != null && !_handledIds.contains(id)) {
+      if (id != null && !_handledIds.contains(id) && !_isProcessingPrintRequest) {
         final item = TerminalBarimtSignalItem.tryParse(data);
         if (item != null) {
           _processPrintRequest(item);
@@ -55,38 +66,52 @@ class _KioskTerminalBarimtSignalListenerState
   void _armTimer() {
     _timer?.cancel();
     if (!mounted) return;
-    _timer = Timer.periodic(_pollInterval, (_) => _poll());
+    final pollInterval = SocketService.instance.isConnected
+        ? const Duration(seconds: 8)
+        : const Duration(seconds: 3);
+    _timer = Timer.periodic(pollInterval, (_) => _poll());
     _poll();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _socketSub?.cancel();
     _timer?.cancel();
     super.dispose();
   }
 
   Future<void> _poll() async {
-    if (!mounted || _pollInFlight) return;
+    if (_pollInFlight || _isProcessingPrintRequest || !mounted) return;
     _pollInFlight = true;
-    final auth = context.read<AuthModel>();
-    final session = auth.posSession;
-    if (session == null) {
-      _pollInFlight = false;
-      return;
-    }
-
     try {
-      final list = await _svc.fetchPending(
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        terminalWatchdogHeartbeatKey,
+        DateTime.now().toIso8601String(),
+      );
+
+      if (!mounted) return;
+      final auth = context.read<AuthModel>();
+      final session = auth.posSession;
+      if (session == null) {
+        _pollInFlight = false;
+        return;
+      }
+
+      final items = await _svc.fetchPending(
         baiguullagiinId: session.baiguullagiinId,
         salbariinId: session.salbariinId,
       );
-      if (list.isNotEmpty) {
-        debugPrint('>>> [KioskTerminalBarimtSignalListener] Found ${list.length} pending print requests for branch ${session.salbariinId}');
+      if (items.isNotEmpty) {
+        debugPrint(
+          '>>> [KioskTerminalBarimtSignalListener] Found ${items.length} pending print requests for branch ${session.salbariinId}',
+        );
       }
-      for (final item in list) {
-        if (!_handledIds.contains(item.id)) {
+      for (final item in items) {
+        if (!_handledIds.contains(item.id) && !_isProcessingPrintRequest) {
           await _processPrintRequest(item);
+          break;
         }
       }
     } catch (e) {
@@ -97,39 +122,52 @@ class _KioskTerminalBarimtSignalListenerState
   }
 
   Future<void> _processPrintRequest(TerminalBarimtSignalItem item) async {
-    if (_handledIds.contains(item.id)) return;
+    if (_handledIds.contains(item.id) || _isProcessingPrintRequest) return;
+    _isProcessingPrintRequest = true;
     _handledIds.add(item.id);
     debugPrint('>>> [KioskTerminalBarimtSignalListener] EXECUTING PRINT REQUEST: ${item.id} from ${item.initiatorNer}');
 
+    var success = false;
     try {
-      // Show snackbar / notification on POS terminal
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Баримт хэвлэх хүсэлт ирлээ (${item.initiatorNer.isNotEmpty ? item.initiatorNer : "Ажилтан"})',
+      // Show snackbar on POS terminal if foreground UI is active
+      if (mounted && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        try {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Баримт хэвлэх хүсэлт ирлээ (${item.initiatorNer.isNotEmpty ? item.initiatorNer : "Ажилтан"})',
+              ),
+              duration: const Duration(seconds: 3),
             ),
-            duration: const Duration(seconds: 3),
-          ),
-        );
+          );
+        } catch (_) {}
       }
 
-      // Execute 100% pixel-perfect visual E-Barimt receipt image print matching ReceiptScreen
+      // Execute 100% pixel-perfect visual PNG receipt image rendering via offscreen PipelineOwner
       try {
         final res = await VisualReceiptRenderer.printReceiptData(
           context,
           item.barimtData,
           initiatorNer: item.initiatorNer,
         );
+        success = res.success;
         debugPrint('>>> [KioskTerminalBarimtSignalListener] Visual thermal print result: ${res.message}');
       } catch (err) {
         debugPrint('>>> [KioskTerminalBarimtSignalListener] Visual thermal print error: $err');
       }
 
-      // Mark request completed on backend after processing
-      await _svc.markCompleted(item.id);
+      // Mark request completed on backend after successful printing
+      if (success) {
+        await _svc.markCompleted(item.id);
+        debugPrint('>>> [KioskTerminalBarimtSignalListener] Successfully marked completed: ${item.id}');
+      } else {
+        _handledIds.remove(item.id);
+      }
     } catch (e) {
       debugPrint('Error processing remote print request: $e');
+      _handledIds.remove(item.id);
+    } finally {
+      _isProcessingPrintRequest = false;
     }
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/socket_service.dart';
 import '../services/terminal_barimt_signal_service.dart';
 
 /// Button to trigger a remote E-Barimt / receipt print request to the POS thermal printer.
@@ -48,13 +49,22 @@ class _PrintReceiptToPosButtonState extends State<PrintReceiptToPosButton> {
       }
 
       debugPrint('>>> [PrintReceiptToPosButton] Sending request payload: $payload');
-      await _svc.createRequest(
+      final createdItem = await _svc.createRequest(
         salbariinId: widget.salbariinId,
         barimtType: widget.barimtType,
         barimtData: payload,
         tailbar: widget.tailbar,
       );
       debugPrint('>>> [PrintReceiptToPosButton] SUCCESS! Request created on server.');
+
+      if (createdItem != null) {
+        SocketService.instance.notifyLocalPrintRequest({
+          'id': createdItem.id,
+          'barimtType': createdItem.barimtType,
+          'barimtData': createdItem.barimtData,
+          'initiatorNer': createdItem.initiatorNer,
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
