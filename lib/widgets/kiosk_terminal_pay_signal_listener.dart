@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
@@ -140,11 +139,11 @@ class _KioskTerminalPaySignalListenerState
       );
     } catch (_) {}
     try {
-      // If app is currently backgrounded/minimized on Android, bring MainActivity to foreground first
-      if (Platform.isAndroid && WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      // If app is currently backgrounded/minimized, bring MainActivity to foreground first
+      if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
         debugPrint('>>> [KioskTerminalPaySignalListener] App backgrounded — bringing MainActivity to foreground before UniPOS launch');
         try {
-          final intent = AndroidIntent(
+          await const AndroidIntent(
             action: 'android.intent.action.MAIN',
             category: 'android.intent.category.LAUNCHER',
             package: 'mn.posease.mobile.terminal.pos',
@@ -154,8 +153,7 @@ class _KioskTerminalPaySignalListenerState
               Flag.FLAG_ACTIVITY_CLEAR_TOP,
               Flag.FLAG_ACTIVITY_SINGLE_TOP,
             ],
-          );
-          await intent.launch();
+          ).launch();
           await Future.delayed(const Duration(milliseconds: 600));
         } catch (e) {
           debugPrint('Failed to bring MainActivity to foreground: $e');
