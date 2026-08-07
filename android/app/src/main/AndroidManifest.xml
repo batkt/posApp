@@ -22,7 +22,7 @@
         android:label="PosEase POS"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:extractNativeLibs="false"
+        android:extractNativeLibs="true"
         android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"

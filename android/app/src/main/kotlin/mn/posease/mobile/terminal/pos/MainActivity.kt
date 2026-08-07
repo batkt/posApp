@@ -753,25 +753,24 @@ class MainActivity : FlutterFragmentActivity() {
 
     private fun buildTestBitmap(customText: String?): Bitmap {
         val width = 384
-        val height = 220
+        val rawLines = customText?.lines() ?: listOf("POSEASE TEST PRINT")
+        val lineHeight = 32
+        val height = maxOf(220, rawLines.size * lineHeight + 50)
         val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         canvas.drawColor(Color.WHITE)
 
-        val title = Paint().apply {
-            color = Color.BLACK
-            textSize = 34f
-            isFakeBoldText = true
-        }
-        val body = Paint().apply {
+        val paint = Paint().apply {
             color = Color.BLACK
             textSize = 24f
+            isAntiAlias = true
         }
-        val header = customText?.lineSequence()?.firstOrNull()?.take(28) ?: "POSEASE TEST PRINT"
-        canvas.drawText(header, 20f, 60f, title)
-        canvas.drawText("PAX terminal printer check", 20f, 110f, body)
-        canvas.drawText(java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date()), 20f, 150f, body)
-        canvas.drawText("OK", 20f, 190f, body)
+
+        var y = 36f
+        for (line in rawLines) {
+            canvas.drawText(line, 10f, y, paint)
+            y += lineHeight
+        }
         return bmp
     }
 

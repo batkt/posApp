@@ -18,6 +18,7 @@ import '../../services/printer_service.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../utils/thermal_receipt_image.dart';
+import '../../widgets/print_receipt_to_pos_button.dart';
 
 /// Breakdown for thermal slip when cashier used хөнгөлөлт / НХАТ (И-Баримт not loaded yet).
 class CashierSlipTotals {
@@ -867,6 +868,41 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                         ),
                         const SizedBox(height: 8),
                       ],
+                      SizedBox(
+                        width: double.infinity,
+                        child: PrintReceiptToPosButton(
+                          salbariinId: context.read<AuthModel>().posSession?.salbariinId ?? '',
+                          barimtType: 'ebarimt',
+                          onBeforeSend: () async {
+                            if (_ebarimt == null && canPosEbarimt) {
+                              await _onEbarimtPrintPressed(context);
+                            }
+                            final e = _ebarimt;
+                            if (e == null || _qrDataFromEbarimt(e).isEmpty) {
+                              // Never forward a QR-less payload as 'ebarimt' — the terminal
+                              // would print it as a real tax receipt without a scannable QR.
+                              throw Exception(
+                                  'QR бүхий И-Баримт үүсээгүй тул ПОС терминал руу хэвлэх боломжгүй');
+                            }
+                            return e;
+                          },
+                          barimtData: _ebarimt ?? {
+                            'orderNumber': widget.orderNumber,
+                            'totalAmount': widget.total,
+                            'paymentMethod': widget.paymentMethod,
+                            'items': widget.items
+                                .map((i) => {
+                                      'name': i.product.name,
+                                      'count': i.quantity,
+                                      'price': i.product.price,
+                                      'sumPrice': i.total,
+                                    })
+                                .toList(),
+                          },
+                          label: 'ПОС терминал руу баримт хэвлэх',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                     ],
                   ),
                 ),

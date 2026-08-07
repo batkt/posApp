@@ -291,88 +291,77 @@ class PrinterService {
     String? dbRefNo,
     String? terminalPackage,
   }) async {
+    final base64Image = base64Encode(pngBytes);
+
+    // 1. Try native MainActivity task channel FIRST (handles EPOS in-app / PAX thermal bitmap safely)
     try {
-      final ok = await PaxSdk.initializePrinter();
-      if (ok != true) {
-        throw Exception('pax_sdk initializePrinter failed');
-      }
-      final dynamic res = await PaxSdk.printImage(
-        pngBytes,
-        options: {'alignment': 1},
+      final native = await _channel.invokeMethod<String>(
+        'android.epos.tasks.printBitmap',
+        {'base64': base64Image},
       );
-      if (_isSuccess(res)) {
+      if (native == 'printed' || native == 'printed_pax') {
         return const PrinterResult(
           success: true,
-          backend: 'pax_sdk',
-          message: 'Терминал дээр амжилттай хэвлэлээ (pax_sdk)',
-        );
-      }
-      throw Exception('pax_sdk printImage failed: $res');
-    } catch (_) {
-      // EPOS SEND first (shared with many terminals); then direct Neptune bitmap on device.
-      try {
-        final base64Image = base64Encode(pngBytes);
-        final args = <String, dynamic>{
-          'base64': base64Image,
-          // EPOS docs require amount > 0 and unique dbRefNo.
-          'amount': (amount ?? 0).toStringAsFixed(2),
-          'dbRefNo': (dbRefNo ?? DateTime.now().millisecondsSinceEpoch.toString())
-              .trim(),
-        };
-        final pkg = terminalPackage?.trim();
-        if (pkg != null && pkg.isNotEmpty) {
-          args['packageName'] = pkg;
-        }
-        final epos = await _channel.invokeMethod<dynamic>(
-          'android.epos.payment.printBitmap',
-          args,
-        );
-        final ok = _isEposSuccess(epos);
-        final resData = epos is Map ? Map<String, dynamic>.from(epos) : null;
-        if (resData != null) {
-          final safe = Map<String, dynamic>.from(resData);
-          safe.removeWhere((k, _) =>
-              k.toLowerCase().contains('bitmap') ||
-              k.toLowerCase().contains('image'));
-          for (final e in safe.entries.toList()) {
-            if (e.value is String && (e.value as String).length > 240) {
-              safe[e.key] = '${(e.value as String).substring(0, 240)}…';
-            }
-          }
-          PosNativeDebugLog.record('EPOS', 'android.epos.payment.printBitmap', safe);
-        } else {
-          PosNativeDebugLog.record('EPOS', 'android.epos.payment.printBitmap', epos);
-        }
-        return PrinterResult(
-          success: ok,
-          backend: 'epos',
-          data: resData,
-          message: ok
-              ? 'Терминал дээр амжилттай хэвлэлээ (epos)'
-              : 'EPOS хэвлэх хүсэлт илгээгдсэн боловч амжилтгүй: ${_eposMessage(epos)}',
-        );
-      } catch (_) {}
-      try {
-        final base64Image = base64Encode(pngBytes);
-        final native = await _channel.invokeMethod<String>(
-          'android.epos.tasks.printBitmap',
-          {'base64': base64Image},
-        );
-        return PrinterResult(
-          success: native == 'printed',
           backend: 'native',
-          message: native == 'printed'
-              ? 'Терминал дээр амжилттай хэвлэлээ (native)'
-              : 'Хэвлэх хүсэлт илгээгдлээ (native)',
-        );
-      } catch (e) {
-        return PrinterResult(
-          success: false,
-          backend: 'none',
-          message: '$e',
+          message: 'Терминал дээр амжилттай хэвлэлээ (native)',
         );
       }
+    } catch (e) {
+      PosNativeDebugLog.record('EPOS', 'android.epos.tasks.printBitmap fallback', e.toString());
     }
+
+    // 2. Try EPOS payment intent printBitmap
+    try {
+      final args = <String, dynamic>{
+        'base64': base64Image,
+        'amount': (amount ?? 0).toStringAsFixed(2),
+        'dbRefNo': (dbRefNo ?? DateTime.now().millisecondsSinceEpoch.toString()).trim(),
+      };
+      final pkg = terminalPackage?.trim();
+      if (pkg != null && pkg.isNotEmpty) {
+        args['packageName'] = pkg;
+      }
+      final epos = await _channel.invokeMethod<dynamic>(
+        'android.epos.payment.printBitmap',
+        args,
+      );
+      final ok = _isEposSuccess(epos);
+      final resData = epos is Map ? Map<String, dynamic>.from(epos) : null;
+      return PrinterResult(
+        success: ok,
+        backend: 'epos',
+        data: resData,
+        message: ok
+            ? 'Терминал дээр амжилттай хэвлэлээ (epos)'
+            : 'EPOS хэвлэх хүсэлт илгээгдсэн боловч амжилтгүй: ${_eposMessage(epos)}',
+      );
+    } catch (_) {}
+
+    // 3. Fallback: PaxSdk initializePrinter (safely caught)
+    try {
+      final ok = await PaxSdk.initializePrinter();
+      if (ok == true) {
+        final dynamic res = await PaxSdk.printImage(
+          pngBytes,
+          options: {'alignment': 1},
+        );
+        if (_isSuccess(res)) {
+          return const PrinterResult(
+            success: true,
+            backend: 'pax_sdk',
+            message: 'Терминал дээр амжилттай хэвлэлээ (pax_sdk)',
+          );
+        }
+      }
+    } catch (e) {
+      PosNativeDebugLog.record('PAX', 'PaxSdk.printImage error', e.toString());
+    }
+
+    return const PrinterResult(
+      success: false,
+      backend: 'none',
+      message: 'Хэвлэх төхөөрөмж олдсонгүй эсвэл алдаа гарлаа',
+    );
   }
 
   /// EPOS [BaseResponse] often puts business fields inside [jsonRet] (string or map).
@@ -383,7 +372,7 @@ class PrinterService {
         try {
           final d = jsonDecode(t);
           if (d is Map) {
-            return Map<String, dynamic>.from(d as Map);
+            return Map<String, dynamic>.from(d);
           }
         } catch (_) {}
       }

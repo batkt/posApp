@@ -20,9 +20,15 @@ class SocketService {
 
   final StreamController<void> _uldegdelController =
       StreamController<void>.broadcast();
+  final StreamController<Map<String, dynamic>> _barimtKhuseeltController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   /// Debounced pulses when warehouse stock (`uldegdel`) changed for this branch.
   Stream<void> get uldegdelChanged => _uldegdelController.stream;
+
+  /// Stream of real-time print requests received over Socket.IO (`terminalBarimtKhuseelt`).
+  Stream<Map<String, dynamic>> get terminalBarimtKhuseeltStream =>
+      _barimtKhuseeltController.stream;
 
   bool get isConnected => _socket?.connected == true;
 
@@ -75,6 +81,11 @@ class SocketService {
       _socket!.onConnect((_) => joinRoom());
 
       _socket!.on('uldegdelChanged', (_) => _pulseDebounced());
+      _socket!.on('terminalBarimtKhuseelt', (data) {
+        if (data is Map && !_barimtKhuseeltController.isClosed) {
+          _barimtKhuseeltController.add(Map<String, dynamic>.from(data));
+        }
+      });
 
       _socket!.onDisconnect((_) {});
 

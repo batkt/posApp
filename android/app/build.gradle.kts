@@ -27,7 +27,7 @@ android {
     packaging {
         jniLibs {
             // PAX DAL (DeviceConfig) expects extracted .so files under app nativeLibraryDir.
-            useLegacyPackaging = false
+            useLegacyPackaging = true
         }
     }
 

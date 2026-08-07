@@ -6,6 +6,7 @@ import '../../models/locale_model.dart';
 import '../../widgets/kiosk_drawer.dart';
 import '../../widgets/parked_guilgee_sheet.dart';
 import '../../widgets/kiosk_terminal_pay_signal_listener.dart';
+import '../../widgets/kiosk_terminal_barimt_signal_listener.dart';
 import '../main/khaalt_screen.dart';
 import 'pos_screen.dart';
 
@@ -87,7 +88,9 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
       ),
       body: const SafeArea(
         child: KioskTerminalPaySignalListener(
-          child: POSScreen(cashierMode: true),
+          child: KioskTerminalBarimtSignalListener(
+            child: POSScreen(cashierMode: true),
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
