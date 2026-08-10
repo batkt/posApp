@@ -156,16 +156,15 @@ class _KioskTerminalBarimtSignalListenerState
         debugPrint('>>> [KioskTerminalBarimtSignalListener] Visual thermal print error: $err');
       }
 
-      // Mark request completed on backend after successful printing
-      if (success) {
+      // Mark request completed on backend after processing (success or fail) to prevent infinite loop
+      try {
         await _svc.markCompleted(item.id);
-        debugPrint('>>> [KioskTerminalBarimtSignalListener] Successfully marked completed: ${item.id}');
-      } else {
-        _handledIds.remove(item.id);
+        debugPrint('>>> [KioskTerminalBarimtSignalListener] Marked completed: ${item.id} (success=$success)');
+      } catch (e) {
+        debugPrint('>>> [KioskTerminalBarimtSignalListener] Failed to mark completed on backend: $e');
       }
     } catch (e) {
       debugPrint('Error processing remote print request: $e');
-      _handledIds.remove(item.id);
     } finally {
       _isProcessingPrintRequest = false;
     }

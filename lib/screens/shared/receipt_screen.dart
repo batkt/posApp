@@ -676,18 +676,20 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           topPad: 6,
           fontSize: 15,
         ),
-        _thermalPaymentMoneyRow(
-          textTheme,
-          label: 'НӨАТ-гүй дүн',
-          value: _fmtMnt(thermalNoatgui),
-          fontSize: 14,
-        ),
-        _thermalPaymentMoneyRow(
-          textTheme,
-          label: 'НӨАТ',
-          value: _fmtMnt(thermalVat),
-          fontSize: 14,
-        ),
+        if (thermalVat > 0) ...[
+          _thermalPaymentMoneyRow(
+            textTheme,
+            label: 'НӨАТ-гүй дүн',
+            value: _fmtMnt(thermalNoatgui),
+            fontSize: 14,
+          ),
+          _thermalPaymentMoneyRow(
+            textTheme,
+            label: 'НӨАТ',
+            value: _fmtMnt(thermalVat),
+            fontSize: 14,
+          ),
+        ],
         _thermalPaymentMoneyRow(
           textTheme,
           label: 'НХАТ',

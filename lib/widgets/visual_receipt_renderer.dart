@@ -36,6 +36,12 @@ class VisualReceiptRenderer {
     return '';
   }
 
+  static double _toDouble(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString().trim()) ?? 0.0;
+  }
+
   static Widget buildVisualReceiptWidget(
     Map<String, dynamic> data, {
     String initiatorNer = '',
@@ -55,13 +61,14 @@ class VisualReceiptRenderer {
           final mapItem = Map<String, dynamic>.from(it);
           itemsList.add(mapItem);
           final p = (mapItem['sumPrice'] ?? mapItem['price'] ?? 0);
-          if (p is num) totalVal += p.toDouble();
+          totalVal += _toDouble(p);
         }
       }
     }
-    if (rawTotal is num && rawTotal > 0) totalVal = rawTotal.toDouble();
+    final parsedRawTotal = _toDouble(rawTotal);
+    if (parsedRawTotal > 0) totalVal = parsedRawTotal;
 
-    final noatVal = (data['vat'] ?? (totalVal / 11)).toDouble();
+    final double noatVal = data['vat'] != null ? _toDouble(data['vat']) : 0.0;
     final noatguiVal = totalVal - noatVal;
 
     final payMethod = (data['paymentMethod'] ?? 'cash').toString().toLowerCase();
@@ -84,8 +91,8 @@ class VisualReceiptRenderer {
         ddtd.isNotEmpty ||
         qrData.isNotEmpty;
 
-    final double nhatVal = (data['nhat'] ?? data['cityTax'] ?? 0).toDouble();
-    final bool hasItemNhat = itemsList.any((i) => i['nhatBodohEsekh'] == true || (i['nhatiinDun'] ?? 0) > 0);
+    final double nhatVal = _toDouble(data['nhat'] ?? data['cityTax'] ?? 0);
+    final bool hasItemNhat = itemsList.any((i) => i['nhatBodohEsekh'] == true || _toDouble(i['nhatiinDun']) > 0);
     final bool showNhat = nhatVal > 0 || hasItemNhat;
 
     const thermalDashLine = Text(
@@ -274,7 +281,7 @@ class VisualReceiptRenderer {
                   SizedBox(
                     width: 84,
                     child: Text(
-                      _fmt((item['sumPrice'] ?? item['price'] ?? 0).toDouble()),
+                      _fmt(_toDouble(item['sumPrice'] ?? item['price'] ?? 0)),
                       textAlign: TextAlign.right,
                       style: const TextStyle(
                         color: Colors.black,
@@ -313,7 +320,7 @@ class VisualReceiptRenderer {
             ),
           ),
           _moneyRow('Нийт дүн', _fmt(totalVal), fontSize: 15, isBold: true),
-          if (isEbarimtActive) ...[
+          if (isEbarimtActive && noatVal > 0) ...[
             _moneyRow('НӨАТ-гүй дүн', _fmt(noatguiVal), fontSize: 14, isBold: true),
             _moneyRow('НӨАТ', _fmt(noatVal), fontSize: 14, isBold: true),
           ],
@@ -404,11 +411,12 @@ class VisualReceiptRenderer {
       for (final it in data['items']) {
         if (it is Map) {
           final p = (it['sumPrice'] ?? it['price'] ?? 0);
-          if (p is num) totalVal += p.toDouble();
+          totalVal += _toDouble(p);
         }
       }
     }
-    if (rawTotal is num && rawTotal > 0) totalVal = rawTotal.toDouble();
+    final parsedRawTotal = _toDouble(rawTotal);
+    if (parsedRawTotal > 0) totalVal = parsedRawTotal;
     final orderNo = (data['orderNumber'] ?? '').toString();
     final ddtd = (data['ddtd'] ?? data['billId'] ?? data['id'] ?? '').toString().trim();
 
