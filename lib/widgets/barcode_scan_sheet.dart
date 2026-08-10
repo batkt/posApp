@@ -3,29 +3,35 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/inventory_model.dart';
 
-/// Pool of pre-loaded players for the scan beep, shared across both sheets below.
+/// Pools of pre-loaded players for the scan sounds, shared across both sheets below.
 /// A single reused [AudioPlayer] only reliably plays once — [AudioPool] is the
 /// package's documented way to handle "extremely quick firing, repetitive" sounds.
-Future<AudioPool>? _scanBeepPoolFuture;
+final Map<String, Future<AudioPool>> _soundPoolFutures = {};
 
-Future<AudioPool> _getScanBeepPool() {
-  return _scanBeepPoolFuture ??= AudioPool.createFromAsset(
-    path: 'sounds/beep.wav',
+Future<AudioPool> _getSoundPool(String assetPath) {
+  return _soundPoolFutures[assetPath] ??= AudioPool.createFromAsset(
+    path: assetPath,
     minPlayers: 2,
     maxPlayers: 4,
   );
 }
 
-void _playScanBeep() {
+void _playSound(String assetPath) {
   () async {
     try {
-      final pool = await _getScanBeepPool();
+      final pool = await _getSoundPool(assetPath);
       await pool.start();
     } catch (e) {
-      debugPrint('barcode_scan_sheet: beep playback failed: $e');
+      debugPrint('barcode_scan_sheet: "$assetPath" playback failed: $e');
     }
   }();
 }
+
+/// Normal successful-scan beep.
+void _playScanBeep() => _playSound('sounds/beep.wav');
+
+/// Distinct low double-beep for "can't add / not found" scans (e.g. stock exhausted).
+void _playWarningBeep() => _playSound('sounds/warning.wav');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SINGLE-SCAN SHEET  (used by Inventory, Toololt, etc.)
@@ -260,32 +266,49 @@ class _QuickScanSheetState extends State<_QuickScanSheet> {
     final now = DateTime.now().millisecondsSinceEpoch;
     if ((now - (_lastScanTime[raw] ?? 0)) < _cooldownMs) return;
     _lastScanTime[raw] = now;
-    _playScanBeep();
 
     final found = widget.findProduct(raw);
     if (found == null) {
+      _playWarningBeep();
       _flash('Олдсонгүй: $raw', error: true);
       return;
     }
 
+    String? blockedMessage;
+    var lastPiece = false;
     setState(() {
       if (_batch.containsKey(found.product.id)) {
         final entry = _batch[found.product.id]!;
         final maxStock = found.currentStock;
         if (entry.quantity >= maxStock && maxStock > 0) {
-          _flash('${found.product.name} — Нөөц дуусав', error: true);
+          blockedMessage = '${found.product.name} — Нөөц дуусав';
           return;
         }
         entry.quantity++;
+        lastPiece = entry.quantity >= maxStock;
       } else {
         if (found.currentStock <= 0) {
-          _flash('${found.product.name} — Дууссан', error: true);
+          blockedMessage = '${found.product.name} — Дууссан';
           return;
         }
         _batch[found.product.id] = BatchScanItem(item: found);
+        lastPiece = found.currentStock <= 1;
       }
     });
-    _flash('+1  ${found.product.name}', error: false);
+
+    if (blockedMessage != null) {
+      _playWarningBeep();
+      _flash(blockedMessage!, error: true);
+      return;
+    }
+
+    _playScanBeep();
+    _flash(
+      lastPiece
+          ? '${found.product.name} — Сүүлийн үлдэгдэл!'
+          : '+1  ${found.product.name}',
+      error: lastPiece,
+    );
   }
 
   void _flash(String text, {required bool error}) {
