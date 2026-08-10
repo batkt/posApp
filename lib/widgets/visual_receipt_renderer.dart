@@ -31,8 +31,8 @@ class VisualReceiptRenderer {
     }
     final lottery = (data['lottery'] ?? data['lotteryNo'] ?? '').toString().trim();
     if (lottery.isNotEmpty) return 'lottery:$lottery';
-    final ddtd = (data['ddtd'] ?? data['billId'] ?? data['id'] ?? '').toString().trim();
-    if (ddtd.isNotEmpty) return 'ddtd:$ddtd';
+    final billId = (data['billId'] ?? data['ddtd'] ?? '').toString().trim();
+    if (billId.isNotEmpty) return 'ddtd:$billId';
     return '';
   }
 
@@ -79,7 +79,7 @@ class VisualReceiptRenderer {
             : 'Бэлэн мөнгө';
 
     final lottery = (data['lottery'] ?? data['lotteryNo'] ?? '').toString().trim();
-    final ddtd = (data['ddtd'] ?? data['billId'] ?? data['id'] ?? '').toString().trim();
+    final billId = (data['billId'] ?? data['ddtd'] ?? '').toString().trim();
     final register = (data['register'] ?? '').toString().trim();
     final companyNer = (data['baiguullagiinNer'] ?? data['companyDisplayName'] ?? '').toString().trim();
     final qrData = _qrDataFromBarimt(data);
@@ -88,8 +88,8 @@ class VisualReceiptRenderer {
         (data['hasEbarimt'] == true) ||
         (data['ebarimt'] != null) ||
         lottery.isNotEmpty ||
-        ddtd.isNotEmpty ||
-        qrData.isNotEmpty;
+        billId.isNotEmpty ||
+        (qrData.isNotEmpty && !qrData.startsWith('ddtd:'));
 
     final double nhatVal = _toDouble(data['nhat'] ?? data['cityTax'] ?? 0);
     final bool hasItemNhat = itemsList.any((i) => i['nhatBodohEsekh'] == true || _toDouble(i['nhatiinDun']) > 0);
@@ -158,10 +158,10 @@ class VisualReceiptRenderer {
               fontSize: 13,
             ),
           ),
-          if (isEbarimtActive && ddtd.isNotEmpty) ...[
+          if (isEbarimtActive && billId.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(
-              'ДДТД: $ddtd',
+              'ДДТД: $billId',
               style: const TextStyle(
                 color: Colors.black,
                 fontWeight: FontWeight.w700,

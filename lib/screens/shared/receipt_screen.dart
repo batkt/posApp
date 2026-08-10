@@ -13,6 +13,8 @@ import '../../data/payment_display_config.dart';
 import '../../models/auth_model.dart';
 import '../../models/cart_model.dart';
 import '../../models/sales_model.dart';
+import '../../payment/pos_payment_core.dart';
+import '../../services/pos_settings_service.dart';
 import '../../services/pos_transaction_service.dart';
 import '../../services/printer_service.dart';
 import '../../utils/mnt_amount_formatter.dart';
@@ -71,10 +73,29 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   static const Color _receiptPageBg = Color(0xFFBDBDBD);
   static const double _thermalPaperWidth = 380;
 
+  PosWebTaxContext _taxContext = PosWebTaxContext.paymentDefault;
+
   @override
   void initState() {
     super.initState();
     _ebarimt = widget.initialEbarimt;
+    _loadTaxContext();
+  }
+
+  Future<void> _loadTaxContext() async {
+    final auth = context.read<AuthModel>();
+    final session = auth.posSession;
+    if (session != null) {
+      final ctx = await posSettingsService.loadPosWebTaxContext(
+        baiguullagiinId: session.baiguullagiinId,
+        salbariinId: session.salbariinId,
+      );
+      if (mounted) {
+        setState(() {
+          _taxContext = ctx;
+        });
+      }
+    }
   }
 
   String get _paymentMethodName =>
@@ -102,14 +123,14 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
 
   /// Approximate НӨАТ / НӨАТ-гүй / НХАТ from cart when И-Баримт map is missing.
   static ({double noatgui, double noat, double nhat}) _cartTaxApprox(
-      List<CartItem> items) {
+      List<CartItem> items, {bool enableVat = true}) {
     var noatgui = 0.0;
     var noat = 0.0;
     var nhat = 0.0;
     for (final i in items) {
       final lt = i.total;
       final p = i.product;
-      if (p.noatBodohEsekh == true) {
+      if (enableVat && p.noatBodohEsekh == true) {
         final net = lt / 1.1;
         noatgui += net;
         noat += lt - net;
@@ -138,6 +159,10 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       final s = _str(e[key]);
       if (s.isNotEmpty) return s;
     }
+    final lottery = _str(e['lottery']);
+    if (lottery.isNotEmpty) return 'lottery:$lottery';
+    final billId = _str(e['billId']);
+    if (billId.isNotEmpty) return 'ddtd:$billId';
     return '';
   }
 
@@ -386,15 +411,20 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final qrData = _qrDataFromEbarimt(e);
     final ebarimtCompanyNer = _companyNameFromEbarimt(e);
     final khungulE = _ebarimtKhungulukh(e);
-    final cartTax = _cartTaxApprox(widget.items);
+    final auth = context.read<AuthModel>();
+    final canPosEbarimt = auth.canSubmitPosSales &&
+        widget.guilgeeniiMongoId != null &&
+        widget.guilgeeniiMongoId!.isNotEmpty;
+    final enableTax = _taxContext.eBarimtShine || _taxContext.borluulaltNUAT;
+    final cartTax = _cartTaxApprox(widget.items, enableVat: enableTax && (e != null || canPosEbarimt));
     final slip = widget.cashierSlipTotals;
     final thermalPay = e != null
         ? (totalAmount > 0 ? totalAmount : widget.total)
         : widget.total;
     final useSlip = e == null && slip != null;
-    final thermalVat = e != null
-        ? totalVat
-        : (useSlip ? slip.noat : cartTax.noat);
+    final thermalVat = enableTax
+        ? (e != null ? totalVat : (useSlip ? slip.noat : cartTax.noat))
+        : 0.0;
     final thermalCt = e != null
         ? totalCityTax
         : (useSlip ? slip.nhat : cartTax.nhat);
@@ -676,7 +706,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           topPad: 6,
           fontSize: 15,
         ),
-        if (thermalVat > 0) ...[
+        if (e != null && thermalVat > 0) ...[
           _thermalPaymentMoneyRow(
             textTheme,
             label: 'НӨАТ-гүй дүн',
@@ -690,12 +720,13 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             fontSize: 14,
           ),
         ],
-        _thermalPaymentMoneyRow(
-          textTheme,
-          label: 'НХАТ',
-          value: _fmtMnt(thermalCt),
-          fontSize: 14,
-        ),
+        if (thermalCt > 0)
+          _thermalPaymentMoneyRow(
+            textTheme,
+            label: 'НХАТ',
+            value: _fmtMnt(thermalCt),
+            fontSize: 14,
+          ),
         _thermalPaymentMoneyRow(
           textTheme,
           label: 'Төлөх дүн',
@@ -705,14 +736,15 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           vw: FontWeight.w900,
           topPad: 4,
         ),
-        _thermalPaymentMoneyRow(
-          textTheme,
-          label: 'И-Баримт дүн',
-          value: _fmtMnt(thermalIb),
-          fontSize: 16,
-          lw: FontWeight.w800,
-          vw: FontWeight.w900,
-        ),
+        if (e != null)
+          _thermalPaymentMoneyRow(
+            textTheme,
+            label: 'И-Баримт дүн',
+            value: _fmtMnt(thermalIb),
+            fontSize: 16,
+            lw: FontWeight.w800,
+            vw: FontWeight.w900,
+          ),
         if (e != null) ...[
           const SizedBox(height: 4),
           _thermalDashLine,
