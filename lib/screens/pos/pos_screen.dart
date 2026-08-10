@@ -1871,31 +1871,16 @@ class _ProductCard extends StatelessWidget {
                           Tooltip(
                             message: item.product.boxPiecesPerBoxHint ??
                                 'Үлдэгдэл: $stock ${item.product.posStockQuantitySuffix}',
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'Үлдэгдэл: ',
-                                    style: textTheme.labelSmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: context.responsiveFontSize(9),
-                                    ),
-                                  ),
-                                  Text(
-                                    '$stock ${item.product.posStockQuantitySuffix}',
-                                    style: textTheme.labelMedium?.copyWith(
-                                      color: stockColor,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: context.responsiveFontSize(10),
-                                      fontFeatures: const [
-                                        FontFeature.tabularFigures(),
-                                      ],
-                                    ),
-                                  ),
+                            child: Text(
+                              'Үлдэгдэл: $stock ${item.product.posStockQuantitySuffix}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.labelSmall?.copyWith(
+                                color: stockColor,
+                                fontWeight: FontWeight.w700,
+                                fontSize: context.responsiveFontSize(9),
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
                                 ],
                               ),
                             ),
