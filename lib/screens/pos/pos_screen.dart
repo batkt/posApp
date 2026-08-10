@@ -1347,6 +1347,7 @@ class _POSScreenState extends State<POSScreen> {
 
   Widget _buildClassicSaleSummary(BuildContext context, SalesModel sales) {
     final colorScheme = Theme.of(context).colorScheme;
+    final auth = context.watch<AuthModel>();
     return Container(
       padding: context.responsivePadding,
       decoration: BoxDecoration(
@@ -1396,6 +1397,32 @@ class _POSScreenState extends State<POSScreen> {
               ),
             ),
           ),
+          if (widget.mobileStaffMode ||
+              auth.staffAccess.allowsMobile ||
+              auth.staffAccess.allowsPosSystem ||
+              auth.canSubmitPosSales) ...[
+            SizedBox(height: context.spacing * 0.5),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: sales.isSaleEmpty
+                    ? null
+                    : () => _sendTerminalCardSignal(context, sales),
+                icon: const Icon(Icons.point_of_sale_rounded, size: 20),
+                label: Text(
+                  AppLocalizations.of(context)
+                      .tr('terminal_signal_send_kiosk'),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: context.responsiveFontSize(15),
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.symmetric(vertical: context.spacing * 0.65),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
