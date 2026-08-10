@@ -415,9 +415,11 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final auth = context.read<AuthModel>();
     final merchantName = _merchantOrgName.isNotEmpty
         ? _merchantOrgName
-        : (auth.activeSalbariinLabel.isNotEmpty
-            ? auth.activeSalbariinLabel
-            : ebarimtCompanyNer)
+        : (auth.merchantDisplayName.isNotEmpty
+            ? auth.merchantDisplayName
+            : (auth.activeSalbariinLabel.isNotEmpty
+                ? auth.activeSalbariinLabel
+                : ebarimtCompanyNer))
             .trim();
     final canPosEbarimt = auth.canSubmitPosSales &&
         widget.guilgeeniiMongoId != null &&
@@ -550,7 +552,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             ),
           ),
         ],
-        if (ebarimtType == 'ААН' && ebarimtCompanyNer.isNotEmpty) ...[
+        if (ebarimtType == 'ААН' && ebarimtCompanyNer.isNotEmpty && ebarimtCompanyNer != merchantName) ...[
           const SizedBox(height: 2),
           Text(
             'Худалдан авагч: $ebarimtCompanyNer',
@@ -835,7 +837,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final auth = context.read<AuthModel>();
     final mName = _merchantOrgName.isNotEmpty
         ? _merchantOrgName
-        : auth.activeSalbariinLabel;
+        : (auth.merchantDisplayName.isNotEmpty
+            ? auth.merchantDisplayName
+            : auth.activeSalbariinLabel);
     final Map<String, dynamic> map = {
       'orderNumber': widget.orderNumber,
       'totalAmount': widget.total,

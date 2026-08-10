@@ -147,6 +147,32 @@ class AuthModel extends ChangeNotifier {
     return id;
   }
 
+  /// Display name of the active merchant / organization or branch.
+  String get merchantDisplayName {
+    final s = _posSession;
+    if (s == null) return '';
+    final a = s.ajiltan;
+    final bgn = a['baiguullagiinNer'] ?? a['baiguullagaNer'] ?? a['merchantName'] ?? a['ner'] ?? a['name'];
+    if (bgn != null && bgn.toString().trim().isNotEmpty) {
+      return bgn.toString().trim();
+    }
+    if (a['baiguullaga'] is Map) {
+      final bName = a['baiguullaga']['ner'] ?? a['baiguullaga']['name'];
+      if (bName != null && bName.toString().trim().isNotEmpty) {
+        return bName.toString().trim();
+      }
+    }
+    if (a['salbar'] is Map) {
+      final sName = a['salbar']['ner'] ?? a['salbar']['name'];
+      if (sName != null && sName.toString().trim().isNotEmpty) {
+        return sName.toString().trim();
+      }
+    }
+    final label = activeSalbariinLabel;
+    if (label.isNotEmpty) return label;
+    return '';
+  }
+
   /// When true, checkout submits to the same backend as Next.js `pos`.
   bool get canSubmitPosSales =>
       _posSession != null &&

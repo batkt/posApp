@@ -77,7 +77,8 @@ class VisualReceiptRenderer {
     final lottery = (data['lottery'] ?? data['lotteryNo'] ?? '').toString().trim();
     final billId = (data['billId'] ?? data['ddtd'] ?? '').toString().trim();
     final register = (data['register'] ?? '').toString().trim();
-    final companyNer = (data['baiguullagiinNer'] ?? data['companyDisplayName'] ?? '').toString().trim();
+    final companyNer = (data['baiguullagiinNer'] ?? data['merchantName'] ?? '').toString().trim();
+    final buyerCompanyNer = (data['customerName'] ?? data['companyDisplayName'] ?? data['buyerName'] ?? '').toString().trim();
     final qrData = _qrDataFromBarimt(data);
 
     final bool isEbarimtActive = (data['eBarimtShine'] == true) &&
@@ -186,10 +187,10 @@ class VisualReceiptRenderer {
               ),
             ),
           ],
-          if (companyNer.isNotEmpty) ...[
+          if (buyerCompanyNer.isNotEmpty && buyerCompanyNer != companyNer) ...[
             const SizedBox(height: 2),
             Text(
-              'Худалдан авагч: $companyNer',
+              'Худалдан авагч: $buyerCompanyNer',
               style: const TextStyle(
                 color: Colors.black,
                 fontWeight: FontWeight.w700,
