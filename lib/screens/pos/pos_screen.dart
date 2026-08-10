@@ -1903,37 +1903,42 @@ class _ProductCard extends StatelessWidget {
                       ),
                     ),
                     SizedBox(width: context.spacing * 0.5),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: colorScheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 5,
+                    Flexible(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                            child: Text(
-                              MntAmountFormatter.formatTugrikSpaced(
-                                  item.product.price),
-                              style: textTheme.labelLarge?.copyWith(
-                                color: colorScheme.onPrimaryContainer,
-                                fontWeight: FontWeight.w800,
-                                fontSize: context.responsiveFontSize(11),
-                                height: 1.1,
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
                               ),
-                              textAlign: TextAlign.right,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  MntAmountFormatter.formatTugrikSpaced(
+                                      item.product.price),
+                                  style: textTheme.labelLarge?.copyWith(
+                                    color: colorScheme.onPrimaryContainer,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: context.responsiveFontSize(11),
+                                    height: 1.1,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                  ),
+                                  textAlign: TextAlign.right,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
