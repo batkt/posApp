@@ -159,10 +159,6 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       final s = _str(e[key]);
       if (s.isNotEmpty) return s;
     }
-    final lottery = _str(e['lottery']);
-    if (lottery.isNotEmpty) return 'lottery:$lottery';
-    final billId = _str(e['billId']);
-    if (billId.isNotEmpty) return 'ddtd:$billId';
     return '';
   }
 

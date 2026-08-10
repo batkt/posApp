@@ -29,10 +29,6 @@ class VisualReceiptRenderer {
       final s = (data[key] ?? '').toString().trim();
       if (s.isNotEmpty) return s;
     }
-    final lottery = (data['lottery'] ?? data['lotteryNo'] ?? '').toString().trim();
-    if (lottery.isNotEmpty) return 'lottery:$lottery';
-    final billId = (data['billId'] ?? data['ddtd'] ?? '').toString().trim();
-    if (billId.isNotEmpty) return 'ddtd:$billId';
     return '';
   }
 
