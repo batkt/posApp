@@ -1871,18 +1871,21 @@ class _ProductCard extends StatelessWidget {
                           Tooltip(
                             message: item.product.boxPiecesPerBoxHint ??
                                 'Үлдэгдэл: $stock ${item.product.posStockQuantitySuffix}',
-                            child: Row(
-                              children: [
-                                Text(
-                                  'Үлдэгдэл: ',
-                                  style: textTheme.labelSmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: context.responsiveFontSize(9),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Үлдэгдэл: ',
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: context.responsiveFontSize(9),
+                                    ),
                                   ),
-                                ),
-                                Flexible(
-                                  child: Text(
+                                  Text(
                                     '$stock ${item.product.posStockQuantitySuffix}',
                                     style: textTheme.labelMedium?.copyWith(
                                       color: stockColor,
@@ -1892,11 +1895,9 @@ class _ProductCard extends StatelessWidget {
                                         FontFeature.tabularFigures(),
                                       ],
                                     ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ],
