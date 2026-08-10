@@ -416,7 +416,7 @@ class _POSScreenState extends State<POSScreen> {
   ) async {
     final l10n = AppLocalizations.of(context);
     final auth = context.read<AuthModel>();
-    if (!auth.canSubmitPosSales || !auth.staffAccess.allowsMobile) {
+    if (!auth.canSubmitPosSales) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1484,7 +1484,11 @@ class _POSScreenState extends State<POSScreen> {
                   ),
                 ),
               ),
-              if (widget.mobileStaffMode) ...[
+              final showTerminalSignalButton = widget.mobileStaffMode ||
+                  auth.staffAccess.allowsMobile ||
+                  auth.staffAccess.allowsPosSystem ||
+                  auth.canSubmitPosSales;
+              if (showTerminalSignalButton) ...[
                 const SizedBox(height: 10),
                 OutlinedButton.icon(
                   onPressed: sales.isSaleEmpty
