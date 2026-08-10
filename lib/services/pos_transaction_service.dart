@@ -423,8 +423,11 @@ class PosTransactionService {
       final data = _decodeBody(res.body);
       if (data is Map) {
         final m = Map<String, dynamic>.from(data);
-        final ok = m['success'] == true ||
-            m['status']?.toString().toUpperCase() == 'SUCCESS';
+        final hasBillOrId = m['billId'] != null || m['_id'] != null || m['id'] != null;
+        final isError = m['status']?.toString().toUpperCase() == 'ERROR' || m['errorCode'] != null;
+        final ok = (m['success'] == true ||
+            m['status']?.toString().toUpperCase() == 'SUCCESS' ||
+            hasBillOrId) && !isError;
         if (!ok && kDebugMode) {
           debugPrint('[ebarimtShivye] payload=${jsonEncode(payload)}');
           debugPrint('[ebarimtShivye] response=${jsonEncode(m)}');
