@@ -63,6 +63,22 @@ class _POSScreenState extends State<POSScreen> {
     if (widget.cashierMode) {
       _cashierPageController = PageController();
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadTaxContext());
+  }
+
+  Future<void> _loadTaxContext() async {
+    if (!mounted) return;
+    final auth = context.read<AuthModel>();
+    final session = auth.posSession;
+    if (session != null) {
+      final ctx = await posSettingsService.loadPosWebTaxContext(
+        baiguullagiinId: session.baiguullagiinId,
+        salbariinId: session.salbariinId,
+      );
+      if (mounted) {
+        context.read<SalesModel>().setWebTaxContext(ctx);
+      }
+    }
   }
 
   @override
@@ -400,14 +416,54 @@ class _POSScreenState extends State<POSScreen> {
     );
   }
 
-  Future<void> _scanBarcodeToSearch(BuildContext context) async {
-    final code = await showBarcodeScanSheet(context);
-    final v = code?.trim();
-    if (v == null || v.isEmpty) return;
-    if (!context.mounted) return;
-    _searchController.text = v;
-    setState(() {});
+
+  /// Look up a product in the local inventory by barcode or code.
+  InventoryItem? _findByBarcode(InventoryModel inventory, String barcode) {
+    final lower = barcode.toLowerCase().trim();
+    try {
+      return inventory.inventory.firstWhere(
+        (item) =>
+            item.product.barCode?.toLowerCase().trim() == lower ||
+            item.product.code?.toLowerCase().trim() == lower,
+      );
+    } catch (_) {
+      return null;
+    }
   }
+
+  /// Rapid scan-to-cart: scan multiple barcodes, preview list, then go directly
+  /// to payment. Returns after the payment screen is popped.
+  Future<void> _quickScanToCart(BuildContext context) async {
+    // Capture both models before the async gap.
+    final inventory = context.read<InventoryModel>();
+    final sales = context.read<SalesModel>();
+
+    final batch = await showBarcodeQuickScanSheet(
+      context,
+      findProduct: (barcode) => _findByBarcode(inventory, barcode),
+    );
+
+    if (batch == null || batch.isEmpty) return;
+    if (!mounted) return;
+
+    // Commit the whole batch to the cart + deduct local shelf stock.
+    for (final entry in batch) {
+      final qty = entry.quantity.clamp(1, entry.item.currentStock);
+      for (var i = 0; i < qty; i++) {
+        sales.addToSale(entry.item.product);
+        inventory.deductStock(entry.item.product.id, 1);
+      }
+    }
+
+    if (!mounted) return;
+    if (widget.cashierMode) {
+      _goCashierCheckoutStep();
+    } else {
+      setState(() {});
+    }
+  }
+
+
 
   /// Mobile staff → posBack → kiosk polls and can open UniPOS for this amount.
   Future<void> _sendTerminalCardSignal(
@@ -967,12 +1023,12 @@ class _POSScreenState extends State<POSScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    tooltip: 'Баркод унших',
+                    tooltip: 'Баркод уншуулах',
                     icon: Icon(
                       Icons.qr_code_scanner_rounded,
                       size: context.responsiveIconSize(22),
                     ),
-                    onPressed: () => _scanBarcodeToSearch(context),
+                    onPressed: () => _quickScanToCart(context),
                   ),
                   if (_searchController.text.isNotEmpty)
                     IconButton(
@@ -997,6 +1053,15 @@ class _POSScreenState extends State<POSScreen> {
                 final categoryChips = inventory.categories
                     .where((c) => c != 'Бүгд' && c != 'All')
                     .toList();
+                int countFor(String category) {
+                  return inventory.inventory.where((item) {
+                    final p = item.product;
+                    return p.category == category ||
+                        p.angilal == category ||
+                        (p.angilal?.contains(category) == true);
+                  }).length;
+                }
+
                 return Row(
                   children: [
                     // "View All" button
@@ -1004,7 +1069,7 @@ class _POSScreenState extends State<POSScreen> {
                       padding: EdgeInsets.only(right: context.spacing * 0.5),
                       child: FilterChip(
                         label: Text(
-                          'Бүгдийг харах',
+                          'Бүгдийг харах (${inventory.inventory.length})',
                           style: TextStyle(
                             fontSize: context.responsiveFontSize(12),
                           ),
@@ -1028,7 +1093,7 @@ class _POSScreenState extends State<POSScreen> {
                                 EdgeInsets.only(right: context.spacing * 0.5),
                             child: FilterChip(
                               label: Text(
-                                category,
+                                '$category (${countFor(category)})',
                                 style: TextStyle(
                                   fontSize: context.responsiveFontSize(12),
                                 ),
@@ -1365,14 +1430,15 @@ class _POSScreenState extends State<POSScreen> {
             amount: sales.subtotal,
             isTotal: false,
           ),
-          SizedBox(height: context.spacing * 0.5),
-          _buildSummaryRow(
-            context: context,
-            label: 'НӨАТ',
-            amount: sales.tax,
-            isTotal: false,
-          ),
-          SizedBox(height: context.spacing * 0.5),
+          if (sales.tax > 0) ...[
+            _buildSummaryRow(
+              context: context,
+              label: 'НӨАТ',
+              amount: sales.tax,
+              isTotal: false,
+            ),
+            SizedBox(height: context.spacing * 0.5),
+          ],
           _buildSummaryRow(
             context: context,
             label: 'Нийт',
@@ -1464,8 +1530,10 @@ class _POSScreenState extends State<POSScreen> {
               ),
               const SizedBox(height: 12),
               _sheetSummaryLine(context, 'Дүн', sales.subtotal, false),
-              const SizedBox(height: 8),
-              _sheetSummaryLine(context, 'НӨАТ (10%)', sales.tax, false),
+              if (sales.tax > 0) ...[
+                const SizedBox(height: 8),
+                _sheetSummaryLine(context, 'НӨАТ (10%)', sales.tax, false),
+              ],
               const SizedBox(height: 12),
               Divider(height: 1, color: cs.outlineVariant),
               const SizedBox(height: 12),

@@ -194,11 +194,35 @@ class SalesModel extends ChangeNotifier {
     return 'code:$c|$s';
   }
 
+  PosWebTaxContext? _webTaxContext;
+  PosWebTaxContext? get webTaxContext => _webTaxContext;
+
+  void setWebTaxContext(PosWebTaxContext? ctx) {
+    _webTaxContext = ctx;
+    notifyListeners();
+  }
+
   double get subtotal => _currentSale.fold(0, (sum, item) => sum + item.total);
-  double get tax =>
-      PosPaymentCore.calculateStandardSaleTotals(subtotal).vat;
-  double get total =>
-      PosPaymentCore.calculateStandardSaleTotals(subtotal).total;
+
+  double get tax {
+    final ctx = _webTaxContext;
+    if (ctx != null) {
+      if (!ctx.borluulaltNUAT) return 0.0;
+      return PosPaymentCore.calculateCashierTotalsWeb(
+        lineGrossAmounts:
+            _currentSale.map((e) => e.total.toDouble()).toList(),
+        noatBodohPerLine:
+            _currentSale.map((e) => e.product.noatBodohEsekh == true).toList(),
+        nhatBodohPerLine:
+            _currentSale.map((e) => e.product.nhatBodohEsekh == true).toList(),
+        discountMnt: 0,
+        ctx: ctx,
+      ).vat;
+    }
+    return PosPaymentCore.calculateStandardSaleTotals(subtotal).vat;
+  }
+
+  double get total => subtotal;
 
   // Sales history getters
   List<CompletedSale> get salesHistory => List.unmodifiable(_salesHistory);

@@ -110,12 +110,12 @@ class VisualReceiptRenderer {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(
+          SizedBox(
             width: double.infinity,
             child: Text(
-              'POSEASE БАРИМТ',
+              '${companyNer.isNotEmpty ? companyNer.toUpperCase() : 'POSEASE'} БАРИМТ',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: Colors.black,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0.6,

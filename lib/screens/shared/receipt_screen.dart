@@ -452,7 +452,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
         SizedBox(
           width: double.infinity,
           child: Text(
-            'POSEASE БАРИМТ',
+            '${merchantName.isNotEmpty ? merchantName.toUpperCase() : 'POSEASE'} БАРИМТ',
             textAlign: TextAlign.center,
             style: textTheme.titleSmall?.copyWith(
               color: Colors.black,

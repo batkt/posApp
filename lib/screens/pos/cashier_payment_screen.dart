@@ -1031,8 +1031,8 @@ class _SummaryPanel extends StatelessWidget {
               ],
             ),
           ),
-          _row(context, 'НӨАТ', _fmtMnt(vat)),
-          _row(context, 'НХАТ', _fmtMnt(nhhat)),
+          if (vat > 0) _row(context, 'НӨАТ', _fmtMnt(vat)),
+          if (nhhat > 0) _row(context, 'НХАТ', _fmtMnt(nhhat)),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Divider(color: cs.outlineVariant, height: 1),

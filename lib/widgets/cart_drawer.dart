@@ -95,8 +95,10 @@ class CartDrawer extends StatelessWidget {
                 return Column(
                   children: [
                     _buildPriceRow('Subtotal', cart.subtotal, textTheme, colorScheme),
-                    const SizedBox(height: 8),
-                    _buildPriceRow('Tax (10%)', cart.tax, textTheme, colorScheme),
+                    if (cart.tax > 0) ...[
+                      const SizedBox(height: 8),
+                      _buildPriceRow('Tax (10%)', cart.tax, textTheme, colorScheme),
+                    ],
                     const Divider(height: 24),
                     _buildPriceRow(
                       'Total',
