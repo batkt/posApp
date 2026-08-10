@@ -274,40 +274,38 @@ class _QuickScanSheetState extends State<_QuickScanSheet> {
       return;
     }
 
-    String? blockedMessage;
-    var lastPiece = false;
+    var blocked = false;
+    var remaining = 0;
     setState(() {
       if (_batch.containsKey(found.product.id)) {
         final entry = _batch[found.product.id]!;
         final maxStock = found.currentStock;
         if (entry.quantity >= maxStock && maxStock > 0) {
-          blockedMessage = '${found.product.name} — Нөөц дуусав';
+          blocked = true;
           return;
         }
         entry.quantity++;
-        lastPiece = entry.quantity >= maxStock;
+        remaining = maxStock - entry.quantity;
       } else {
         if (found.currentStock <= 0) {
-          blockedMessage = '${found.product.name} — Дууссан';
+          blocked = true;
           return;
         }
         _batch[found.product.id] = BatchScanItem(item: found);
-        lastPiece = found.currentStock <= 1;
+        remaining = found.currentStock - 1;
       }
     });
 
-    if (blockedMessage != null) {
+    if (blocked) {
       _playWarningBeep();
-      _flash(blockedMessage!, error: true);
+      _flash('${found.product.name} — үлдэгдэлгүй байна', error: true);
       return;
     }
 
     _playScanBeep();
     _flash(
-      lastPiece
-          ? '${found.product.name} — Сүүлийн үлдэгдэл!'
-          : '+1  ${found.product.name}',
-      error: lastPiece,
+      '+1  ${found.product.name}  ·  Үлдэгдэл: $remaining',
+      error: remaining <= 0,
     );
   }
 
@@ -316,7 +314,7 @@ class _QuickScanSheetState extends State<_QuickScanSheet> {
       _feedbackText = text;
       _feedbackError = error;
     });
-    Future.delayed(const Duration(milliseconds: 1600), () {
+    Future.delayed(const Duration(milliseconds: 3000), () {
       if (mounted) setState(() => _feedbackText = null);
     });
   }
