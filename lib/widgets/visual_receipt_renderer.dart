@@ -126,7 +126,7 @@ class VisualReceiptRenderer {
           if (companyNer.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(
-              'Байгууллага: $companyNer',
+              'Салбар: $companyNer',
               style: const TextStyle(
                 color: Colors.black,
                 fontWeight: FontWeight.w700,

@@ -74,7 +74,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   static const double _thermalPaperWidth = 380;
 
   PosWebTaxContext _taxContext = PosWebTaxContext.paymentDefault;
-  String _merchantOrgName = '';
+  String _merchantSalbarName = '';
 
   @override
   void initState() {
@@ -87,8 +87,15 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final auth = context.read<AuthModel>();
     final session = auth.posSession;
     if (session != null) {
-      final org = await posSettingsService.fetchBaiguullaga(session.baiguullagiinId);
-      final orgName = (org?['ner'] ?? org?['name'] ?? '').toString().trim();
+      final salbaruud = await posSettingsService.fetchSalbaruud(session.baiguullagiinId);
+      String salbarName = '';
+      for (final s in salbaruud) {
+        if (s['_id']?.toString() == session.salbariinId) {
+          final raw = s['ner'] ?? s['name'] ?? s['salbariinNer'] ?? s['boginoNer'] ?? s['hayag'];
+          salbarName = (raw ?? '').toString().trim();
+          break;
+        }
+      }
       final ctx = await posSettingsService.loadPosWebTaxContext(
         baiguullagiinId: session.baiguullagiinId,
         salbariinId: session.salbariinId,
@@ -96,8 +103,8 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       if (mounted) {
         setState(() {
           _taxContext = ctx;
-          if (orgName.isNotEmpty) {
-            _merchantOrgName = orgName;
+          if (salbarName.isNotEmpty) {
+            _merchantSalbarName = salbarName;
           }
         });
       }
@@ -413,12 +420,12 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final ebarimtCompanyNer = _companyNameFromEbarimt(e);
     final khungulE = _ebarimtKhungulukh(e);
     final auth = context.read<AuthModel>();
-    final merchantName = _merchantOrgName.isNotEmpty
-        ? _merchantOrgName
-        : (auth.merchantDisplayName.isNotEmpty
-            ? auth.merchantDisplayName
-            : (auth.activeSalbariinLabel.isNotEmpty
-                ? auth.activeSalbariinLabel
+    final merchantName = _merchantSalbarName.isNotEmpty
+        ? _merchantSalbarName
+        : (auth.activeSalbariinLabel.isNotEmpty
+            ? auth.activeSalbariinLabel
+            : (auth.merchantDisplayName.isNotEmpty
+                ? auth.merchantDisplayName
                 : ebarimtCompanyNer))
             .trim();
     final canPosEbarimt = auth.canSubmitPosSales &&
@@ -465,7 +472,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
         if (merchantName.isNotEmpty) ...[
           const SizedBox(height: 2),
           Text(
-            'Байгууллага: $merchantName',
+            'Салбар: $merchantName',
             textAlign: TextAlign.start,
             style: textTheme.labelMedium?.copyWith(
               color: Colors.black,
@@ -835,11 +842,11 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
 
   Map<String, dynamic> _buildCompleteBarimtData() {
     final auth = context.read<AuthModel>();
-    final mName = _merchantOrgName.isNotEmpty
-        ? _merchantOrgName
-        : (auth.merchantDisplayName.isNotEmpty
-            ? auth.merchantDisplayName
-            : auth.activeSalbariinLabel);
+    final mName = _merchantSalbarName.isNotEmpty
+        ? _merchantSalbarName
+        : (auth.activeSalbariinLabel.isNotEmpty
+            ? auth.activeSalbariinLabel
+            : auth.merchantDisplayName);
     final Map<String, dynamic> map = {
       'orderNumber': widget.orderNumber,
       'totalAmount': widget.total,

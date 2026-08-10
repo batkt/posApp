@@ -1,6 +1,14 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/inventory_model.dart';
+
+/// Shared player for the scan beep; reused across both sheets below.
+final AudioPlayer _scanBeepPlayer = AudioPlayer()..setPlayerMode(PlayerMode.lowLatency);
+
+void _playScanBeep() {
+  _scanBeepPlayer.play(AssetSource('sounds/beep.wav')).catchError((_) {});
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SINGLE-SCAN SHEET  (used by Inventory, Toololt, etc.)
@@ -53,6 +61,7 @@ Future<String?> showBarcodeScanSheet(BuildContext context) {
                     final raw = (b.rawValue ?? b.displayValue)?.trim();
                     if (raw == null || raw.isEmpty) return;
                     handled = true;
+                    _playScanBeep();
                     await controller.stop();
                     if (context.mounted) Navigator.pop(context, raw);
                   },
@@ -234,6 +243,7 @@ class _QuickScanSheetState extends State<_QuickScanSheet> {
     final now = DateTime.now().millisecondsSinceEpoch;
     if ((now - (_lastScanTime[raw] ?? 0)) < _cooldownMs) return;
     _lastScanTime[raw] = now;
+    _playScanBeep();
 
     final found = widget.findProduct(raw);
     if (found == null) {
