@@ -3,11 +3,28 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/inventory_model.dart';
 
-/// Shared player for the scan beep; reused across both sheets below.
-final AudioPlayer _scanBeepPlayer = AudioPlayer()..setPlayerMode(PlayerMode.lowLatency);
+/// Pool of pre-loaded players for the scan beep, shared across both sheets below.
+/// A single reused [AudioPlayer] only reliably plays once — [AudioPool] is the
+/// package's documented way to handle "extremely quick firing, repetitive" sounds.
+Future<AudioPool>? _scanBeepPoolFuture;
+
+Future<AudioPool> _getScanBeepPool() {
+  return _scanBeepPoolFuture ??= AudioPool.createFromAsset(
+    path: 'sounds/beep.wav',
+    minPlayers: 2,
+    maxPlayers: 4,
+  );
+}
 
 void _playScanBeep() {
-  _scanBeepPlayer.play(AssetSource('sounds/beep.wav')).catchError((_) {});
+  () async {
+    try {
+      final pool = await _getScanBeepPool();
+      await pool.start();
+    } catch (e) {
+      debugPrint('barcode_scan_sheet: beep playback failed: $e');
+    }
+  }();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
