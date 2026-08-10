@@ -80,12 +80,11 @@ class VisualReceiptRenderer {
     final companyNer = (data['baiguullagiinNer'] ?? data['companyDisplayName'] ?? '').toString().trim();
     final qrData = _qrDataFromBarimt(data);
 
-    final bool isEbarimtActive = (data['eBarimtShine'] == true) ||
-        (data['hasEbarimt'] == true) ||
-        (data['ebarimt'] != null) ||
-        lottery.isNotEmpty ||
-        billId.isNotEmpty ||
-        (qrData.isNotEmpty && !qrData.startsWith('ddtd:'));
+    final bool isEbarimtActive = (data['eBarimtShine'] == true) &&
+        ((data['hasEbarimt'] == true) ||
+            (data['ebarimt'] != null) ||
+            lottery.isNotEmpty ||
+            (qrData.isNotEmpty && !qrData.startsWith('ddtd:')));
 
     final double nhatVal = _toDouble(data['nhat'] ?? data['cityTax'] ?? 0);
     final bool hasItemNhat = itemsList.any((i) => i['nhatBodohEsekh'] == true || _toDouble(i['nhatiinDun']) > 0);

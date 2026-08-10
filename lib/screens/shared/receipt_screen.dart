@@ -732,7 +732,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           vw: FontWeight.w900,
           topPad: 4,
         ),
-        if (e != null)
+        if (e != null && _taxContext.eBarimtShine)
           _thermalPaymentMoneyRow(
             textTheme,
             label: 'И-Баримт дүн',
@@ -741,7 +741,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             lw: FontWeight.w800,
             vw: FontWeight.w900,
           ),
-        if (e != null) ...[
+        if (e != null && _taxContext.eBarimtShine) ...[
           const SizedBox(height: 4),
           _thermalDashLine,
           const SizedBox(height: 2),
@@ -767,7 +767,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (qrData.isNotEmpty)
+              if (qrData.isNotEmpty) ...[
                 QrImageView(
                   data: qrData,
                   version: QrVersions.auto,
@@ -782,27 +782,18 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                     dataModuleShape: QrDataModuleShape.square,
                     color: Colors.black,
                   ),
-                )
-              else
-                const Icon(
-                  Icons.qr_code_2_rounded,
-                  size: 96,
-                  color: Colors.black,
                 ),
-              const SizedBox(height: 4),
-              Text(
-                qrData.isNotEmpty
-                    ? 'QR уншуулаад баримтаа шалгана уу'
-                    : (e != null
-                        ? 'ebarimt.mn эсвэл ДДТД-аар шалгана уу'
-                        : 'QR мэдээлэл олдсонгүй'),
-                textAlign: TextAlign.center,
-                style: textTheme.labelMedium?.copyWith(
-                  color: Colors.black,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
+                const SizedBox(height: 4),
+                Text(
+                  'QR уншуулаад баримтаа шалгана уу',
+                  textAlign: TextAlign.center,
+                  style: textTheme.labelMedium?.copyWith(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                 ),
-              ),
+              ],
               Text(
                 'Баярлалаа',
                 style: textTheme.bodySmall?.copyWith(
