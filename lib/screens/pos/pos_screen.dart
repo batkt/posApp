@@ -1404,6 +1404,7 @@ class _POSScreenState extends State<POSScreen> {
   Widget _buildSheetSaleSummary(BuildContext context, SalesModel sales) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final auth = context.watch<AuthModel>();
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
       child: Material(
