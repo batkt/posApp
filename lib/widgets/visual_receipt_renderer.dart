@@ -122,6 +122,17 @@ class VisualReceiptRenderer {
               ),
             ),
           ),
+          if (companyNer.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Байгууллага: $companyNer',
+              style: const TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
+          ],
           if (cashier.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(
