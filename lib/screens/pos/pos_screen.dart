@@ -1484,11 +1484,10 @@ class _POSScreenState extends State<POSScreen> {
                   ),
                 ),
               ),
-              final showTerminalSignalButton = widget.mobileStaffMode ||
+              if (widget.mobileStaffMode ||
                   auth.staffAccess.allowsMobile ||
                   auth.staffAccess.allowsPosSystem ||
-                  auth.canSubmitPosSales;
-              if (showTerminalSignalButton) ...[
+                  auth.canSubmitPosSales) ...[
                 const SizedBox(height: 10),
                 OutlinedButton.icon(
                   onPressed: sales.isSaleEmpty
