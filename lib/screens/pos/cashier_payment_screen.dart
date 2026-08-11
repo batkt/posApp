@@ -103,7 +103,9 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     );
   }
 
-  /// Гараар оруулсан эсвэл харилцагчийн хөнгөлөлт (вэб `niitDunNoat.hungulsunDun`).
+  /// Харилцагчийн хөнгөлөлт → гараар оруулсан хөнгөлөлт → "N-т 1 үнэгүй"
+  /// (автомат, идэвхтэй бол) — эхнийх нь тодорхой байвал дараагийнхыг үл хэрэгсэнэ
+  /// (вэб `niitDunNoat.hungulsunDun`).
   double _effectiveDiscountMnt(SalesModel sales) {
     final sub = sales.subtotal;
     final payload = _checkoutKhariltsagchPayload();
@@ -115,7 +117,24 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       );
       return d.clamp(0.0, sub);
     }
-    return _discountMnt.clamp(0.0, sub);
+    if (_discountMnt > 0.009) {
+      return _discountMnt.clamp(0.0, sub);
+    }
+    if (sales.dorvonNegPromo != null) {
+      return sales.dorvonNegCalc.discount.clamp(0.0, sub);
+    }
+    return 0.0;
+  }
+
+  /// "N-т 1 үнэгүй" одоо идэвхтэй бол (харилцагч/гараар хөнгөлөлт сонгоогүй үед)
+  /// товч тайлбар — [_SummaryPanel]-д харагдана.
+  String? _dorvonNegActiveLabel(SalesModel sales) {
+    if (_khariltsagchRawRow != null || _discountMnt > 0.009) return null;
+    final promo = sales.dorvonNegPromo;
+    final calc = sales.dorvonNegCalc;
+    if (promo == null || calc.discount <= 0.009) return null;
+    final name = promo['ner']?.toString() ?? 'Урамшуулал';
+    return '$name (${calc.freeCount} үнэгүй)';
   }
 
   CashierTotals _cashierTotals(SalesModel sales, double discountMnt) {
@@ -632,6 +651,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           }
 
           final effectiveDiscount = _effectiveDiscountMnt(sales);
+          final dorvonNegLabelNow = _dorvonNegActiveLabel(sales);
           if (_khariltsagchRawRow != null) {
             if (!_discountFocus.hasFocus) {
               final t = effectiveDiscount > 0.009
@@ -643,6 +663,26 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                   if (!mounted) return;
                   setState(() {
                     _discountMnt = effectiveDiscount;
+                    _discountInput.value = TextEditingValue(
+                      text: t,
+                      selection: TextSelection.collapsed(offset: t.length),
+                    );
+                  });
+                });
+              }
+            }
+          } else if (dorvonNegLabelNow != null) {
+            // Автомат — _discountMnt-д бичихгүй (тэр нь "гараар оруулсан" гэсэн
+            // тэмдэг тул сагс өөрчлөгдөхөд автомат сэргэхийг нь блоклоно);
+            // зөвхөн харагдах текстийг шинэчилнэ.
+            if (!_discountFocus.hasFocus) {
+              final t = effectiveDiscount > 0.009
+                  ? MntAmountFormatter.format(effectiveDiscount)
+                  : '';
+              if (_discountInput.text != t) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  setState(() {
                     _discountInput.value = TextEditingValue(
                       text: t,
                       selection: TextSelection.collapsed(offset: t.length),
@@ -710,6 +750,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                     _onDiscountTextChanged(sales.subtotal),
                 onDiscountEditingComplete: () =>
                     _formatDiscountFieldForDisplay(sales.subtotal),
+                dorvonNegLabel: _dorvonNegActiveLabel(sales),
               );
 
               final payment = _PaymentPanel(
@@ -838,6 +879,7 @@ class _SummaryPanel extends StatelessWidget {
     this.customerPromoName,
     this.onOpenCustomerPromo,
     this.onClearCustomerPromo,
+    this.dorvonNegLabel,
   });
 
   final String orderId;
@@ -855,6 +897,9 @@ class _SummaryPanel extends StatelessWidget {
   final String? customerPromoName;
   final VoidCallback? onOpenCustomerPromo;
   final VoidCallback? onClearCustomerPromo;
+
+  /// "N-т 1 үнэгүй" одоо идэвхтэй бол (жиш нь "test (1 үнэгүй)") — тэр үед л харагдана.
+  final String? dorvonNegLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -901,6 +946,29 @@ class _SummaryPanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _row(context, 'Дүн', _fmtMnt(subtotal)),
+          if (dorvonNegLabel != null) ...[
+            const SizedBox(height: 6),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.successContainer,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppColors.success.withValues(alpha: 0.4),
+                ),
+              ),
+              child: Text(
+                '🎁 $dorvonNegLabel',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.onSuccessContainer,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
           if (onOpenCustomerPromo != null) ...[
             const SizedBox(height: 8),
             OutlinedButton.icon(
@@ -946,7 +1014,9 @@ class _SummaryPanel extends StatelessWidget {
                 Text(
                   customerPromoLocked
                       ? 'Хөнгөлөлт (харилцагч)'
-                      : 'Хөнгөлөлт (₮)',
+                      : dorvonNegLabel != null
+                          ? 'Хөнгөлөлт (урамшуулал)'
+                          : 'Хөнгөлөлт (₮)',
                   style: TextStyle(
                     color: cs.onSurfaceVariant,
                     fontSize: 12,
@@ -960,7 +1030,7 @@ class _SummaryPanel extends StatelessWidget {
                     return TextField(
                       controller: discountController,
                       focusNode: discountFocus,
-                      readOnly: customerPromoLocked,
+                      readOnly: customerPromoLocked || dorvonNegLabel != null,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                         signed: false,
@@ -1037,7 +1107,45 @@ class _SummaryPanel extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Divider(color: cs.outlineVariant, height: 1),
           ),
-          _row(context, 'Нийт дүн', _fmtMnt(total), emphasize: true),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Нийт дүн',
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (discount > 0.009)
+                      Text(
+                        _fmtMnt(total + discount),
+                        style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontSize: 12,
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ),
+                    Text(
+                      _fmtMnt(total),
+                      style: TextStyle(
+                        color: cs.primary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 6),
           _row(context, 'Төлбөрийн төрөл', paymentKindLabel, sub: true),
         ],

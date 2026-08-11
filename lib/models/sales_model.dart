@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../data/payment_display_config.dart';
 import '../payment/pos_payment_core.dart';
 import '../utils/buunii_une_helper.dart';
+import '../utils/dorvon_neg_uramshuulal.dart';
 import 'cart_model.dart';
 import 'customer_model.dart';
 import 'inventory_model.dart';
@@ -202,6 +203,61 @@ class SalesModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Идэвхтэй "N-т 1 үнэгүй" (`uramshuulal.turul == "khamgiinKhyamd"`) бичлэг
+  /// энэ салбарт байвал энд ачаалагдана — [UramshuulalService.fetchActive].
+  Map<String, dynamic>? _dorvonNegPromo;
+  Map<String, dynamic>? get dorvonNegPromo => _dorvonNegPromo;
+
+  void setDorvonNegPromo(Map<String, dynamic>? promo) {
+    _dorvonNegPromo = promo;
+    _pruneStaleDorvonNegPicks();
+    notifyListeners();
+  }
+
+  /// Чөлөөлөх сүүлийн нэгж(үүд)ийн үнэ өөр өөр 2+ баранд тэнцүү орсон үед
+  /// (тэнцвэр) кассчингийн сонголт — [DorvonNegUramshuulal.compute] руу дамжина.
+  Map<String, int> _dorvonNegManualPicks = const {};
+  Map<String, int> get dorvonNegManualPicks => _dorvonNegManualPicks;
+
+  void setDorvonNegManualPicks(Map<String, int> picks) {
+    _dorvonNegManualPicks = Map.unmodifiable(picks);
+    notifyListeners();
+  }
+
+  /// Сагсны нэгжүүд болон идэвхтэй урамшуулалд тулгуурлан "хамгийн хямд N
+  /// үнэгүй" тооцоог хийнэ (freeCount/discount/freeUnitsById/тэнцвэр).
+  DorvonNegCalcResult get dorvonNegCalc {
+    final promo = _dorvonNegPromo;
+    if (promo == null) return DorvonNegUramshuulal.empty;
+    final rawBuleg = promo['buleg'];
+    final buleg = (rawBuleg is num && rawBuleg > 0) ? rawBuleg.toInt() : 4;
+    final lines = _currentSale
+        .map((i) => DorvonNegLineInput(
+              id: i.product.id,
+              name: i.product.name,
+              unitPrice: i.unitPrice,
+              quantity: i.quantity,
+            ))
+        .toList();
+    return DorvonNegUramshuulal.compute(
+      lines: lines,
+      buleg: buleg,
+      manualPicks: _dorvonNegManualPicks,
+    );
+  }
+
+  /// Сагс өөрчлөгдөх (нэмэх/хасах/тоо өөрчлөх) болгонд дуудна — тэнцвэр
+  /// (tie) арилсан бол хуучин кассчингийн сонголтыг цэвэрлэнэ, эс тэгвээс
+  /// шинэ тэнцвэрт хуучин сонголт санамсаргүй давхацвал (ижил id-тай бараа
+  /// дахин тэнцвэрт орвол) буруу автомат үнэгүй сонгогдож болзошгүй. Web
+  /// хувилбартай ижил (`pages/khyanalt/posSystem/index.js`, useEffect дээр
+  /// `dorvonNegCalc.tieCandidates.length === 0` бол цэвэрлэдэг).
+  void _pruneStaleDorvonNegPicks() {
+    if (_dorvonNegManualPicks.isNotEmpty && !dorvonNegCalc.hasTie) {
+      _dorvonNegManualPicks = const {};
+    }
+  }
+
   double get subtotal => _currentSale.fold(0, (sum, item) => sum + item.total);
 
   double get tax {
@@ -291,6 +347,7 @@ class SalesModel extends ChangeNotifier {
       ));
       _reapplyWholesaleForIndex(_currentSale.length - 1);
     }
+    _pruneStaleDorvonNegPicks();
     notifyListeners();
   }
 
@@ -329,6 +386,7 @@ class SalesModel extends ChangeNotifier {
 
   void removeFromSale(String productId) {
     _currentSale.removeWhere((item) => item.product.id == productId);
+    _pruneStaleDorvonNegPicks();
     notifyListeners();
   }
 
@@ -342,6 +400,7 @@ class SalesModel extends ChangeNotifier {
       _currentSale[index].boxPiecesSold = null;
       _currentSale[index].quantity = quantity;
       _reapplyWholesaleForIndex(index);
+      _pruneStaleDorvonNegPicks();
       notifyListeners();
     }
   }
@@ -353,6 +412,7 @@ class SalesModel extends ChangeNotifier {
       line.boxPiecesSold = null;
       line.quantity++;
       _reapplyWholesaleForIndex(index);
+      _pruneStaleDorvonNegPicks();
       notifyListeners();
     }
   }
@@ -365,6 +425,7 @@ class SalesModel extends ChangeNotifier {
         line.boxPiecesSold = null;
         line.quantity--;
         _reapplyWholesaleForIndex(index);
+        _pruneStaleDorvonNegPicks();
         notifyListeners();
       } else {
         removeFromSale(productId);
@@ -398,6 +459,7 @@ class SalesModel extends ChangeNotifier {
       }
     }
     _reapplyWholesaleForIndex(i);
+    _pruneStaleDorvonNegPicks();
     notifyListeners();
   }
 
@@ -422,6 +484,7 @@ class SalesModel extends ChangeNotifier {
     _currentSale.clear();
     _guilgeeniiDugaar = null;
     _selectedCustomer = null;
+    _dorvonNegManualPicks = const {};
     notifyListeners();
   }
 

@@ -15,9 +15,11 @@ import '../../widgets/barcode_scan_sheet.dart';
 import '../../widgets/test_image_widget.dart';
 import '../../widgets/authenticated_image.dart';
 import '../../widgets/box_line_pieces_sheet.dart';
+import '../../widgets/dorvon_neg_tie_breaker_sheet.dart';
 import '../../services/terminal_tulbur_signal_service.dart';
 import '../../services/pos_transaction_service.dart';
 import '../../services/pos_settings_service.dart';
+import '../../services/uramshuulal_service.dart';
 import '../../payment/pos_payment_core.dart';
 
 /// How many of this product are in the current sale (0 = not in cart).
@@ -64,6 +66,7 @@ class _POSScreenState extends State<POSScreen> {
       _cashierPageController = PageController();
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadTaxContext());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadDorvonNegPromo());
   }
 
   Future<void> _loadTaxContext() async {
@@ -78,6 +81,21 @@ class _POSScreenState extends State<POSScreen> {
       if (mounted) {
         context.read<SalesModel>().setWebTaxContext(ctx);
       }
+    }
+  }
+
+  /// "N-т 1 үнэгүй" — энэ салбарт идэвхтэй `khamgiinKhyamd` урамшуулал байвал ачаална.
+  Future<void> _loadDorvonNegPromo() async {
+    if (!mounted) return;
+    final auth = context.read<AuthModel>();
+    final session = auth.posSession;
+    if (session == null) return;
+    final promo = await uramshuulalService.fetchActive(
+      baiguullagiinId: session.baiguullagiinId,
+      salbariinId: session.salbariinId,
+    );
+    if (mounted) {
+      context.read<SalesModel>().setDorvonNegPromo(promo);
     }
   }
 
@@ -1269,6 +1287,8 @@ class _POSScreenState extends State<POSScreen> {
     return _SaleItemTile(
       sheetMode: sheetStyle,
       item: item,
+      dorvonNegFreeUnits:
+          sales.dorvonNegCalc.freeUnitsById[item.product.id] ?? 0,
       showBulkAction:
           item.product.buuniiUneEsekh == true &&
           item.product.buuniiUneJagsaalt.isNotEmpty,
@@ -1366,6 +1386,64 @@ class _POSScreenState extends State<POSScreen> {
                 fontSize: context.responsiveFontSize(14),
               ),
             ),
+            if (sales.dorvonNegPromo != null &&
+                sales.dorvonNegCalc.freeCount > 0) ...[
+              SizedBox(height: context.spacing * 0.5),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.successContainer,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppColors.success.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Text(
+                  '🎁 ${sales.dorvonNegPromo?['ner'] ?? 'Урамшуулал'} — '
+                  '${sales.dorvonNegCalc.freeCount} ширхэг үнэгүй',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.onSuccessContainer,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+            if (sales.dorvonNegCalc.hasTie) ...[
+              SizedBox(height: context.spacing * 0.5),
+              Material(
+                color: Colors.amber.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => showDorvonNegTieBreakerSheet(context, sales),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Colors.amber.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: Text(
+                      '⚖️ Ижил үнэтэй ${sales.dorvonNegCalc.tieCandidates.length}'
+                      ' бараанаас ${sales.dorvonNegCalc.tieSlotsNeeded} ширхэгийг сонгох',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.amber.shade900,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -2017,6 +2095,7 @@ class _SaleItemTile extends StatelessWidget {
     required this.onPromoTap,
     this.onBoxPiecesTap,
     this.sheetMode = false,
+    this.dorvonNegFreeUnits = 0,
   });
 
   final SaleItem item;
@@ -2030,11 +2109,18 @@ class _SaleItemTile extends StatelessWidget {
   final VoidCallback? onBoxPiecesTap;
   final bool sheetMode;
 
+  /// "N-т 1 үнэгүй" урамшуулалд энэ мөрөнд ноогдсон үнэгүй ширхэгийн тоо.
+  final int dorvonNegFreeUnits;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final lineTotal = item.total;
+    final dorvonNegFullyFree =
+        dorvonNegFreeUnits > 0 && dorvonNegFreeUnits >= item.quantity;
+    final dorvonNegPartiallyFree =
+        dorvonNegFreeUnits > 0 && !dorvonNegFullyFree;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -2042,15 +2128,22 @@ class _SaleItemTile extends StatelessWidget {
         return Padding(
           padding: EdgeInsets.only(bottom: sheetMode ? 6 : 8),
           child: Material(
-            color: sheetMode
-                ? colorScheme.surfaceContainerLow
-                : colorScheme.surfaceContainerHighest,
+            color: dorvonNegFullyFree
+                ? AppColors.success.withValues(alpha: 0.08)
+                : sheetMode
+                    ? colorScheme.surfaceContainerLow
+                    : colorScheme.surfaceContainerHighest,
             elevation: 0,
             shadowColor: Colors.transparent,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
               side: BorderSide(
-                color: colorScheme.outline.withValues(alpha: 0.12),
+                color: dorvonNegFullyFree
+                    ? AppColors.success.withValues(alpha: 0.5)
+                    : dorvonNegPartiallyFree
+                        ? AppColors.success.withValues(alpha: 0.3)
+                        : colorScheme.outline.withValues(alpha: 0.12),
+                width: dorvonNegFullyFree ? 1.4 : 1,
               ),
             ),
             clipBehavior: Clip.antiAlias,
@@ -2104,6 +2197,29 @@ class _SaleItemTile extends StatelessWidget {
                                           .tr('pos_sale_promo'),
                                       style: textTheme.labelSmall?.copyWith(
                                         color: colorScheme.tertiary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            if (dorvonNegFreeUnits > 0) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('🎁', style: TextStyle(fontSize: 12)),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      dorvonNegFullyFree
+                                          ? 'Үнэгүй'
+                                          : '$dorvonNegFreeUnits ш үнэгүй',
+                                      style: textTheme.labelSmall?.copyWith(
+                                        color: AppColors.success,
                                         fontWeight: FontWeight.w700,
                                       ),
                                       maxLines: 1,
@@ -2224,17 +2340,36 @@ class _SaleItemTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Text(
-                        '${MntAmountFormatter.format(lineTotal)} ₮',
-                        style: textTheme.titleMedium?.copyWith(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.w900,
-                          fontSize: sheetMode ? 17 : 16,
-                          fontFeatures: const [
-                            FontFeature.tabularFigures(),
-                          ],
+                      if (dorvonNegFullyFree) ...[
+                        Text(
+                          '${MntAmountFormatter.format(lineTotal)} ₮',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            decoration: TextDecoration.lineThrough,
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '0 ₮',
+                          style: textTheme.titleMedium?.copyWith(
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w900,
+                            fontSize: sheetMode ? 17 : 16,
+                          ),
+                        ),
+                      ] else
+                        Text(
+                          '${MntAmountFormatter.format(lineTotal)} ₮',
+                          style: textTheme.titleMedium?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w900,
+                            fontSize: sheetMode ? 17 : 16,
+                            fontFeatures: const [
+                              FontFeature.tabularFigures(),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 6),
