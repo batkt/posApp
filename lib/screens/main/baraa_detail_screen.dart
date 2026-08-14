@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../auth/staff_screen_access.dart';
@@ -11,6 +13,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../widgets/authenticated_image.dart';
+import '../../widgets/barcode_scan_sheet.dart';
 import '../../widgets/niimbot_printer_dialog.dart';
 
 /// One row of web `Form.List` / `aguulakh.buuniiUneJagsaalt` (`buuniiToo`, `buuniiUne`).
@@ -44,6 +47,10 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
   bool _editing = false;
   bool _saving = false;
   final _formKey = GlobalKey<FormState>();
+
+  File? _selectedImage;
+  bool _checkingBbns = false;
+  String? _bbnsFoundName;
 
   late final TextEditingController _ner;
   late final TextEditingController _bogino;
@@ -243,6 +250,45 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
     return true;
   }
 
+  Future<void> _lookupBbnsBarcode(String barcode) async {
+    final trimmed = barcode.trim();
+    if (trimmed.length < 5) return;
+    setState(() {
+      _checkingBbns = true;
+      _bbnsFoundName = null;
+    });
+    final res = await _productApi.searchBbnsBarcode(trimmed);
+    if (!mounted) return;
+    setState(() {
+      _checkingBbns = false;
+      if (res.found && res.ner != null && res.ner!.isNotEmpty) {
+        _bbnsFoundName = res.ner;
+        if (_ner.text.trim().isEmpty) {
+          _ner.text = res.ner!;
+        }
+      }
+    });
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 85,
+      );
+      if (picked != null) {
+        setState(() {
+          _selectedImage = File(picked.path);
+        });
+      }
+    } catch (e) {
+      debugPrint('Image pick error: $e');
+    }
+  }
+
   Future<void> _onSave() async {
     if (!_formKey.currentState!.validate()) return;
     final p = _item.product;
@@ -271,6 +317,13 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
       if (!_validateBuuniiTiers(niit, buuniiPayload, l10n)) return;
     }
 
+    setState(() => _saving = true);
+
+    String? zurgiinId;
+    if (_selectedImage != null) {
+      zurgiinId = await _productApi.uploadProductImage(_selectedImage!);
+    }
+
     final body = <String, dynamic>{
       'baiguullagiinId': p.baiguullagiinId,
       'salbariinId': p.salbariinId,
@@ -291,6 +344,9 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
       'buuniiUneEsekh': _buuniiUneEsekh,
       'buuniiUneJagsaalt': buuniiPayload,
     };
+    if (zurgiinId != null) {
+      body['zurgiinId'] = zurgiinId;
+    }
     if (negK > 0) {
       body['negKhairtsaganDahiShirhegiinToo'] = negK;
     } else {
@@ -298,7 +354,6 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
     }
     body.removeWhere((k, v) => v == null);
 
-    setState(() => _saving = true);
     final r = await _productApi.updateAguulakh(p.id, fields: body);
     if (!mounted) return;
     setState(() => _saving = false);
@@ -496,6 +551,17 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
                   ? _EditForm(
                       l10n: l10n,
                       formKey: _formKey,
+                      selectedImage: _selectedImage,
+                      checkingBbns: _checkingBbns,
+                      bbnsFoundName: _bbnsFoundName,
+                      onPickImage: _pickImage,
+                      onRemoveImage: () => setState(() => _selectedImage = null),
+                      onLookupBbns: _lookupBbnsBarcode,
+                      onApplyBbnsName: () {
+                        if (_bbnsFoundName != null && _bbnsFoundName!.isNotEmpty) {
+                          _ner.text = _bbnsFoundName!;
+                        }
+                      },
                       ner: _ner,
                       bogino: _bogino,
                       code: _code,
@@ -811,6 +877,13 @@ class _EditForm extends StatelessWidget {
   const _EditForm({
     required this.l10n,
     required this.formKey,
+    required this.selectedImage,
+    required this.checkingBbns,
+    required this.bbnsFoundName,
+    required this.onPickImage,
+    required this.onRemoveImage,
+    required this.onLookupBbns,
+    required this.onApplyBbnsName,
     required this.ner,
     required this.bogino,
     required this.code,
@@ -838,6 +911,13 @@ class _EditForm extends StatelessWidget {
 
   final AppLocalizations l10n;
   final GlobalKey<FormState> formKey;
+  final File? selectedImage;
+  final bool checkingBbns;
+  final String? bbnsFoundName;
+  final Function(ImageSource) onPickImage;
+  final VoidCallback onRemoveImage;
+  final Function(String) onLookupBbns;
+  final VoidCallback onApplyBbnsName;
   final TextEditingController ner;
   final TextEditingController bogino;
   final TextEditingController code;
@@ -879,6 +959,92 @@ class _EditForm extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
+
+          // --- Image Picker Card (Camera & Gallery) ---
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Барааны зураг',
+                  style: tt.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (selectedImage != null)
+                  Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.file(
+                          selectedImage!,
+                          width: double.infinity,
+                          height: 180,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: CircleAvatar(
+                          backgroundColor: Colors.black54,
+                          radius: 16,
+                          child: IconButton(
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(Icons.close, size: 18, color: Colors.white),
+                            onPressed: onRemoveImage,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => onPickImage(ImageSource.camera),
+                          icon: const Icon(Icons.camera_alt_outlined, size: 20),
+                          label: const Text('Камераар авах'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => onPickImage(ImageSource.gallery),
+                          icon: const Icon(Icons.photo_library_outlined, size: 20),
+                          label: const Text('Цомгоос сонгох'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
           TextFormField(
             controller: ner,
             decoration: InputDecoration(
@@ -909,13 +1075,88 @@ class _EditForm extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
+
+          // --- Barcode Section with Scanner Button & BBNS lookup ---
           TextFormField(
             controller: barCode,
+            onChanged: (v) {
+              if (v.trim().length >= 8) {
+                onLookupBbns(v.trim());
+              }
+            },
             decoration: InputDecoration(
               labelText: l10n.tr('baraa_barcode'),
               border: const OutlineInputBorder(),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (checkingBbns)
+                    const Padding(
+                      padding: EdgeInsets.all(12.0),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.qr_code_scanner, color: Colors.blue),
+                    tooltip: 'Баркод уншуулах',
+                    onPressed: () async {
+                      final scanned = await showBarcodeScanSheet(context);
+                      if (scanned != null && scanned.trim().isNotEmpty) {
+                        barCode.text = scanned.trim();
+                        onLookupBbns(scanned.trim());
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
+          if (bbnsFoundName != null && bbnsFoundName!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.shade200),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'ББНС: $bbnsFoundName',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: onApplyBbnsName,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'Нэр авах',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           TextFormField(
             controller: angilal,

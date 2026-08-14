@@ -24,10 +24,9 @@ class UramshuulalService {
         queryParams: {
           'query': jsonEncode({
             'baiguullagiinId': baiguullagiinId,
-            'salbariinId': salbariinId,
             'turul': turul,
           }),
-          'khuudasniiKhemjee': '20',
+          'khuudasniiKhemjee': '50',
         },
         parser: (data) => data as Map<String, dynamic>,
       );
@@ -38,6 +37,10 @@ class UramshuulalService {
       for (final e in raw) {
         if (e is! Map) continue;
         final row = Map<String, dynamic>.from(e);
+        final promoSalbar = row['salbariinId']?.toString();
+        if (promoSalbar != null && promoSalbar != 'ALL' && promoSalbar != salbariinId) {
+          continue;
+        }
         if (_isActiveNow(row, now)) return row;
       }
       return null;

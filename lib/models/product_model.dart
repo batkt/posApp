@@ -135,7 +135,9 @@ class ProductModel extends ChangeNotifier {
           product.code?.toLowerCase().contains(_searchQuery.toLowerCase()) ==
               true ||
           product.barCode?.toLowerCase().contains(_searchQuery.toLowerCase()) ==
-              true;
+              true ||
+          product.olonBarCodeJagsaalt.any(
+              (b) => b.toLowerCase().contains(_searchQuery.toLowerCase()));
       return matchesCategory && matchesSearch;
     }).toList();
 

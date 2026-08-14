@@ -27,31 +27,43 @@ class EposOpenInAppHelper(
 ) {
     private val api: IEposTransAPI = EposTransAPIFactory.createTransAPI()
 
-    fun startHealthCheck() {
+    /**
+     * [IEposTransAPI.startTrans] returns whether the SDK actually accepted and
+     * started the transaction — when it returns false, no [onResult]/activity
+     * result ever arrives, so a caller that ignores this return value is left
+     * waiting forever on a pending [MethodChannel.Result] that will never
+     * resolve. All three start* methods below surface it so [MainActivity] can
+     * fail fast instead of hanging.
+     */
+    fun startHealthCheck(): Boolean {
         Log.i(logTag, "EPOS in-app health check")
         val request = HealthCheckMsg.Request()
         val args = Bundle()
         args.putString("request-type", "healthCheck")
         request.setExtraBundle(args)
         request.setCategory(SdkConstants.CATEGORY_HEALTH_CHECK)
-        api.startTrans(activity, request)
+        val started = api.startTrans(activity, request)
+        if (!started) Log.e(logTag, "EPOS in-app health check: startTrans returned false")
+        return started
     }
 
-    fun startPrintBitmap(base64Image: String?) {
+    fun startPrintBitmap(base64Image: String?): Boolean {
         Log.i(logTag, "EPOS in-app printBitmap")
         val request = PrintBitmapMsg.Request()
         val args = Bundle()
         request.setExtraBundle(args)
         request.setBitmap(base64Image)
         request.setCategory(SdkConstants.CATEGORY_PRINT_BITMAP)
-        api.startTrans(activity, request)
+        val started = api.startTrans(activity, request)
+        if (!started) Log.e(logTag, "EPOS in-app printBitmap: startTrans returned false")
+        return started
     }
 
     /**
      * Card sale without receipt — matches parkeasev1 [SaleNoReceiptMsg] flow.
      * [amountMinor] is amount in **minor units** (e.g. tögrög × 100).
      */
-    fun startSaleNoReceipt(amountMinor: Long, dbRefNo: String?) {
+    fun startSaleNoReceipt(amountMinor: Long, dbRefNo: String?): Boolean {
         Log.i(logTag, "EPOS in-app saleNoReceipt amountMinor=$amountMinor dbRefNo=$dbRefNo")
         val request = SaleNoReceiptMsg.Request()
         val args = Bundle()
@@ -61,7 +73,9 @@ class EposOpenInAppHelper(
             request.setDbRefNo(dbRefNo)
         }
         request.setCategory(SdkConstants.CATEGORY_SALE)
-        api.startTrans(activity, request)
+        val started = api.startTrans(activity, request)
+        if (!started) Log.e(logTag, "EPOS in-app saleNoReceipt: startTrans returned false")
+        return started
     }
 
     /**

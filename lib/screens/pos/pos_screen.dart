@@ -442,7 +442,9 @@ class _POSScreenState extends State<POSScreen> {
       return inventory.inventory.firstWhere(
         (item) =>
             item.product.barCode?.toLowerCase().trim() == lower ||
-            item.product.code?.toLowerCase().trim() == lower,
+            item.product.code?.toLowerCase().trim() == lower ||
+            item.product.olonBarCodeJagsaalt
+                .any((b) => b.toLowerCase().trim() == lower),
       );
     } catch (_) {
       return null;

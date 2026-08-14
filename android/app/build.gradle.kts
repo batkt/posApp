@@ -64,12 +64,22 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Same signing key as release (when android/key.properties is present) so a
+            // debug build can always install over a release build already on a device,
+            // and vice versa, without "App not installed" signature-mismatch errors.
+            // Falls back to the auto-generated per-machine debug keystore only when
+            // key.properties isn't present (e.g. a dev machine without the shared key).
+            signingConfig =
+                signingConfigs.findByName("release")
+                    ?: signingConfigs.getByName("debug")
+        }
         release {
             // Play Store requires a release-signed App Bundle — use android/key.properties
             // + upload-keystore.jks (see android/key.properties.example).
             signingConfig =
-                signingConfigs.findByName("release")
-                    ?: signingConfigs.getByName("debug")
+                signingConfigs.findByName("debug")
+                    ?: signingConfigs.getByName("release")
             // When you enable isMinifyEnabled = true, PAX/Neptune needs these keeps (see proguard-rules.pro).
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

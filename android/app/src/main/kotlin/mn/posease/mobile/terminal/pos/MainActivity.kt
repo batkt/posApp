@@ -25,7 +25,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
     private val channelName = "mn.posease.mobile.terminal.pos"
-    private val eposLogTag = "PosEase POSEpos"
+    private val eposLogTag = "PosAppEpos"
     /**
      * Known UniPOS package ids; [resolveUniPosTargetPackage] also scans SEND text/plain handlers
      * so other bank/PAX-shipped terminal apps can be found without hardcoding every id.
@@ -120,7 +120,13 @@ class MainActivity : FlutterFragmentActivity() {
                             }
                             pendingEposInAppResult = result
                             try {
-                                eposBridge.startPrintBitmap(base64)
+                                if (!eposBridge.startPrintBitmap(base64)) {
+                                    // No onResult/onActivityResult will ever arrive for a
+                                    // transaction the SDK never started — fail now instead of
+                                    // leaving this Result (and the Dart-side await) hanging forever.
+                                    pendingEposInAppResult = null
+                                    result.error("PRINT_ERROR", "EPOS SDK rejected the print request (startTrans returned false)", null)
+                                }
                             } catch (e: Throwable) {
                                 pendingEposInAppResult = null
                                 result.error("PRINT_ERROR", e.message, null)
@@ -159,7 +165,10 @@ class MainActivity : FlutterFragmentActivity() {
                                 }
                                 pendingEposInAppResult = result
                                 val b64 = bitmapToBase64(bitmap)
-                                eposBridgeTest.startPrintBitmap(b64)
+                                if (!eposBridgeTest.startPrintBitmap(b64)) {
+                                    pendingEposInAppResult = null
+                                    result.error("PRINT_ERROR", "EPOS SDK rejected the test print request (startTrans returned false)", null)
+                                }
                                 return@setMethodCallHandler
                             }
                             val preferred = call.argument<String>("packageName")
@@ -227,7 +236,10 @@ class MainActivity : FlutterFragmentActivity() {
                                 val minor = EposOpenInAppHelper.amountDoubleToMinorUnits(amount)
                                 val dbRef =
                                     "${System.currentTimeMillis()}_${originalId}_${code.hashCode()}"
-                                eposBridgePay.startSaleNoReceipt(minor, dbRef)
+                                if (!eposBridgePay.startSaleNoReceipt(minor, dbRef)) {
+                                    pendingEposInAppResult = null
+                                    result.error("UNIPOS_ERROR", "EPOS SDK rejected the sale request (startTrans returned false)", null)
+                                }
                                 return@setMethodCallHandler
                             }
                             val purchaseJson = JSONObject().apply {
@@ -312,7 +324,10 @@ class MainActivity : FlutterFragmentActivity() {
                                     return@setMethodCallHandler
                                 }
                                 pendingEposInAppResult = result
-                                eposBridgeHc.startHealthCheck()
+                                if (!eposBridgeHc.startHealthCheck()) {
+                                    pendingEposInAppResult = null
+                                    result.error("EPOS_ERROR", "EPOS SDK rejected the health check request (startTrans returned false)", null)
+                                }
                                 return@setMethodCallHandler
                             }
                             // Match epossdk.md §1.6.1: Java sets only CATEGORY_HEALTH_CHECK + empty Bundle.

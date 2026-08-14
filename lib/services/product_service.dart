@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import 'api_service.dart';
 import '../models/cart_model.dart';
@@ -41,6 +44,9 @@ class ProductService {
               },
               {
                 'barCode': {r'$regex': search, r'$options': 'i'}
+              },
+              {
+                'olonBarCodeJagsaalt': {r'$regex': search, r'$options': 'i'}
               },
               {
                 'code': {r'$regex': search, r'$options': 'i'}
@@ -214,6 +220,71 @@ class ProductService {
       baiguullagiinId: baiguullagiinId,
       salbariinId: salbariinId,
     );
+  }
+
+  /// Upload image to `POST /upload` endpoint
+  Future<String?> uploadProductImage(File file) async {
+    try {
+      final token = _apiService.token;
+      final uri = Uri.parse('${ApiConfig.posBaseUrl}/upload');
+      final request = http.MultipartRequest('POST', uri);
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'bearer $token';
+      }
+      final filename = file.path.split(Platform.pathSeparator).last;
+      final stream = http.ByteStream(file.openRead());
+      final length = await file.length();
+      final multipartFile = http.MultipartFile(
+        'file',
+        stream,
+        length,
+        filename: filename,
+      );
+      request.files.add(multipartFile);
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      if (response.statusCode == 200) {
+        final resBody = response.body.trim();
+        if (resBody.startsWith('{')) {
+          final decoded = jsonDecode(resBody);
+          if (decoded is Map && decoded['filename'] != null) {
+            return decoded['filename'].toString();
+          }
+        }
+        return resBody.replaceAll('"', '');
+      }
+    } catch (e) {
+      debugPrint('uploadProductImage error: $e');
+    }
+    return null;
+  }
+
+  /// Search barcode in BBNS / Ebarimt database (`GET /bbns-barcode-search?barcode=...`).
+  Future<({bool found, String? ner, String? date, String? bunaKod})> searchBbnsBarcode(String barcode) async {
+    final trimmed = barcode.trim();
+    if (trimmed.isEmpty) return (found: false, ner: null, date: null, bunaKod: null);
+    try {
+      final response = await _apiService.get<Map<String, dynamic>>(
+        '/bbns-barcode-search',
+        queryParams: {'barcode': trimmed},
+        parser: (d) => d as Map<String, dynamic>,
+      );
+      if (response.success && response.data != null) {
+        final d = response.data!;
+        if (d['found'] == true) {
+          return (
+            found: true,
+            ner: d['ner']?.toString(),
+            date: d['date']?.toString(),
+            bunaKod: d['bunaKod']?.toString(),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('searchBbnsBarcode error: $e');
+    }
+    return (found: false, ner: null, date: null, bunaKod: null);
   }
 
   /// `POST /aguulakh` — same as web inventory add (posBack `crud`).

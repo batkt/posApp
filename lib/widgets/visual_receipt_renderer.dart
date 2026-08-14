@@ -123,17 +123,22 @@ class VisualReceiptRenderer {
               ),
             ),
           ),
-          if (companyNer.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(
-              'Салбар: $companyNer',
-              style: const TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
+          (() {
+            final salbarNer = (data['salbarNer'] ?? data['salbariinNer'] ?? data['salbarName'] ?? data['salbar'] ?? '').toString().trim();
+            final displaySalbar = salbarNer.isNotEmpty ? salbarNer : companyNer;
+            if (displaySalbar.isEmpty) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                'Салбар: $displaySalbar',
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
               ),
-            ),
-          ],
+            );
+          })(),
           if (cashier.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(
@@ -260,7 +265,15 @@ class VisualReceiptRenderer {
                 children: [
                   Expanded(
                     child: Text(
-                      (item['name'] ?? 'Бараа').toString(),
+                      (() {
+                        final rawName = (item['name'] ?? item['ner'] ?? 'Бараа').toString();
+                        final hasMultipleBranches = itemsList.map((i) => (i['salbariinId'] ?? i['salbarNer'] ?? i['salbar'] ?? '').toString()).where((s) => s.isNotEmpty).toSet().length > 1;
+                        final salbarStr = (item['salbarNer'] ?? item['salbariinNer'] ?? item['salbar'] ?? '').toString();
+                        if (hasMultipleBranches && salbarStr.isNotEmpty && !rawName.contains('($salbarStr)')) {
+                          return '$rawName ($salbarStr)';
+                        }
+                        return rawName;
+                      })(),
                       style: const TextStyle(
                         color: Colors.black,
                         fontWeight: FontWeight.w700,

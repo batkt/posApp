@@ -236,7 +236,8 @@ class InventoryModel extends ChangeNotifier {
       return p.name.toLowerCase().contains(q) ||
           p.id.toLowerCase().contains(q) ||
           (p.code?.toLowerCase().contains(q) == true) ||
-          (p.barCode?.toLowerCase().contains(q) == true);
+          (p.barCode?.toLowerCase().contains(q) == true) ||
+          p.olonBarCodeJagsaalt.any((b) => b.toLowerCase().contains(q));
     }
 
     final list = _inventory
@@ -279,7 +280,8 @@ class InventoryModel extends ChangeNotifier {
       return p.name.toLowerCase().contains(q) ||
           p.id.toLowerCase().contains(q) ||
           (p.code?.toLowerCase().contains(q) == true) ||
-          (p.barCode?.toLowerCase().contains(q) == true);
+          (p.barCode?.toLowerCase().contains(q) == true) ||
+          p.olonBarCodeJagsaalt.any((b) => b.toLowerCase().contains(q));
     }
 
     final list = _inventory

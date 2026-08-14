@@ -51,6 +51,10 @@ class Product {
   final bool? buuniiUneEsekh;
   final List<Map<String, dynamic>> buuniiUneJagsaalt;
 
+  /// Олон баркод
+  final bool? olonBarCodeEsekh;
+  final List<String> olonBarCodeJagsaalt;
+
   /// Урамшууллын цонхнууд (вэб `aguulakh.uramshuulal`).
   final List<Map<String, dynamic>> uramshuulal;
 
@@ -96,6 +100,8 @@ class Product {
     this.butsaaltToo,
     this.buuniiUneEsekh,
     this.buuniiUneJagsaalt = const [],
+    this.olonBarCodeEsekh,
+    this.olonBarCodeJagsaalt = const [],
     this.uramshuulal = const [],
   });
 
@@ -218,6 +224,18 @@ class Product {
       buuniiUneEsekh:
           json['buuniiUneEsekh'] is bool ? json['buuniiUneEsekh'] as bool : null,
       buuniiUneJagsaalt: _deepMapList(json['buuniiUneJagsaalt']),
+      olonBarCodeEsekh:
+          json['olonBarCodeEsekh'] is bool ? json['olonBarCodeEsekh'] as bool : null,
+      olonBarCodeJagsaalt: (json['olonBarCodeJagsaalt'] as List<dynamic>?)
+              ?.map((e) {
+                if (e is Map) {
+                  return (e['barCode'] ?? '').toString().trim();
+                }
+                return e.toString().trim();
+              })
+              .where((e) => e.isNotEmpty)
+              .toList() ??
+          const [],
       uramshuulal: _deepMapList(json['uramshuulal']),
     );
   }
