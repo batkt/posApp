@@ -33,32 +33,42 @@ class ProductService {
     int limit = 100,
   }) async {
     try {
+      final trimmedSearch = search.trim();
+      final Map<String, dynamic> queryMap = {
+        'baiguullagiinId': baiguullagiinId,
+        'salbariinId': salbariinId,
+        'idevkhteiEsekh': {r'$ne': false},
+      };
+
+      if (trimmedSearch.isNotEmpty) {
+        final escapedSearch =
+            trimmedSearch.replaceAll(RegExp(r'[.*+?^${}()|[\]\\]'), r'\$&');
+        queryMap[r'$or'] = [
+          {
+            'ner': {r'$regex': escapedSearch, r'$options': 'i'}
+          },
+          {
+            'barCode': {r'$regex': escapedSearch, r'$options': 'i'}
+          },
+          {
+            'olonBarCodeJagsaalt.barCode': {
+              r'$regex': escapedSearch,
+              r'$options': 'i'
+            }
+          },
+          {
+            'code': {r'$regex': escapedSearch, r'$options': 'i'}
+          },
+          {
+            'boginoNer': {r'$regex': escapedSearch, r'$options': 'i'}
+          },
+        ];
+      }
+
       final response = await _apiService.get<Map<String, dynamic>>(
         '/aguulakh',
         queryParams: {
-          // No `uldegdel` filter: show zero-stock items in POS (tap can still block sale).
-          'query': jsonEncode({
-            r'$or': [
-              {
-                'ner': {r'$regex': search, r'$options': 'i'}
-              },
-              {
-                'barCode': {r'$regex': search, r'$options': 'i'}
-              },
-              {
-                'olonBarCodeJagsaalt': {r'$regex': search, r'$options': 'i'}
-              },
-              {
-                'code': {r'$regex': search, r'$options': 'i'}
-              },
-              {
-                'boginoNer': {r'$regex': search, r'$options': 'i'}
-              },
-            ],
-            'idevkhteiEsekh': {r'$ne': false},
-            'baiguullagiinId': baiguullagiinId,
-            'salbariinId': salbariinId,
-          }),
+          'query': jsonEncode(queryMap),
           'order': jsonEncode({r'createdAt': -1}),
           _khuudasniiDugaar: page.toString(),
           _khuudasniiKhemjee: limit.toString(),

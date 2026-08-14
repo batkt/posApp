@@ -3,7 +3,7 @@ import 'dart:ui';
 
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -33,7 +33,16 @@ class BackgroundWatchdogService {
   static final BackgroundWatchdogService instance =
       BackgroundWatchdogService._();
 
+  bool get _isSupportedMobilePlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
   Future<void> configure() async {
+    if (!_isSupportedMobilePlatform) {
+      debugPrint('BackgroundWatchdogService skipped on non-mobile platform');
+      return;
+    }
     await FlutterBackgroundService().configure(
       androidConfiguration: AndroidConfiguration(
         onStart: onStartBackgroundWatchdog,
@@ -57,6 +66,9 @@ class BackgroundWatchdogService {
   }
 
   Future<void> ensureStarted() async {
+    if (!_isSupportedMobilePlatform) {
+      return;
+    }
     final running = await FlutterBackgroundService().isRunning();
     debugPrint('>>> [BackgroundWatchdogService] ensureStarted: alreadyRunning=$running');
     if (!running) {

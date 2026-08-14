@@ -4,8 +4,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/auth_model.dart';
+import '../../models/category_model.dart';
 import '../../models/inventory_model.dart';
 import '../../models/locale_model.dart';
+import '../../services/category_service.dart';
 import '../../services/product_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/barcode_scan_sheet.dart';
@@ -34,12 +36,18 @@ class BaraaAddScreen extends StatefulWidget {
 
 class _BaraaAddScreenState extends State<BaraaAddScreen> {
   static final _productApi = ProductService();
+  static final _categoryApi = CategoryService();
   bool _saving = false;
   final _formKey = GlobalKey<FormState>();
 
   File? _selectedImage;
   bool _checkingBbns = false;
   String? _bbnsFoundName;
+
+  List<Category> _categoryList = [];
+  bool _loadingCategories = false;
+  Category? _selectedCategory;
+  String? _selectedSubcategory;
 
   late final TextEditingController _ner;
   late final TextEditingController _bogino;
@@ -72,6 +80,33 @@ class _BaraaAddScreenState extends State<BaraaAddScreen> {
     _urtugUne = TextEditingController();
     _uldegdel = TextEditingController();
     _negKhairtsag = TextEditingController();
+  }
+
+  bool _categoriesLoaded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_categoriesLoaded) {
+      _categoriesLoaded = true;
+      _loadCategories();
+    }
+  }
+
+  Future<void> _loadCategories() async {
+    final authModel = Provider.of<AuthModel>(context, listen: false);
+    final baiguullagiinId = authModel.posSession?.baiguullagiinId ?? '';
+    if (baiguullagiinId.isEmpty) return;
+
+    setState(() => _loadingCategories = true);
+    final res = await _categoryApi.getCategories(baiguullagiinId: baiguullagiinId);
+    if (!mounted) return;
+    setState(() {
+      _loadingCategories = false;
+      if (res.success) {
+        _categoryList = res.categories;
+      }
+    });
   }
 
   void _disposeBuuniiTiers() {
@@ -349,6 +384,10 @@ class _BaraaAddScreenState extends State<BaraaAddScreen> {
           selectedImage: _selectedImage,
           checkingBbns: _checkingBbns,
           bbnsFoundName: _bbnsFoundName,
+          categoryList: _categoryList,
+          loadingCategories: _loadingCategories,
+          selectedCategory: _selectedCategory,
+          selectedSubcategory: _selectedSubcategory,
           onPickImage: _pickImage,
           onRemoveImage: () => setState(() => _selectedImage = null),
           onLookupBbns: _lookupBbnsBarcode,
@@ -356,6 +395,23 @@ class _BaraaAddScreenState extends State<BaraaAddScreen> {
             if (_bbnsFoundName != null && _bbnsFoundName!.isNotEmpty) {
               _ner.text = _bbnsFoundName!;
             }
+          },
+          onSelectCategory: (cat) {
+            setState(() {
+              _selectedCategory = cat;
+              _selectedSubcategory = null;
+              if (cat != null) {
+                _angilal.text = cat.angilal;
+              }
+            });
+          },
+          onSelectSubcategory: (sub) {
+            setState(() {
+              _selectedSubcategory = sub;
+              if (sub != null && sub.isNotEmpty) {
+                _bogino.text = sub;
+              }
+            });
           },
           ner: _ner,
           bogino: _bogino,
@@ -405,10 +461,16 @@ class _EditForm extends StatelessWidget {
     required this.selectedImage,
     required this.checkingBbns,
     required this.bbnsFoundName,
+    required this.categoryList,
+    required this.loadingCategories,
+    required this.selectedCategory,
+    required this.selectedSubcategory,
     required this.onPickImage,
     required this.onRemoveImage,
     required this.onLookupBbns,
     required this.onApplyBbnsName,
+    required this.onSelectCategory,
+    required this.onSelectSubcategory,
     required this.ner,
     required this.bogino,
     required this.code,
@@ -439,10 +501,16 @@ class _EditForm extends StatelessWidget {
   final File? selectedImage;
   final bool checkingBbns;
   final String? bbnsFoundName;
+  final List<Category> categoryList;
+  final bool loadingCategories;
+  final Category? selectedCategory;
+  final String? selectedSubcategory;
   final Function(ImageSource) onPickImage;
   final VoidCallback onRemoveImage;
   final Function(String) onLookupBbns;
   final VoidCallback onApplyBbnsName;
+  final Function(Category?) onSelectCategory;
+  final Function(String?) onSelectSubcategory;
   final TextEditingController ner;
   final TextEditingController bogino;
   final TextEditingController code;
@@ -485,12 +553,12 @@ class _EditForm extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // --- Image Picker Card (Camera & Gallery) ---
+          // --- Redesigned Premium Image Picker Card ---
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(12),
+              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: colorScheme.outlineVariant.withValues(alpha: 0.5),
               ),
@@ -498,72 +566,117 @@ class _EditForm extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Барааны зураг',
-                  style: tt.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: colorScheme.onSurface,
-                  ),
+                Row(
+                  children: [
+                    Icon(Icons.image_outlined, size: 18, color: colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Барааны зураг',
+                      style: tt.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 if (selectedImage != null)
                   Stack(
                     children: [
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(12),
                         child: Image.file(
                           selectedImage!,
                           width: double.infinity,
-                          height: 180,
+                          height: 170,
                           fit: BoxFit.cover,
                         ),
                       ),
                       Positioned(
                         top: 8,
                         right: 8,
-                        child: CircleAvatar(
-                          backgroundColor: Colors.black54,
-                          radius: 16,
-                          child: IconButton(
-                            padding: EdgeInsets.zero,
-                            icon: const Icon(Icons.close, size: 18, color: Colors.white),
-                            onPressed: onRemoveImage,
-                          ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: Colors.black.withValues(alpha: 0.7),
+                              radius: 16,
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                                tooltip: 'Зураг солих',
+                                onPressed: () => onPickImage(ImageSource.camera),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            CircleAvatar(
+                              backgroundColor: Colors.black.withValues(alpha: 0.7),
+                              radius: 16,
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(Icons.delete, size: 16, color: Colors.redAccent),
+                                tooltip: 'Зураг устгах',
+                                onPressed: onRemoveImage,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   )
                 else
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => onPickImage(ImageSource.camera),
-                          icon: const Icon(Icons.camera_alt_outlined, size: 20),
-                          label: const Text('Камераар авах'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(Icons.add_a_photo_outlined, size: 36, color: colorScheme.primary),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Зураг сонгох эсвэл камераар авах',
+                          style: tt.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => onPickImage(ImageSource.gallery),
-                          icon: const Icon(Icons.photo_library_outlined, size: 20),
-                          label: const Text('Цомгоос сонгох'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 8,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: () => onPickImage(ImageSource.camera),
+                              icon: const Icon(Icons.camera_alt_outlined, size: 16),
+                              label: const Text('Камераар'),
+                              style: ElevatedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
                             ),
-                          ),
+                            OutlinedButton.icon(
+                              onPressed: () => onPickImage(ImageSource.gallery),
+                              icon: const Icon(Icons.photo_library_outlined, size: 16),
+                              label: const Text('Цомгоос'),
+                              style: OutlinedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
               ],
             ),
@@ -682,13 +795,85 @@ class _EditForm extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: angilal,
-            decoration: InputDecoration(
-              labelText: l10n.tr('baraa_angilal'),
-              border: const OutlineInputBorder(),
-            ),
+          const SizedBox(height: 12),
+          // --- Fetched Category Dropdown & Subcategory Chips ---
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (categoryList.isNotEmpty) ...[
+                DropdownButtonFormField<Category>(
+                  isExpanded: true,
+                  initialValue: categoryList.any((c) => c.angilal == angilal.text.trim())
+                      ? categoryList.firstWhere((c) => c.angilal == angilal.text.trim())
+                      : selectedCategory,
+                  decoration: InputDecoration(
+                    labelText: 'Ангилал сонгох',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.category_outlined, color: AppColors.primary),
+                    suffixIcon: loadingCategories
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: Padding(
+                              padding: EdgeInsets.all(12),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : null,
+                  ),
+                  items: categoryList.map((cat) {
+                    return DropdownMenuItem<Category>(
+                      value: cat,
+                      child: Text(
+                        cat.angilal,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (cat) {
+                    onSelectCategory(cat);
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+              TextFormField(
+                controller: angilal,
+                decoration: InputDecoration(
+                  labelText: l10n.tr('baraa_angilal'),
+                  border: const OutlineInputBorder(),
+                  helperText: categoryList.isEmpty && !loadingCategories
+                      ? 'Салбарт одоогоор бүртгэгдсэн ангилал байхгүй байна'
+                      : 'Гараар оруулах эсвэл дээрээс сонгох',
+                ),
+              ),
+              if (selectedCategory != null && selectedCategory!.subcategoryNames.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Дэд ангилал сонгох:',
+                  style: tt.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: selectedCategory!.subcategoryNames.map((sub) {
+                    final isSelected = selectedSubcategory == sub || bogino.text.trim() == sub;
+                    return FilterChip(
+                      selected: isSelected,
+                      label: Text(sub, style: const TextStyle(fontSize: 12)),
+                      onSelected: (selected) {
+                        onSelectSubcategory(selected ? sub : null);
+                      },
+                      selectedColor: colorScheme.primaryContainer,
+                      checkmarkColor: colorScheme.primary,
+                    );
+                  }).toList(),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 10),
           TextFormField(
