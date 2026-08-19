@@ -7,14 +7,13 @@ import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../services/background_watchdog_service.dart';
+import '../../widgets/chat_fab.dart';
 import '../../widgets/kiosk_drawer.dart';
 import '../../widgets/parked_guilgee_sheet.dart';
 import '../../widgets/kiosk_terminal_pay_signal_listener.dart';
 import '../../widgets/kiosk_terminal_barimt_signal_listener.dart';
 import '../main/khaalt_screen.dart';
 import 'pos_screen.dart';
-
-import '../main/support_chat_page.dart';
 
 /// Kiosk POS (`/khyanalt/kiosk`): same [POSScreen] as full app, plus drawer; electronic pay is **карт** (UniPOS CARD, not QPay).
 class CashierMainScreen extends StatefulWidget {
@@ -100,7 +99,8 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
           if (auth.canSubmitPosSales && auth.posSession != null)
             IconButton(
               tooltip: l10n.tr('pos_park_queue'),
-              onPressed: () => showParkedGuilgeeSheet(context),
+              onPressed: () =>
+                  showParkedGuilgeeSheet(context, cashierMode: true),
               icon: const Icon(Icons.inventory_2_outlined),
             ),
           if (auth.canSubmitPosSales)
@@ -111,25 +111,20 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
             ),
         ],
       ),
-      body: const SafeArea(
-        child: KioskTerminalPaySignalListener(
-          child: KioskTerminalBarimtSignalListener(
-            child: POSScreen(cashierMode: true),
+      body: const Stack(
+        children: [
+          SafeArea(
+            child: KioskTerminalPaySignalListener(
+              child: KioskTerminalBarimtSignalListener(
+                child: POSScreen(cashierMode: true),
+              ),
+            ),
           ),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SupportChatPage()),
-          );
-        },
-        backgroundColor: colorScheme.primary,
-        foregroundColor: Colors.white,
-        elevation: 6,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.support_agent_rounded, size: 28),
+          // Draggable floating chatbot button — same as MainScreen; this
+          // screen (kiosk/cashier shell) never routes through MainScreen, so
+          // without this the draggable chat button never appears here.
+          ChatFab(),
+        ],
       ),
     );
   }

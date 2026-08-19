@@ -47,7 +47,6 @@ class TerminalPaySignalItem {
   }
 }
 
-/// Mobile → posBack → kiosk: card amount for UniPOS (audit: initiator from JWT on server).
 class TerminalTulburSignalService {
   TerminalTulburSignalService({http.Client? httpClient})
       : _http = httpClient ?? http.Client();

@@ -16,6 +16,7 @@ import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../widgets/authenticated_image.dart';
 import '../../widgets/barcode_scan_sheet.dart';
+import '../../widgets/category_picker_section.dart';
 import '../../widgets/niimbot_printer_dialog.dart';
 
 /// One row of web `Form.List` / `aguulakh.buuniiUneJagsaalt` (`buuniiToo`, `buuniiUne`).
@@ -34,7 +35,8 @@ class _BuuniiTierCtrls {
 }
 
 class BaraaDetailScreen extends StatefulWidget {
-  const BaraaDetailScreen({super.key, required this.item, this.startEditing = false});
+  const BaraaDetailScreen(
+      {super.key, required this.item, this.startEditing = false});
 
   final InventoryItem item;
   final bool startEditing;
@@ -113,7 +115,8 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
     if (baiguullagiinId.isEmpty) return;
 
     setState(() => _loadingCategories = true);
-    final res = await _categoryApi.getCategories(baiguullagiinId: baiguullagiinId);
+    final res =
+        await _categoryApi.getCategories(baiguullagiinId: baiguullagiinId);
     if (!mounted) return;
     setState(() {
       _loadingCategories = false;
@@ -135,12 +138,10 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
         : p.category;
     _niitUne.text = _formatNum(
         (p.niitUne != null && p.niitUne! > 0) ? p.niitUne! : p.price);
-    _urtugUne.text = p.urtugUne != null && p.urtugUne! > 0
-        ? _formatNum(p.urtugUne)
-        : '';
+    _urtugUne.text =
+        p.urtugUne != null && p.urtugUne! > 0 ? _formatNum(p.urtugUne) : '';
     _uldegdel.text = '${p.uldegdel ?? _item.currentStock}';
-    _negKhairtsag.text =
-        p.negKhairtsaganDahiShirhegiinToo?.toString() ?? '';
+    _negKhairtsag.text = p.negKhairtsaganDahiShirhegiinToo?.toString() ?? '';
 
     _idevkhteiEsekh = p.isAvailable;
     _noatBodohEsekh = p.noatBodohEsekh ?? true;
@@ -327,9 +328,7 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
   Future<void> _onSave() async {
     if (!_formKey.currentState!.validate()) return;
     final p = _item.product;
-    if (p.baiguullagiinId == null ||
-        p.salbariinId == null ||
-        p.id.isEmpty) {
+    if (p.baiguullagiinId == null || p.salbariinId == null || p.id.isEmpty) {
       return;
     }
 
@@ -459,6 +458,80 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
+      bottomNavigationBar: (canEdit && _editing)
+          ? SafeArea(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  border: Border(
+                    top: BorderSide(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.tonal(
+                        onPressed: _saving
+                            ? null
+                            : () {
+                                setState(() {
+                                  _editing = false;
+                                  _applyProductToForm();
+                                });
+                              },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: colorScheme.surfaceContainerHighest,
+                          foregroundColor: colorScheme.onSurfaceVariant,
+                          minimumSize: const Size.fromHeight(50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          l10n.tr('baraa_cancel'),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _saving ? null : _onSave,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _saving
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                l10n.tr('baraa_save'),
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
@@ -510,25 +583,44 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
                   child: Text(l10n.tr('baraa_edit')),
                 ),
               if (canEdit && _editing) ...[
-                TextButton(
-                  onPressed: _saving
-                      ? null
-                      : () {
-                          setState(() {
-                            _editing = false;
-                            _applyProductToForm();
-                          });
-                        },
-                  child: Text(l10n.tr('baraa_cancel')),
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: FilledButton.tonal(
+                    onPressed: _saving
+                        ? null
+                        : () {
+                            setState(() {
+                              _editing = false;
+                              _applyProductToForm();
+                            });
+                          },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colorScheme.surfaceContainerHighest,
+                      foregroundColor: colorScheme.onSurfaceVariant,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      minimumSize: const Size(0, 36),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Text(l10n.tr('baraa_cancel')),
+                  ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.only(right: 4),
+                  padding: const EdgeInsets.only(right: 8),
                   child: FilledButton(
                     onPressed: _saving ? null : _onSave,
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      minimumSize: const Size(0, 36),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
                     child: _saving
                         ? const SizedBox(
-                            width: 20,
-                            height: 20,
+                            width: 18,
+                            height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               color: Colors.white,
@@ -594,10 +686,12 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
                       selectedCategory: _selectedCategory,
                       selectedSubcategory: _selectedSubcategory,
                       onPickImage: _pickImage,
-                      onRemoveImage: () => setState(() => _selectedImage = null),
+                      onRemoveImage: () =>
+                          setState(() => _selectedImage = null),
                       onLookupBbns: _lookupBbnsBarcode,
                       onApplyBbnsName: () {
-                        if (_bbnsFoundName != null && _bbnsFoundName!.isNotEmpty) {
+                        if (_bbnsFoundName != null &&
+                            _bbnsFoundName!.isNotEmpty) {
                           _ner.text = _bbnsFoundName!;
                         }
                       },
@@ -634,8 +728,7 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
                       nhat: _nhatBodohEsekh,
                       shirkheg: _shirkheglekhEsekh,
                       buunii: _buuniiUneEsekh,
-                      onIdevkhtei: (v) =>
-                          setState(() => _idevkhteiEsekh = v),
+                      onIdevkhtei: (v) => setState(() => _idevkhteiEsekh = v),
                       onNoat: (v) => setState(() => _noatBodohEsekh = v),
                       onNhat: (v) => setState(() => _nhatBodohEsekh = v),
                       onShirkheg: (v) => setState(() {
@@ -720,7 +813,8 @@ class _ViewContent extends StatelessWidget {
             letterSpacing: -0.2,
           ),
         ),
-        if (product.boginoNer != null && product.boginoNer!.trim().isNotEmpty) ...[
+        if (product.boginoNer != null &&
+            product.boginoNer!.trim().isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(
             product.boginoNer!,
@@ -743,7 +837,12 @@ class _ViewContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        _FlagGrid(l10n: l10n, product: product, yn: yn, colorScheme: colorScheme, textTheme: textTheme),
+        _FlagGrid(
+            l10n: l10n,
+            product: product,
+            yn: yn,
+            colorScheme: colorScheme,
+            textTheme: textTheme),
         const SizedBox(height: 16),
         _MetaPill(
           label: l10n.tr('baraa_code'),
@@ -891,14 +990,14 @@ class _FlagGrid extends StatelessWidget {
             const SizedBox(height: 8),
             _gridRow(
                 l10n.tr('baraa_flag_idevkhtei'), yn(l10n, product.isAvailable)),
-            _gridRow(l10n.tr('baraa_flag_noat'), yn(l10n, product.noatBodohEsekh)),
-            _gridRow(l10n.tr('baraa_flag_nhat'), yn(l10n, product.nhatBodohEsekh)),
             _gridRow(
-                l10n.tr('baraa_flag_shirkheg'),
+                l10n.tr('baraa_flag_noat'), yn(l10n, product.noatBodohEsekh)),
+            _gridRow(
+                l10n.tr('baraa_flag_nhat'), yn(l10n, product.nhatBodohEsekh)),
+            _gridRow(l10n.tr('baraa_flag_shirkheg'),
                 yn(l10n, product.shirkheglekhEsekh)),
             _gridRow(
-                l10n.tr('baraa_flag_buunii'),
-                yn(l10n, product.buuniiUneEsekh)),
+                l10n.tr('baraa_flag_buunii'), yn(l10n, product.buuniiUneEsekh)),
           ],
         ),
       ),
@@ -1032,7 +1131,8 @@ class _EditForm extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+              color:
+                  colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: colorScheme.outlineVariant.withValues(alpha: 0.5),
@@ -1043,7 +1143,8 @@ class _EditForm extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.image_outlined, size: 18, color: colorScheme.primary),
+                    Icon(Icons.image_outlined,
+                        size: 18, color: colorScheme.primary),
                     const SizedBox(width: 8),
                     Text(
                       'Барааны зураг',
@@ -1073,22 +1174,27 @@ class _EditForm extends StatelessWidget {
                         child: Row(
                           children: [
                             CircleAvatar(
-                              backgroundColor: Colors.black.withValues(alpha: 0.7),
+                              backgroundColor:
+                                  Colors.black.withValues(alpha: 0.7),
                               radius: 16,
                               child: IconButton(
                                 padding: EdgeInsets.zero,
-                                icon: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                                icon: const Icon(Icons.camera_alt,
+                                    size: 16, color: Colors.white),
                                 tooltip: 'Зураг солих',
-                                onPressed: () => onPickImage(ImageSource.camera),
+                                onPressed: () =>
+                                    onPickImage(ImageSource.camera),
                               ),
                             ),
                             const SizedBox(width: 6),
                             CircleAvatar(
-                              backgroundColor: Colors.black.withValues(alpha: 0.7),
+                              backgroundColor:
+                                  Colors.black.withValues(alpha: 0.7),
                               radius: 16,
                               child: IconButton(
                                 padding: EdgeInsets.zero,
-                                icon: const Icon(Icons.delete, size: 16, color: Colors.redAccent),
+                                icon: const Icon(Icons.delete,
+                                    size: 16, color: Colors.redAccent),
                                 tooltip: 'Зураг устгах',
                                 onPressed: onRemoveImage,
                               ),
@@ -1101,17 +1207,20 @@ class _EditForm extends StatelessWidget {
                 else
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 18, horizontal: 12),
                     decoration: BoxDecoration(
                       color: colorScheme.surface,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+                        color:
+                            colorScheme.outlineVariant.withValues(alpha: 0.4),
                       ),
                     ),
                     child: Column(
                       children: [
-                        Icon(Icons.add_a_photo_outlined, size: 36, color: colorScheme.primary),
+                        Icon(Icons.add_a_photo_outlined,
+                            size: 36, color: colorScheme.primary),
                         const SizedBox(height: 6),
                         Text(
                           'Зураг сонгох эсвэл камераар авах',
@@ -1128,7 +1237,8 @@ class _EditForm extends StatelessWidget {
                           children: [
                             ElevatedButton.icon(
                               onPressed: () => onPickImage(ImageSource.camera),
-                              icon: const Icon(Icons.camera_alt_outlined, size: 16),
+                              icon: const Icon(Icons.camera_alt_outlined,
+                                  size: 16),
                               label: const Text('Камераар'),
                               style: ElevatedButton.styleFrom(
                                 visualDensity: VisualDensity.compact,
@@ -1139,7 +1249,8 @@ class _EditForm extends StatelessWidget {
                             ),
                             OutlinedButton.icon(
                               onPressed: () => onPickImage(ImageSource.gallery),
-                              icon: const Icon(Icons.photo_library_outlined, size: 16),
+                              icon: const Icon(Icons.photo_library_outlined,
+                                  size: 16),
                               label: const Text('Цомгоос'),
                               style: OutlinedButton.styleFrom(
                                 visualDensity: VisualDensity.compact,
@@ -1182,9 +1293,14 @@ class _EditForm extends StatelessWidget {
           const SizedBox(height: 10),
           TextFormField(
             controller: code,
+            readOnly: true,
             decoration: InputDecoration(
               labelText: l10n.tr('baraa_code'),
               border: const OutlineInputBorder(),
+              filled: true,
+              fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+              suffixIcon: const Icon(Icons.lock_outline, size: 20, color: Colors.grey),
+              helperText: 'Бараа засах үед дотоод код засах боломжгүй',
             ),
           ),
           const SizedBox(height: 10),
@@ -1238,7 +1354,8 @@ class _EditForm extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
+                  const Icon(Icons.check_circle_outline,
+                      size: 16, color: Colors.green),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -1271,84 +1388,15 @@ class _EditForm extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
-          // --- Fetched Category Dropdown & Subcategory Chips ---
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (categoryList.isNotEmpty) ...[
-                DropdownButtonFormField<Category>(
-                  isExpanded: true,
-                  initialValue: categoryList.any((c) => c.angilal == angilal.text.trim())
-                      ? categoryList.firstWhere((c) => c.angilal == angilal.text.trim())
-                      : selectedCategory,
-                  decoration: InputDecoration(
-                    labelText: 'Ангилал сонгох',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.category_outlined, color: AppColors.primary),
-                    suffixIcon: loadingCategories
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: Padding(
-                              padding: EdgeInsets.all(12),
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        : null,
-                  ),
-                  items: categoryList.map((cat) {
-                    return DropdownMenuItem<Category>(
-                      value: cat,
-                      child: Text(
-                        cat.angilal,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (cat) {
-                    onSelectCategory(cat);
-                  },
-                ),
-                const SizedBox(height: 8),
-              ],
-              TextFormField(
-                controller: angilal,
-                decoration: InputDecoration(
-                  labelText: l10n.tr('baraa_angilal'),
-                  border: const OutlineInputBorder(),
-                  helperText: categoryList.isEmpty && !loadingCategories
-                      ? 'Салбарт одоогоор бүртгэгдсэн ангилал байхгүй байна'
-                      : 'Гараар оруулах эсвэл дээрээс сонгох',
-                ),
-              ),
-              if (selectedCategory != null && selectedCategory!.subcategoryNames.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Дэд ангилал сонгох:',
-                  style: tt.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: selectedCategory!.subcategoryNames.map((sub) {
-                    final isSelected = selectedSubcategory == sub || bogino.text.trim() == sub;
-                    return FilterChip(
-                      selected: isSelected,
-                      label: Text(sub, style: const TextStyle(fontSize: 12)),
-                      onSelected: (selected) {
-                        onSelectSubcategory(selected ? sub : null);
-                      },
-                      selectedColor: colorScheme.primaryContainer,
-                      checkmarkColor: colorScheme.primary,
-                    );
-                  }).toList(),
-                ),
-              ],
-            ],
+          CategoryPickerSection(
+            categoryList: categoryList,
+            loadingCategories: loadingCategories,
+            selectedCategory: selectedCategory,
+            selectedSubcategory: selectedSubcategory,
+            angilal: angilal,
+            bogino: bogino,
+            onSelectCategory: onSelectCategory,
+            onSelectSubcategory: onSelectSubcategory,
           ),
           const SizedBox(height: 10),
           TextFormField(
@@ -1361,7 +1409,8 @@ class _EditForm extends StatelessWidget {
           const SizedBox(height: 10),
           TextFormField(
             controller: niitUne,
-            keyboardType: TextInputType.number,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [MntThousandsInputFormatter()],
             decoration: InputDecoration(
               labelText: l10n.tr('baraa_sell_price'),
               border: const OutlineInputBorder(),
@@ -1370,19 +1419,30 @@ class _EditForm extends StatelessWidget {
           const SizedBox(height: 10),
           TextFormField(
             controller: urtugUne,
-            keyboardType: TextInputType.number,
+            readOnly: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [MntThousandsInputFormatter()],
             decoration: InputDecoration(
               labelText: l10n.tr('baraa_urtug'),
               border: const OutlineInputBorder(),
+              filled: true,
+              fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+              suffixIcon: const Icon(Icons.lock_outline, size: 20, color: Colors.grey),
+              helperText: 'Бараа засах үед нэгж өртөг засах боломжгүй',
             ),
           ),
           const SizedBox(height: 10),
           TextFormField(
             controller: uldegdel,
+            readOnly: true,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
               labelText: l10n.tr('baraa_uldegdel'),
               border: const OutlineInputBorder(),
+              filled: true,
+              fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+              suffixIcon: const Icon(Icons.lock_outline, size: 20, color: Colors.grey),
+              helperText: 'Бараа засах үед үлдэгдэл засах боломжгүй',
             ),
           ),
           const SizedBox(height: 8),
@@ -1470,7 +1530,9 @@ class _EditForm extends StatelessWidget {
                     Expanded(
                       child: TextFormField(
                         controller: c.une,
-                        keyboardType: TextInputType.number,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        inputFormatters: [MntThousandsInputFormatter()],
                         decoration: InputDecoration(
                           labelText: l10n.tr('baraa_buunii_price'),
                           border: const OutlineInputBorder(),
@@ -1478,8 +1540,8 @@ class _EditForm extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: MaterialLocalizations.of(context)
-                          .deleteButtonTooltip,
+                      tooltip:
+                          MaterialLocalizations.of(context).deleteButtonTooltip,
                       onPressed: () => onRemoveBuuniiTier(i),
                       icon: Icon(
                         Icons.delete_outline_rounded,

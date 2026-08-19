@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 /// All UI money amounts: comma thousands, two decimals (e.g. `100,000.00`).
@@ -44,5 +45,42 @@ abstract final class MntAmountFormatter {
     final v = double.tryParse(normalized);
     if (v == null || !v.isFinite) return 0;
     return v;
+  }
+}
+
+/// Adds `1,000`-style thousands separators live as the user types into a
+/// price [TextField] — cursor always lands at the end, matching how the
+/// discount/amount fields elsewhere in the app reformat.
+class MntThousandsInputFormatter extends TextInputFormatter {
+  static final NumberFormat _intFormat = NumberFormat('#,##0', 'en_US');
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) return newValue;
+
+    final digitsOnly = newValue.text.replaceAll(RegExp(r'[^\d.]'), '');
+    if (digitsOnly.isEmpty) return const TextEditingValue(text: '');
+
+    final dotIndex = digitsOnly.indexOf('.');
+    var intPart =
+        dotIndex >= 0 ? digitsOnly.substring(0, dotIndex) : digitsOnly;
+    final fracPart = dotIndex >= 0
+        ? digitsOnly.substring(dotIndex + 1).replaceAll('.', '')
+        : '';
+    intPart = intPart.replaceFirst(RegExp(r'^0+(?=\d)'), '');
+    if (intPart.isEmpty) intPart = '0';
+
+    final formattedInt = _intFormat.format(int.parse(intPart));
+    // Preserve a trailing dot the user just typed (`dotIndex >= 0` but no
+    // fraction digits yet) so it doesn't get swallowed mid-entry.
+    final formatted = dotIndex >= 0 ? '$formattedInt.$fracPart' : formattedInt;
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
   }
 }

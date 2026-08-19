@@ -165,7 +165,7 @@ class _KioskTerminalPaySignalListenerState
           messenger.showSnackBar(
             SnackBar(
               content: Text(
-                'Картын төлбөрийн хүсэлт (${MntAmountFormatter.formatTugrik(item.amountMnt)}) — UniPOS нээж байна...',
+                'Картын төлбөрийн хүсэлт (${MntAmountFormatter.formatTugrik(item.amountMnt)}) — ПОС нээж байна...',
               ),
               duration: const Duration(seconds: 2),
               backgroundColor: Colors.blue.shade800,

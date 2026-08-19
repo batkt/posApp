@@ -16,6 +16,7 @@ import 'staff_permissions_screen.dart';
 import 'pos_settings_hub_screen.dart';
 import 'tailan_screen.dart';
 import 'support_chat_page.dart';
+import '../../widgets/chat_fab.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key, this.initialSection});
@@ -693,23 +694,18 @@ class _MainScreenState extends State<MainScreen> {
           ],
         ),
       ),
-      body: IndexedStack(
-        index: entries.isEmpty ? 0 : safeIndex,
-        children:
-            entries.isEmpty ? [const SizedBox.shrink()] : entries.map((e) => e.screen).toList(),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SupportChatPage()),
-          );
-        },
-        backgroundColor: colorScheme.primary,
-        foregroundColor: Colors.white,
-        elevation: 6,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.support_agent_rounded, size: 28),
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: entries.isEmpty ? 0 : safeIndex,
+            children: entries.isEmpty
+                ? [const SizedBox.shrink()]
+                : entries.map((e) => e.screen).toList(),
+          ),
+          // Draggable floating chatbot button — drag to trash zone to hide,
+          // re-enable in Settings → Чатбот.
+          const ChatFab(),
+        ],
       ),
     );
   }

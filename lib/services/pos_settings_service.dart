@@ -183,8 +183,11 @@ class PosSettingsService {
     final merged = <String, dynamic>{...orgMap};
     if (branchTok != null) merged.addAll(branchTok);
 
-    final borl = merged['borluulaltNUAT'] == true;
     final shine = merged['eBarimtShine'] == true;
+    // Web derives this the same way every render (pages/khyanalt/posSystem/index.js)
+    // instead of trusting the stored flag, so a stale `borluulaltNUAT: true` left
+    // over from before POS API 3.0 was turned off can't strip VAT from totals.
+    final borl = shine && merged['borluulaltNUAT'] == true;
 
     return PosWebTaxContext(
       borluulaltNUAT: borl,

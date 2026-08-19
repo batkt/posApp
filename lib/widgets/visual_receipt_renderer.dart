@@ -17,6 +17,9 @@ class VisualReceiptRenderer {
 
   static String _fmt(double v) => MntAmountFormatter.formatTugrik(v);
 
+  /// Subtotal line has no ₮ suffix — only the final payable/e-barimt amounts do.
+  static String _fmtPlain(double v) => MntAmountFormatter.format(v);
+
   static String _qrDataFromBarimt(Map<String, dynamic> data) {
     for (final key in const [
       'qrData',
@@ -117,7 +120,7 @@ class VisualReceiptRenderer {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.black,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 letterSpacing: 0.6,
                 fontSize: 18,
               ),
@@ -145,7 +148,7 @@ class VisualReceiptRenderer {
               'Касс: $cashier',
               style: const TextStyle(
                 color: Colors.black,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
                 fontSize: 14,
               ),
             ),
@@ -155,7 +158,7 @@ class VisualReceiptRenderer {
             'БД: $orderNo',
             style: const TextStyle(
               color: Colors.black,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               fontSize: 15,
             ),
             maxLines: 2,
@@ -166,7 +169,7 @@ class VisualReceiptRenderer {
             nowStr,
             style: const TextStyle(
               color: Colors.black,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
               fontSize: 13,
             ),
           ),
@@ -176,7 +179,7 @@ class VisualReceiptRenderer {
               'ДДТД: $billId',
               style: const TextStyle(
                 color: Colors.black,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
                 fontSize: 13,
               ),
             ),
@@ -187,7 +190,7 @@ class VisualReceiptRenderer {
               'Регистр: $register',
               style: const TextStyle(
                 color: Colors.black,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
                 fontSize: 13,
               ),
             ),
@@ -198,7 +201,7 @@ class VisualReceiptRenderer {
               'Худалдан авагч: $buyerCompanyNer',
               style: const TextStyle(
                 color: Colors.black,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w500,
                 fontSize: 13,
               ),
               maxLines: 3,
@@ -217,7 +220,7 @@ class VisualReceiptRenderer {
                     'Бараа',
                     style: TextStyle(
                       color: Colors.black,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
                   ),
@@ -234,7 +237,7 @@ class VisualReceiptRenderer {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.black,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                         fontSize: 13,
                         height: 1.0,
                       ),
@@ -248,7 +251,7 @@ class VisualReceiptRenderer {
                     textAlign: TextAlign.right,
                     style: TextStyle(
                       color: Colors.black,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w600,
                       fontSize: 13,
                     ),
                   ),
@@ -276,7 +279,7 @@ class VisualReceiptRenderer {
                       })(),
                       style: const TextStyle(
                         color: Colors.black,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         fontSize: 14,
                       ),
                       maxLines: 2,
@@ -292,7 +295,7 @@ class VisualReceiptRenderer {
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.black,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w500,
                           fontSize: 14,
                         ),
                       ),
@@ -305,7 +308,7 @@ class VisualReceiptRenderer {
                       textAlign: TextAlign.right,
                       style: const TextStyle(
                         color: Colors.black,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
                     ),
@@ -323,7 +326,7 @@ class VisualReceiptRenderer {
                   'Төлбөр',
                   style: TextStyle(
                     color: Colors.black,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     fontSize: 17,
                   ),
                 ),
@@ -332,20 +335,20 @@ class VisualReceiptRenderer {
                   payMethodLabel,
                   style: const TextStyle(
                     color: Colors.black,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     fontSize: 17,
                   ),
                 ),
               ],
             ),
           ),
-          _moneyRow('Нийт дүн', _fmt(totalVal), fontSize: 15, isBold: true),
+          _moneyRow('Нийт дүн', _fmtPlain(totalVal), fontSize: 15),
           if (isEbarimtActive && noatVal > 0) ...[
-            _moneyRow('НӨАТ-гүй дүн', _fmt(noatguiVal), fontSize: 14, isBold: true),
-            _moneyRow('НӨАТ', _fmt(noatVal), fontSize: 14, isBold: true),
+            _moneyRow('НӨАТ-гүй дүн', _fmt(noatguiVal), fontSize: 14),
+            _moneyRow('НӨАТ', _fmt(noatVal), fontSize: 14),
           ],
           if (showNhat)
-            _moneyRow('НХАТ', _fmt(nhatVal), fontSize: 14, isBold: true),
+            _moneyRow('НХАТ', _fmt(nhatVal), fontSize: 14),
           _moneyRow('Төлөх дүн', _fmt(totalVal), fontSize: 16, isBold: true),
           if (isEbarimtActive)
             _moneyRow('И-Баримт дүн', _fmt(totalVal), fontSize: 16, isBold: true),
@@ -362,7 +365,7 @@ class VisualReceiptRenderer {
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.black,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     fontSize: 16,
                   ),
                   maxLines: 2,
@@ -399,7 +402,7 @@ class VisualReceiptRenderer {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.black,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w500,
                       fontSize: 15,
                     ),
                   ),
@@ -408,7 +411,7 @@ class VisualReceiptRenderer {
                   'Баярлалаа',
                   style: TextStyle(
                     color: Colors.black,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w400,
                     fontSize: 15,
                   ),
                 ),
@@ -519,7 +522,7 @@ class VisualReceiptRenderer {
               style: TextStyle(
                 color: Colors.black,
                 fontSize: fontSize,
-                fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+                fontWeight: isBold ? FontWeight.w700 : FontWeight.w400,
                 height: 1.15,
               ),
             ),
@@ -530,7 +533,7 @@ class VisualReceiptRenderer {
             style: TextStyle(
               color: Colors.black,
               fontSize: fontSize,
-              fontWeight: isBold ? FontWeight.w900 : FontWeight.w700,
+              fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
               height: 1.15,
               fontFeatures: const [ui.FontFeature.tabularFigures()],
             ),

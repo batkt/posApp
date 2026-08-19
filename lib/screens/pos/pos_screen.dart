@@ -9,8 +9,7 @@ import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/responsive_helper.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../utils/uramshuulal_helper.dart';
-import 'cashier_payment_screen.dart';
-import '../main/checkout_screen.dart';
+import '../../payment/payment_navigation.dart';
 import '../../widgets/barcode_scan_sheet.dart';
 import '../../widgets/test_image_widget.dart';
 import '../../widgets/authenticated_image.dart';
@@ -21,6 +20,7 @@ import '../../services/pos_transaction_service.dart';
 import '../../services/pos_settings_service.dart';
 import '../../services/uramshuulal_service.dart';
 import '../../payment/pos_payment_core.dart';
+import '../../utils/clean_barcode.dart';
 
 /// How many of this product are in the current sale (0 = not in cart).
 int _saleQtyForProduct(SalesModel sales, String productId) {
@@ -414,42 +414,36 @@ class _POSScreenState extends State<POSScreen> {
   }
 
   void _openPaymentScreen(BuildContext context) {
-    final auth = context.read<AuthModel>();
-    final cashier = auth.currentUser?.isCashier == true;
-    final useCashierPayment =
-        cashier || widget.cashierMode || auth.staffAccess.allowsMobile;
-    final mobileQpayMode =
-        widget.mobileStaffMode || auth.staffAccess.allowsMobile;
-    Navigator.push(
+    openPosPaymentScreen(
       context,
-      MaterialPageRoute(
-        builder: (context) => useCashierPayment
-            ? CashierPaymentScreen(
-                terminalMode: mobileQpayMode
-                    ? CashierTerminalPaymentMode.qpayOnly
-                    : CashierTerminalPaymentMode.cardOnly,
-              )
-            : const CheckoutScreen(),
-      ),
+      cashierMode: widget.cashierMode,
+      mobileStaffMode: widget.mobileStaffMode,
     );
   }
 
 
   /// Look up a product in the local inventory by barcode or code.
   InventoryItem? _findByBarcode(InventoryModel inventory, String barcode) {
-    final lower = barcode.toLowerCase().trim();
+    final candidates = getBarcodeCandidates(barcode).map((c) => c.toLowerCase().trim()).toSet();
     try {
       return inventory.inventory.firstWhere(
-        (item) =>
-            item.product.barCode?.toLowerCase().trim() == lower ||
-            item.product.code?.toLowerCase().trim() == lower ||
-            item.product.olonBarCodeJagsaalt
-                .any((b) => b.toLowerCase().trim() == lower),
+        (item) {
+          final bc = item.product.barCode?.toLowerCase().trim() ?? '';
+          final code = item.product.code?.toLowerCase().trim() ?? '';
+          if (bc.isNotEmpty && candidates.contains(bc)) return true;
+          if (code.isNotEmpty && candidates.contains(code)) return true;
+          return item.product.olonBarCodeJagsaalt.any((b) {
+            final bLower = b.toLowerCase().trim();
+            return bLower.isNotEmpty && candidates.contains(bLower);
+          });
+        },
       );
     } catch (_) {
       return null;
     }
   }
+
+
 
   /// Rapid scan-to-cart: scan multiple barcodes, preview list, then go directly
   /// to payment. Returns after the payment screen is popped.

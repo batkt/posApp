@@ -1,7 +1,9 @@
 import 'dart:async';
 
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/auth_model.dart';
@@ -14,6 +16,8 @@ import '../../utils/app_date_range_picker.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/app_date_range_filter_button.dart';
 import '../../widgets/barcode_scan_sheet.dart';
+import '../../utils/clean_barcode.dart';
+
 
 /// Holds dialog search string across [StatefulBuilder] rebuilds.
 class _SearchHolder {
@@ -117,6 +121,19 @@ class _ToololtScreenState extends State<ToololtScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+  }
+
+  Future<void> _openMultiScanMode(ToololtActiveSession session) async {
+    final refreshed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ToololtMultiScanSheet(
+        session: session,
+        toollogoId: session.id,
+      ),
+    );
+    if (refreshed == true && mounted) _refresh();
   }
 
   Future<void> _openStartSheet() async {
@@ -544,6 +561,7 @@ class _ToololtScreenState extends State<ToololtScreen> {
                           _saveLineQty(session, line, value),
                       onComplete: () => _confirmComplete(session),
                       onCancel: () => _confirmCancel(session),
+                      onScanMode: () => _openMultiScanMode(session),
                       activePage: _activePage,
                       totalPages: session.totalPageCount,
                       onPrevPage: session.khuudasniiDugaar > 1
@@ -637,6 +655,7 @@ class _ActiveCountCard extends StatelessWidget {
     required this.totalPages,
     this.onPrevPage,
     this.onNextPage,
+    this.onScanMode,
   });
 
   final AppLocalizations l10n;
@@ -645,6 +664,7 @@ class _ActiveCountCard extends StatelessWidget {
   final Future<void> Function(ToololtBaraaLine, String) onSubmitLineFor;
   final VoidCallback onComplete;
   final VoidCallback onCancel;
+  final VoidCallback? onScanMode;
   final int activePage;
   final int totalPages;
   final VoidCallback? onPrevPage;
@@ -943,6 +963,20 @@ class _ActiveCountCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
+              // ── Barcode scan mode button ──────────────────────────────────
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.secondary,
+                    foregroundColor: Theme.of(context).colorScheme.onSecondary,
+                  ),
+                  onPressed: onScanMode,
+                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                  label: const Text('Баркодоор тоолох'),
+                ),
+              ),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
@@ -1561,6 +1595,567 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
                   : Text(l10n.tr('toololt_start_count')),
             ),
             const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOOLOLT MULTI-BARCODE SCAN SHEET
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Entry tracking a scanned product during a multi-scan toololt session.
+class _ScannedEntry {
+  const _ScannedEntry({
+    required this.line,
+    required this.addedQty,
+    required this.newTotal,
+    this.saving = false,
+    this.error,
+  });
+
+  final ToololtBaraaLine line;
+
+  /// How many times we scanned this item in this session.
+  final int addedQty;
+
+  /// The running total we saved (line.toolsonToo + addedQty).
+  final double newTotal;
+
+  final bool saving;
+  final String? error;
+
+  _ScannedEntry copyWith({
+    int? addedQty,
+    double? newTotal,
+    bool? saving,
+    String? error,
+  }) =>
+      _ScannedEntry(
+        line: line,
+        addedQty: addedQty ?? this.addedQty,
+        newTotal: newTotal ?? this.newTotal,
+        saving: saving ?? this.saving,
+        error: error,
+      );
+}
+
+/// Full-screen camera sheet for continuous barcode scanning during stock count.
+/// Each successful scan increments & immediately saves the counted quantity
+/// for the matched product line via [toololtService.saveCountedQty].
+class _ToololtMultiScanSheet extends StatefulWidget {
+  const _ToololtMultiScanSheet({
+    required this.session,
+    required this.toollogoId,
+  });
+
+  final ToololtActiveSession session;
+  final String toollogoId;
+
+  @override
+  State<_ToololtMultiScanSheet> createState() =>
+      _ToololtMultiScanSheetState();
+}
+
+class _ToololtMultiScanSheetState
+    extends State<_ToololtMultiScanSheet> {
+  late final MobileScannerController _controller;
+
+  /// code → accumulated scan entry (preserves insertion order).
+  final Map<String, _ScannedEntry> _scanned = {};
+
+  static const _cooldownMs = 1000;
+  final Map<String, int> _lastScanTime = {};
+
+  bool _torchOn = false;
+  String? _feedbackText;
+  bool _feedbackError = false;
+
+  int get _totalScanned =>
+      _scanned.values.fold(0, (s, e) => s + e.addedQty);
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = MobileScannerController(
+      facing: CameraFacing.back,
+      detectionSpeed: DetectionSpeed.normal,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  // ── line lookup ──────────────────────────────────────────────────────────
+
+  ToololtBaraaLine? _findLine(String raw) {
+    final cleaned = cleanBarcode(raw);
+    for (final line in widget.session.lines) {
+      final bc = line.barCode?.trim() ?? '';
+      if (bc == raw || (cleaned.isNotEmpty && bc == cleaned)) return line;
+    }
+    for (final line in widget.session.lines) {
+      final code = line.code.trim();
+      if (code == raw || (cleaned.isNotEmpty && code == cleaned)) return line;
+    }
+    return null;
+  }
+
+
+  // ── scan detection ───────────────────────────────────────────────────────
+
+  void _handleDetect(BarcodeCapture capture) {
+    if (capture.barcodes.isEmpty) return;
+    final raw =
+        (capture.barcodes.first.rawValue ?? capture.barcodes.first.displayValue)
+            ?.trim();
+    if (raw == null || raw.isEmpty) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if ((now - (_lastScanTime[raw] ?? 0)) < _cooldownMs) return;
+    _lastScanTime[raw] = now;
+
+    final line = _findLine(raw);
+    if (line == null) {
+      HapticFeedback.heavyImpact();
+      _flash('Олдсонгүй: $raw', error: true);
+      return;
+    }
+
+    HapticFeedback.lightImpact();
+    _incrementAndSave(line);
+  }
+
+  Future<void> _incrementAndSave(ToololtBaraaLine line) async {
+    final prev = _scanned[line.code];
+    final prevAdded = prev?.addedQty ?? 0;
+    final newAdded = prevAdded + 1;
+    final newTotal = line.toolsonToo + newAdded;
+
+    // Optimistic update — show immediately.
+    setState(() {
+      _scanned[line.code] = _ScannedEntry(
+        line: line,
+        addedQty: newAdded,
+        newTotal: newTotal,
+        saving: true,
+      );
+    });
+
+    final res = await toololtService.saveCountedQty(
+      toollogoId: widget.toollogoId,
+      code: line.code,
+      too: newTotal,
+    );
+    if (!mounted) return;
+
+    if (res.success) {
+      setState(() {
+        _scanned[line.code] =
+            _scanned[line.code]!.copyWith(saving: false);
+      });
+      _flash(
+        '+1  ${line.ner}  ·  Нийт: ${_fmt(newTotal)}',
+        error: false,
+      );
+    } else {
+      // Roll back optimistic update.
+      setState(() {
+        if (prevAdded == 0) {
+          _scanned.remove(line.code);
+        } else {
+          _scanned[line.code] = prev!.copyWith(
+            saving: false,
+            error: res.error,
+          );
+        }
+      });
+      _flash(res.error ?? 'Хадгалахад алдаа', error: true);
+    }
+  }
+
+  String _fmt(double v) =>
+      v == v.truncateToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+
+  void _flash(String text, {required bool error}) {
+    setState(() {
+      _feedbackText = text;
+      _feedbackError = error;
+    });
+    Future.delayed(const Duration(milliseconds: 2800), () {
+      if (mounted) setState(() => _feedbackText = null);
+    });
+  }
+
+  // ── build ────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final size = MediaQuery.sizeOf(context);
+    final entries = _scanned.values.toList().reversed.toList();
+    final hasEntries = entries.isNotEmpty;
+
+    final topInset = MediaQuery.paddingOf(context).top;
+    const scanBoxWidth = 280.0;
+    const scanBoxHeight = 160.0;
+    final scanBoxTop = topInset + 88.0;
+    final scanBoxLeft = (size.width - scanBoxWidth) / 2;
+    final scanWindowRect = Rect.fromLTWH(
+      scanBoxLeft, scanBoxTop, scanBoxWidth, scanBoxHeight);
+
+    return SizedBox(
+      height: size.height,
+      width: size.width,
+      child: Material(
+        color: Colors.black,
+        child: Stack(
+          children: [
+            // ── Camera ──────────────────────────────────────────────────────
+            Positioned.fill(
+              child: MobileScanner(
+                controller: _controller,
+                scanWindow: scanWindowRect,
+                fit: BoxFit.cover,
+                onDetect: _handleDetect,
+              ),
+            ),
+
+            // ── Bottom gradient ──────────────────────────────────────────────
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: size.height * 0.55,
+              child: const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Color(0xF5000000),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // ── Scan frame ──────────────────────────────────────────────────
+            Positioned(
+              top: scanBoxTop,
+              left: scanBoxLeft,
+              child: Container(
+                width: scanBoxWidth,
+                height: scanBoxHeight,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: cs.primary, width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: cs.primary.withValues(alpha: 0.35),
+                      blurRadius: 14,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Баркод энэ хүрээнд байрлуулна уу',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // ── Top header ──────────────────────────────────────────────────
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: EdgeInsets.fromLTRB(14, topInset + 8, 14, 14),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xE6000000),
+                      Color(0x80000000),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    IconButton.filled(
+                      onPressed: () => Navigator.pop(context, hasEntries),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.black54,
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.check_rounded),
+                      tooltip: 'Дуусгах',
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'Баркодоор тоолох',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            hasEntries
+                                ? '${_scanned.length} төрөл · $_totalScanned ширхэг тоологдлоо'
+                                : 'Баркод уншуулахад тоог нэмнэ',
+                            style: const TextStyle(
+                                color: Colors.white60, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton.filled(
+                      onPressed: () async {
+                        try {
+                          await _controller.toggleTorch();
+                          setState(() => _torchOn = !_torchOn);
+                        } catch (_) {}
+                      },
+                      style: IconButton.styleFrom(
+                        backgroundColor: _torchOn
+                            ? Colors.amber.shade700
+                            : Colors.black54,
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: Icon(_torchOn
+                          ? Icons.flash_on_rounded
+                          : Icons.flash_off_rounded),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Feedback banner ──────────────────────────────────────────────
+            if (_feedbackText != null)
+              Positioned(
+                top: scanBoxTop + scanBoxHeight + 14,
+                left: 20,
+                right: 20,
+                child: AnimatedOpacity(
+                  opacity: 1.0,
+                  duration: const Duration(milliseconds: 150),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _feedbackError
+                          ? Colors.red.shade700.withValues(alpha: 0.92)
+                          : Colors.green.shade700.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _feedbackError
+                              ? Icons.error_outline_rounded
+                              : Icons.check_circle_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _feedbackText!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+            // ── Scanned list + Done button ───────────────────────────────────
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (hasEntries) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.inventory_2_rounded,
+                                color: Colors.white54, size: 15),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Тоологдсон — $_totalScanned ширхэг',
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ConstrainedBox(
+                        constraints:
+                            BoxConstraints(maxHeight: size.height * 0.32),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 12),
+                          itemCount: entries.length,
+                          itemBuilder: (_, i) {
+                            final e = entries[i];
+                            return Container(
+                              height: 52,
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color:
+                                    Colors.white.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: e.error != null
+                                      ? Colors.red.shade400
+                                          .withValues(alpha: 0.6)
+                                      : Colors.white
+                                          .withValues(alpha: 0.15),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          e.line.ner,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        Text(
+                                          e.line.code,
+                                          style: const TextStyle(
+                                            color: Colors.white38,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  if (e.saving)
+                                    const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white54,
+                                      ),
+                                    )
+                                  else
+                                    Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          '+${e.addedQty}',
+                                          style: TextStyle(
+                                            color: Colors.green.shade400,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Нийт: ${_fmt(e.newTotal)}',
+                                          style: const TextStyle(
+                                            color: Colors.white54,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      child: SizedBox(
+                        height: 54,
+                        child: FilledButton.icon(
+                          onPressed: () =>
+                              Navigator.pop(context, hasEntries),
+                          icon: const Icon(Icons.check_rounded),
+                          label: Text(
+                            hasEntries
+                                ? 'Дуусгах  ·  $_totalScanned ширхэг тоологдлоо'
+                                : 'Дуусгах',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
+                          style: FilledButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),

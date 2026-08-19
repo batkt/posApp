@@ -3,12 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
+import '../../widgets/chat_fab.dart';
 import '../../widgets/kiosk_drawer.dart';
 import '../../widgets/parked_guilgee_sheet.dart';
 import '../main/khaalt_screen.dart';
 import '../pos/pos_screen.dart';
-
-import '../main/support_chat_page.dart';
 
 /// Staff with only `/khyanalt/mobile` in `tsonkhniiTokhirgoo`: same sale flow as kiosk
 /// but no side drawer, two-step layout, and Бэлэн / **Карт** (UniPOS) / Данс.
@@ -74,7 +73,11 @@ class _MobilePosMainScreenState extends State<MobilePosMainScreen> {
           if (auth.canSubmitPosSales && auth.posSession != null)
             IconButton(
               tooltip: l10n.tr('pos_park_queue'),
-              onPressed: () => showParkedGuilgeeSheet(context),
+              onPressed: () => showParkedGuilgeeSheet(
+                context,
+                cashierMode: true,
+                mobileStaffMode: true,
+              ),
               icon: const Icon(Icons.inventory_2_outlined),
             ),
           if (auth.canSubmitPosSales)
@@ -85,24 +88,19 @@ class _MobilePosMainScreenState extends State<MobilePosMainScreen> {
             ),
         ],
       ),
-      body: const SafeArea(
-        child: POSScreen(
-          cashierMode: true,
-          mobileStaffMode: true,
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SupportChatPage()),
-          );
-        },
-        backgroundColor: colorScheme.primary,
-        foregroundColor: Colors.white,
-        elevation: 6,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.support_agent_rounded, size: 28),
+      body: const Stack(
+        children: [
+          SafeArea(
+            child: POSScreen(
+              cashierMode: true,
+              mobileStaffMode: true,
+            ),
+          ),
+          // Draggable floating chatbot button — same as MainScreen; this
+          // screen (mobile POS shell) never routes through MainScreen, so
+          // without this the draggable chat button never appears here.
+          ChatFab(),
+        ],
       ),
     );
   }

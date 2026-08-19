@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'api_service.dart';
 import '../models/cart_model.dart';
+import '../utils/clean_barcode.dart';
 
 /// Matches zevback CRUD / posBack list handlers (`khuudasniiDugaar`, `khuudasniiKhemjee`).
 const _khuudasniiDugaar = 'khuudasniiDugaar';
@@ -34,6 +35,8 @@ class ProductService {
   }) async {
     try {
       final trimmedSearch = search.trim();
+      final cleanedSearch = cleanBarcode(trimmedSearch);
+
       final Map<String, dynamic> queryMap = {
         'baiguullagiinId': baiguullagiinId,
         'salbariinId': salbariinId,
@@ -43,7 +46,7 @@ class ProductService {
       if (trimmedSearch.isNotEmpty) {
         final escapedSearch =
             trimmedSearch.replaceAll(RegExp(r'[.*+?^${}()|[\]\\]'), r'\$&');
-        queryMap[r'$or'] = [
+        final orList = <Map<String, dynamic>>[
           {
             'ner': {r'$regex': escapedSearch, r'$options': 'i'}
           },
@@ -63,6 +66,26 @@ class ProductService {
             'boginoNer': {r'$regex': escapedSearch, r'$options': 'i'}
           },
         ];
+
+        if (cleanedSearch.isNotEmpty && cleanedSearch != trimmedSearch) {
+          final escapedCleaned =
+              cleanedSearch.replaceAll(RegExp(r'[.*+?^${}()|[\]\\]'), r'\$&');
+          orList.addAll([
+            {
+              'barCode': {r'$regex': escapedCleaned, r'$options': 'i'}
+            },
+            {
+              'code': {r'$regex': escapedCleaned, r'$options': 'i'}
+            },
+            {
+              'olonBarCodeJagsaalt.barCode': {
+                r'$regex': escapedCleaned,
+                r'$options': 'i'
+              }
+            },
+          ]);
+        }
+        queryMap[r'$or'] = orList;
       }
 
       final response = await _apiService.get<Map<String, dynamic>>(
@@ -297,13 +320,18 @@ class ProductService {
     return (found: false, ner: null, date: null, bunaKod: null);
   }
 
-  /// `POST /aguulakh` — same as web inventory add (posBack `crud`).
+  /// `POST /baraaBurtgeye` — same route the web "Бараа бүртгэх" form uses.
+  /// Unlike the generic `POST /aguulakh` (crud), this also writes the
+  /// "Эхний үлдэгдэл" ledger entry (posBack orlogZarlagiinTuukh) backing the
+  /// initial stock, price-change history, and NOAT/NHAT calc — skipping it
+  /// left app-registered products with stock in `Aguulakh.uldegdel` but no
+  /// matching ledger record, so bodithUldegdel (tailan) never matched.
   Future<({bool success, String? error, String? insertedId})> createAguulakh({
     required Map<String, dynamic> fields,
   }) async {
     try {
       final response = await _apiService.post<dynamic>(
-        '/aguulakh',
+        '/baraaBurtgeye',
         body: fields,
         parser: (d) => d,
       );

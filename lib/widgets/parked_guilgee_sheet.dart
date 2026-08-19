@@ -5,6 +5,7 @@ import '../models/auth_model.dart';
 import '../models/inventory_model.dart';
 import '../models/locale_model.dart';
 import '../models/sales_model.dart';
+import '../payment/payment_navigation.dart';
 import '../services/guilgee_service.dart';
 import '../utils/mnt_amount_formatter.dart';
 import '../utils/mongolian_date_formatter.dart';
@@ -18,7 +19,15 @@ void _restockAndClearCart(BuildContext context, SalesModel sales) {
 }
 
 /// Parked `guilgeeniiTuukh` (`tuluv: 0`) — same flow as web **Хүлээлгэ** list + recall.
-Future<void> showParkedGuilgeeSheet(BuildContext parentContext) async {
+///
+/// [cashierMode]/[mobileStaffMode] should mirror whatever the calling screen
+/// passes to its own `POSScreen` (if any), so recalling a parked sale opens
+/// the same payment screen the cashier would otherwise reach from that tab.
+Future<void> showParkedGuilgeeSheet(
+  BuildContext parentContext, {
+  bool cashierMode = false,
+  bool mobileStaffMode = false,
+}) async {
   final auth = parentContext.read<AuthModel>();
   if (!auth.canSubmitPosSales || auth.posSession == null) return;
 
@@ -27,14 +36,24 @@ Future<void> showParkedGuilgeeSheet(BuildContext parentContext) async {
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => _ParkedGuilgeeSheetShell(parentContext: parentContext),
+    builder: (ctx) => _ParkedGuilgeeSheetShell(
+      parentContext: parentContext,
+      cashierMode: cashierMode,
+      mobileStaffMode: mobileStaffMode,
+    ),
   );
 }
 
 class _ParkedGuilgeeSheetShell extends StatefulWidget {
-  const _ParkedGuilgeeSheetShell({required this.parentContext});
+  const _ParkedGuilgeeSheetShell({
+    required this.parentContext,
+    required this.cashierMode,
+    required this.mobileStaffMode,
+  });
 
   final BuildContext parentContext;
+  final bool cashierMode;
+  final bool mobileStaffMode;
 
   @override
   State<_ParkedGuilgeeSheetShell> createState() =>
@@ -188,11 +207,18 @@ class _ParkedGuilgeeSheetShellState extends State<_ParkedGuilgeeSheetShell> {
     sales.restoreParkedSale(lines, guilgeeniiDugaar: row.guilgeeniiDugaar);
 
     if (sheetContext.mounted) Navigator.pop(sheetContext);
-    if (widget.parentContext.mounted) {
-      ScaffoldMessenger.of(widget.parentContext).showSnackBar(
-        SnackBar(content: Text(l10n.tr('pos_park_recalled'))),
-      );
-    }
+    if (!widget.parentContext.mounted) return;
+    ScaffoldMessenger.of(widget.parentContext).showSnackBar(
+      SnackBar(content: Text(l10n.tr('pos_park_recalled'))),
+    );
+    // Jump straight to payment regardless of which tab this was opened from —
+    // pushed on the parent's Navigator, so popping it (paid or cancelled)
+    // returns to that same tab, not a fixed screen.
+    await openPosPaymentScreen(
+      widget.parentContext,
+      cashierMode: widget.cashierMode,
+      mobileStaffMode: widget.mobileStaffMode,
+    );
   }
 
   @override

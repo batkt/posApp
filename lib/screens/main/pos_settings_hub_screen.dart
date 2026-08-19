@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
@@ -11,6 +12,7 @@ import '../../services/version_service.dart';
 import '../../services/api_service.dart';
 import '../../models/category_model.dart';
 import '../../utils/mongolian_date_formatter.dart';
+import '../../widgets/chat_fab.dart';
 
 /// Web parity: `pages/khyanalt/tokhirgoo` — profile + org/branch settings.
 
@@ -52,6 +54,8 @@ IconData _posSettingsIcon(PosSettingsSection s) {
       return Icons.door_front_door_outlined;
     case PosSettingsSection.branches:
       return Icons.storefront_outlined;
+    case PosSettingsSection.chatbot:
+      return Icons.smart_toy_outlined;
   }
 }
 
@@ -92,6 +96,7 @@ enum PosSettingsSection {
   bonus,
   door,
   branches,
+  chatbot,
 }
 
 class _PosSettingsHubScreenState extends State<PosSettingsHubScreen> {
@@ -340,6 +345,8 @@ class _PosSettingsHubScreenState extends State<PosSettingsHubScreen> {
           l10n: l10n,
           baiguullagiinId: pos.baiguullagiinId,
         );
+      case PosSettingsSection.chatbot:
+        return const _ChatbotSettingsPanel();
     }
   }
 
@@ -365,6 +372,8 @@ String posSettingsSectionLabel(AppLocalizations l10n, PosSettingsSection s) {
       return l10n.tr('pos_settings_nav_door');
     case PosSettingsSection.branches:
       return l10n.tr('pos_settings_nav_branches');
+    case PosSettingsSection.chatbot:
+      return 'Чатбот';
   }
 }
 
@@ -1608,6 +1617,234 @@ class _VersionControlPanelState extends State<_VersionControlPanel> {
           label: const Text('Save Version'),
         ),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chatbot Settings Panel
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ChatbotSettingsPanel extends StatefulWidget {
+  const _ChatbotSettingsPanel();
+
+  @override
+  State<_ChatbotSettingsPanel> createState() => _ChatbotSettingsPanelState();
+}
+
+class _ChatbotSettingsPanelState extends State<_ChatbotSettingsPanel> {
+  bool _visible = true;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    chatFabNotifier.addListener(_onExternal);
+  }
+
+  @override
+  void dispose() {
+    chatFabNotifier.removeListener(_onExternal);
+    super.dispose();
+  }
+
+  void _onExternal() {
+    if (!mounted) return;
+    setState(() => _visible = chatFabNotifier.value);
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _visible = prefs.getBool('chat_fab_visible') ?? true;
+      _loaded = true;
+    });
+  }
+
+  Future<void> _toggle(bool v) async {
+    setState(() => _visible = v);
+    // Sync global notifier (ChatFab listens to it).
+    chatFabNotifier.removeListener(_onExternal);
+    chatFabNotifier.value = v;
+    chatFabNotifier.addListener(_onExternal);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('chat_fab_visible', v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    if (!_loaded) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header ──────────────────────────────────────────────────────
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF4469), Color(0xFFff6b8a)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x44FF4469),
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.support_agent_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Чатбот',
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    'Тусламж & Дэмжлэгийн товч',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // ── Toggle card ──────────────────────────────────────────────────
+          Material(
+            color: cs.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              onTap: () => _toggle(!_visible),
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: _visible
+                            ? const Color(0xFFFF4469).withValues(alpha: 0.12)
+                            : cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        _visible
+                            ? Icons.visibility_rounded
+                            : Icons.visibility_off_rounded,
+                        color: _visible
+                            ? const Color(0xFFFF4469)
+                            : cs.onSurfaceVariant,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Чатбот товч харуулах',
+                            style: textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            'Нүүр дэлгэц дээр хөдөлдөг товч гарна',
+                            style: textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _visible,
+                      onChanged: _toggle,
+                      activeThumbColor: const Color(0xFFFF4469),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Info tip ─────────────────────────────────────────────────────
+          Material(
+            color: cs.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 20,
+                    color: cs.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Хэрэглэх заавар',
+                          style: textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: cs.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '• Товчийг чирч байрлуулна уу\n'
+                          '• Дэлгэцийн доод хэсэг рүү чирвэл устгагдана\n'
+                          '• Товчийг дахин харуулахыг хүсвэл энэ тохиргооноос асаана уу',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            height: 1.6,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

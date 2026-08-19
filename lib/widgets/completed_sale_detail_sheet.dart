@@ -12,6 +12,10 @@ import 'authenticated_image.dart';
 
 String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 
+/// Breakdown sub-amounts (subtotal, discount, VAT, per-unit price) show no ₮
+/// suffix — only the hero/grand totals do.
+String _fmtMntPlain(double v) => MntAmountFormatter.format(v);
+
 String? _saleStaffCaption(Map<String, dynamic>? a) {
   if (a == null || a.isEmpty) return null;
   final ner = a['ner'] ?? a['name'];
@@ -215,8 +219,6 @@ class _SaleHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = colorScheme.primary;
-
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -291,19 +293,6 @@ class _SaleHeader extends StatelessWidget {
           ),
 
           const SizedBox(height: 10),
-
-          // Total amount — hero
-          Text(
-            _fmtMnt(sale.total),
-            style: textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: colorScheme.onSurface,
-              fontFeatures: const [FontFeature.tabularFigures()],
-              letterSpacing: -0.5,
-            ),
-          ),
-
-          const SizedBox(height: 6),
 
           // Date + time
           Row(
@@ -649,7 +638,7 @@ class _ProductItemCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${_fmtMnt(item.unitPrice)} / нэж',
+                  '${_fmtMntPlain(item.unitPrice)} / ш',
                   style: textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
@@ -873,7 +862,9 @@ class _PriceRow extends StatelessWidget {
           style: textTheme.bodyMedium?.copyWith(color: labelColor),
         ),
         Text(
-          isDeduction ? '- ${_fmtMnt(amount.abs())}' : _fmtMnt(amount),
+          isDeduction
+              ? '- ${_fmtMntPlain(amount.abs())}'
+              : _fmtMntPlain(amount),
           style: textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w600,
             color: amountColor,

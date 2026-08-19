@@ -711,7 +711,6 @@ class _SaleCard extends StatelessWidget {
         .replaceAll('{n}', '${sale.items.length}');
     final staffCaption = _saleStaffCaption(sale.ajiltan);
     final payColor = _paymentColor(sale.paymentMethod, colorScheme);
-    final relTime = _formatRelativeTime(sale.timestamp);
 
     return Material(
       color: colorScheme.surface,
@@ -790,24 +789,6 @@ class _SaleCard extends StatelessWidget {
                                   ],
                                 ),
                               ),
-                              if (relTime.isNotEmpty) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 1),
-                                  decoration: BoxDecoration(
-                                    color: colorScheme.surfaceContainerHighest,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    relTime,
-                                    style: textTheme.labelSmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ),
-                              ],
                             ],
                           ),
                           if (staffCaption != null) ...[
@@ -880,35 +861,32 @@ class _SaleCard extends StatelessWidget {
                             ],
                           ),
                         ),
-                        if (sale.ebarimtAvsan) ...[
+                        if (sale.ebarimtAvsan || sale.nhhat > 0.009) ...[
                           const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: colorScheme.primaryContainer
-                                  .withValues(alpha: 0.5),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.receipt_rounded,
-                                  size: 10,
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            alignment: WrapAlignment.end,
+                            children: [
+                              if (sale.ebarimtAvsan)
+                                _SaleTag(
+                                  icon: Icons.receipt_rounded,
+                                  label: l10n.tr('ebarimt_badge'),
                                   color: colorScheme.primary,
+                                  background: colorScheme.primaryContainer
+                                      .withValues(alpha: 0.5),
+                                  textTheme: textTheme,
                                 ),
-                                const SizedBox(width: 3),
-                                Text(
-                                  'eBarimt',
-                                  style: textTheme.labelSmall?.copyWith(
-                                    color: colorScheme.primary,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 10,
-                                  ),
+                              if (sale.nhhat > 0.009)
+                                _SaleTag(
+                                  icon: Icons.local_fire_department_rounded,
+                                  label: 'НХАТ',
+                                  color: colorScheme.tertiary,
+                                  background: colorScheme.tertiaryContainer
+                                      .withValues(alpha: 0.5),
+                                  textTheme: textTheme,
                                 ),
-                              ],
-                            ),
+                            ],
                           ),
                         ],
                       ],
@@ -975,11 +953,45 @@ class _SaleCard extends StatelessWidget {
 
 }
 
-String _formatRelativeTime(DateTime timestamp) {
-  final diff = DateTime.now().difference(timestamp.toLocal());
-  if (diff.inSeconds < 60) return '${diff.inSeconds}с өмнө';
-  if (diff.inMinutes < 60) return '${diff.inMinutes}м өмнө';
-  if (diff.inHours < 24) return '${diff.inHours}ц өмнө';
-  if (diff.inDays < 7) return '${diff.inDays}х өмнө';
-  return '';
+/// Small pill badge for e-barimt / НХАТ flags on a [_SaleCard].
+class _SaleTag extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Color background;
+  final TextTheme textTheme;
+
+  const _SaleTag({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.background,
+    required this.textTheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: color),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
