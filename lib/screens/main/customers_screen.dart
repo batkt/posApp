@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/customer_model.dart';
 import '../../models/locale_model.dart';
-import '../../theme/app_theme.dart';
+import '../../utils/app_snackbar.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import 'purchase_list_screen.dart';
 
@@ -285,15 +285,10 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
     if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthModel>();
     if (auth.posSession == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Салбарын сесс олдсонгүй'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      showAppSnackBar(context, 'Салбарын сесс олдсонгүй',
+          variant: AppSnackVariant.error);
       return;
     }
-    final messenger = ScaffoldMessenger.of(context);
     final model = context.read<CustomerModel>();
     setState(() => _submitting = true);
     final msg = await model.registerCustomer(
@@ -317,22 +312,13 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
       _register.clear();
       _mail.clear();
       _khayag.clear();
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Амжилттай бүртгэгдлээ'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+      showAppSnackBar(context, 'Амжилттай бүртгэгдлээ',
+          variant: AppSnackVariant.success);
       if (context.mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
     } else {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      showAppSnackBar(context, msg, variant: AppSnackVariant.error);
     }
   }
 
@@ -464,8 +450,12 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
                               border: const OutlineInputBorder(),
                             ),
                             validator: (v) {
-                              if (v == null || v.trim().isEmpty) {
-                                return 'Заавал';
+                              final val = v?.trim() ?? '';
+                              if (val.isEmpty) {
+                                return 'Овог оруулна уу';
+                              }
+                              if (val.length < 2) {
+                                return 'Овог доод тал нь 2 үсэгтэй байна';
                               }
                               return null;
                             },
@@ -475,13 +465,23 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
                         TextFormField(
                           controller: _ner,
                           decoration: InputDecoration(
-                            labelText: l10n.tr('customer_field_ner'),
+                            labelText: _khariltsagchiinTurul == 'Иргэн'
+                                ? l10n.tr('customer_field_ner')
+                                : 'Байгууллагын нэр',
                             filled: true,
                             border: const OutlineInputBorder(),
                           ),
                           validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'Заавал';
+                            final val = v?.trim() ?? '';
+                            if (val.isEmpty) {
+                              return _khariltsagchiinTurul == 'Иргэн'
+                                  ? 'Нэр оруулна уу'
+                                  : 'Байгууллагын нэр оруулна уу';
+                            }
+                            if (val.length < 2) {
+                              return _khariltsagchiinTurul == 'Иргэн'
+                                  ? 'Нэр доод тал нь 2 үсэгтэй байна'
+                                  : 'Байгууллагын нэр доод тал нь 2 үсэгтэй байна';
                             }
                             return null;
                           },
@@ -496,8 +496,13 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
                             border: const OutlineInputBorder(),
                           ),
                           validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'Заавал';
+                            final val = v?.trim() ?? '';
+                            if (val.isEmpty) {
+                              return 'Утасны дугаар оруулна уу';
+                            }
+                            final digitsOnly = val.replaceAll(RegExp(r'\D'), '');
+                            if (digitsOnly.length < 8) {
+                              return 'Утасны дугаар доод тал нь 8 оронтой тоо байна';
                             }
                             return null;
                           },
@@ -510,6 +515,13 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
                             filled: true,
                             border: const OutlineInputBorder(),
                           ),
+                          validator: (v) {
+                            final val = v?.trim() ?? '';
+                            if (val.isNotEmpty && val.length < 7) {
+                              return 'Регистрийн дугаар доод тал нь 7 оронтой байна';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 10),
                         TextFormField(
@@ -520,6 +532,14 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
                             filled: true,
                             border: const OutlineInputBorder(),
                           ),
+                          validator: (v) {
+                            final val = v?.trim() ?? '';
+                            if (val.isNotEmpty &&
+                                (!val.contains('@') || !val.contains('.'))) {
+                              return 'Зөв и-мэйл хаяг оруулна уу';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 10),
                         TextFormField(
@@ -575,104 +595,105 @@ class _CustomerCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.6),
+        ),
+      ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Avatar
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: colorScheme.primaryContainer,
-                child: Text(
-                  customer.initialsLetter,
-                  style: textTheme.titleLarge?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-
-              // Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            customer.name,
-                            style: textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        _TypeChip(type: customer.type),
-                      ],
+              // Top row: Avatar + Name + Type Chip pushed to top-right
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: colorScheme.primaryContainer,
+                    child: Text(
+                      customer.initialsLetter,
+                      style: textTheme.titleMedium?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Row(
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.phone,
-                          size: 14,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 4),
                         Text(
-                          customer.phone,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
+                          customer.name,
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        if (customer.email != null) ...[
-                          const SizedBox(width: 12),
-                          Icon(
-                            Icons.email,
-                            size: 14,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              customer.email!,
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.phone_rounded,
+                              size: 13,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              customer.phone,
                               style: textTheme.bodySmall?.copyWith(
                                 color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w500,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        _StatChip(
-                          icon: Icons.shopping_bag,
-                          value: '${customer.totalPurchases}',
-                          label: 'захиалга',
-                        ),
-                        const SizedBox(width: 12),
-                        _StatChip(
-                          icon: Icons.payments,
-                          value: MntAmountFormatter.formatTugrik(customer.totalSpent),
-                          label: 'нийт',
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 8),
+                  _TypeChip(type: customer.type),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                  ),
+                ],
               ),
-
-              const Icon(Icons.chevron_right),
+              const SizedBox(height: 12),
+              Divider(
+                height: 1,
+                color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _StatBadge(
+                    icon: Icons.shopping_bag_outlined,
+                    label: 'Захиалга',
+                    value: '${customer.totalPurchases} удаа',
+                    colorScheme: colorScheme,
+                    textTheme: textTheme,
+                  ),
+                  _StatBadge(
+                    icon: Icons.payments_outlined,
+                    label: 'Нийт зарцуулсан',
+                    value: MntAmountFormatter.formatTugrikSpaced(
+                        customer.totalSpent),
+                    colorScheme: colorScheme,
+                    textTheme: textTheme,
+                    isHighlight: true,
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -726,46 +747,72 @@ class _TypeChip extends StatelessWidget {
   }
 }
 
-class _StatChip extends StatelessWidget {
+class _StatBadge extends StatelessWidget {
   final IconData icon;
-  final String value;
   final String label;
+  final String value;
+  final ColorScheme colorScheme;
+  final TextTheme textTheme;
+  final bool isHighlight;
 
-  const _StatChip({
+  const _StatBadge({
     required this.icon,
-    required this.value,
     required this.label,
+    required this.value,
+    required this.colorScheme,
+    required this.textTheme,
+    this.isHighlight = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          icon,
-          size: 14,
-          color: colorScheme.primary,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isHighlight
+            ? colorScheme.primaryContainer.withValues(alpha: 0.4)
+            : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isHighlight
+              ? colorScheme.primary.withValues(alpha: 0.2)
+              : colorScheme.outlineVariant.withValues(alpha: 0.4),
         ),
-        const SizedBox(width: 4),
-        Text(
-          value,
-          style: textTheme.bodySmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: colorScheme.onSurface,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 15,
+            color:
+                isHighlight ? colorScheme.primary : colorScheme.onSurfaceVariant,
           ),
-        ),
-        const SizedBox(width: 2),
-        Text(
-          label,
-          style: textTheme.bodySmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
+          const SizedBox(width: 6),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontSize: 10,
+                ),
+              ),
+              Text(
+                value,
+                style: textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color:
+                      isHighlight ? colorScheme.primary : colorScheme.onSurface,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

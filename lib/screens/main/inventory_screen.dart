@@ -448,7 +448,7 @@ class _InventoryItemTile extends StatelessWidget {
                         ),
                         // ₮ Price — bottom right
                         Text(
-                          MntAmountFormatter.formatTugrik(product.price),
+                          MntAmountFormatter.format(product.price),
                           style: textTheme.bodyMedium?.copyWith(
                             color: colorScheme.primary,
                             fontWeight: FontWeight.w700,

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/inventory_model.dart';
 import '../models/locale_model.dart';
 import '../models/sales_model.dart';
+import '../utils/app_snackbar.dart';
 
 String _formatPiecesField(double p) =>
     p % 1 == 0 ? p.toStringAsFixed(0) : p.toStringAsFixed(2);
@@ -103,12 +104,8 @@ class _BoxLinePiecesEditorState extends State<_BoxLinePiecesEditor> {
     final l10n = AppLocalizations.of(ctx);
     final v = _parsePiecesInput(_text.text);
     if (v == null) {
-      ScaffoldMessenger.of(ctx).showSnackBar(
-        SnackBar(
-          content: Text(l10n.tr('pos_sale_invalid_amount')),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showAppSnackBar(ctx, l10n.tr('pos_sale_invalid_amount'),
+          variant: AppSnackVariant.warning);
       return;
     }
     final pieces = v.clamp(0.01, widget.maxPieces);

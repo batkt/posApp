@@ -114,6 +114,48 @@ class HudaldanAvaltPageResult {
       HudaldanAvaltPageResult._(ok: false, error: message);
 }
 
+class HudaldanAvaltBaraaItem {
+  HudaldanAvaltBaraaItem({
+    required this.ner,
+    required this.code,
+    required this.too,
+    required this.urtugUne,
+    required this.zarakhUne,
+    this.khelber,
+  });
+
+  factory HudaldanAvaltBaraaItem.fromJson(Map<String, dynamic> m) {
+    final ner = m['baraaniiNer']?.toString() ??
+        m['ner']?.toString() ??
+        m['code']?.toString() ??
+        'Бараа';
+    final code = m['code']?.toString() ?? m['barkod']?.toString() ?? '';
+    final t = m['too'];
+    final too = t is num ? t.toDouble() : double.tryParse('$t') ?? 1.0;
+    final uu = m['urtugUne'] ?? m['negjUne'] ?? m['urtug'] ?? 0;
+    final urtugUne = uu is num ? uu.toDouble() : double.tryParse('$uu') ?? 0.0;
+    final zu = m['zarakhUne'] ?? m['une'] ?? 0;
+    final zarakhUne = zu is num ? zu.toDouble() : double.tryParse('$zu') ?? 0.0;
+    final khelber = m['khelber']?.toString() ?? m['tulbur']?.toString();
+
+    return HudaldanAvaltBaraaItem(
+      ner: ner,
+      code: code,
+      too: too,
+      urtugUne: urtugUne,
+      zarakhUne: zarakhUne,
+      khelber: khelber,
+    );
+  }
+
+  final String ner;
+  final String code;
+  final double too;
+  final double urtugUne;
+  final double zarakhUne;
+  final String? khelber;
+}
+
 class HudaldanAvaltRow {
   HudaldanAvaltRow({
     required this.id,
@@ -122,16 +164,21 @@ class HudaldanAvaltRow {
     required this.niitDun,
     required this.lineQtySum,
     required this.khelber,
+    this.items = const [],
+    this.rawMap = const {},
   });
 
   factory HudaldanAvaltRow.fromJson(Map<String, dynamic> m) {
     final baraanuud = m['baraanuud'];
+    final items = <HudaldanAvaltBaraaItem>[];
     double qty = 0;
     if (baraanuud is List) {
       for (final b in baraanuud) {
         if (b is Map) {
-          final t = b['too'];
-          qty += t is num ? t.toDouble() : double.tryParse('$t') ?? 0;
+          final item =
+              HudaldanAvaltBaraaItem.fromJson(Map<String, dynamic>.from(b));
+          items.add(item);
+          qty += item.too;
         }
       }
     }
@@ -159,6 +206,8 @@ class HudaldanAvaltRow {
       niitDun: niitDun,
       lineQtySum: qty,
       khelber: m['khelber']?.toString(),
+      items: items,
+      rawMap: m,
     );
   }
 
@@ -168,4 +217,6 @@ class HudaldanAvaltRow {
   final double niitDun;
   final double lineQtySum;
   final String? khelber;
+  final List<HudaldanAvaltBaraaItem> items;
+  final Map<String, dynamic> rawMap;
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../services/niimbot_printer_service.dart';
+import '../utils/app_snackbar.dart';
 import '../utils/niimbot_label_builder.dart';
 
 class NiimbotPrinterDialog extends StatefulWidget {
@@ -198,9 +199,8 @@ class _NiimbotPrinterDialogState extends State<NiimbotPrinterDialog> {
 
   Future<void> _onPrintPressed() async {
     if (_selectedDevice == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Эхлээд Niimbot хэвлэгч сонгоно уу')),
-      );
+      showAppSnackBar(context, 'Эхлээд Niimbot хэвлэгч сонгоно уу',
+          variant: AppSnackVariant.warning);
       return;
     }
     if (_labelImageBytes == null) return;
@@ -229,11 +229,10 @@ class _NiimbotPrinterDialogState extends State<NiimbotPrinterDialog> {
         _statusMessage = res.message;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(res.message),
-          backgroundColor: res.success ? Colors.green : Colors.red,
-        ),
+      showAppSnackBar(
+        context,
+        res.message,
+        variant: res.success ? AppSnackVariant.success : AppSnackVariant.error,
       );
     }
   }
@@ -282,11 +281,10 @@ class _NiimbotPrinterDialogState extends State<NiimbotPrinterDialog> {
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: logs));
                 Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Хэвлэгчийн лог санамжид амжилттай хуулагдлаа!'),
-                    backgroundColor: Colors.green,
-                  ),
+                showAppSnackBar(
+                  context,
+                  'Хэвлэгчийн лог санамжид амжилттай хуулагдлаа!',
+                  variant: AppSnackVariant.success,
                 );
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white),

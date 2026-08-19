@@ -7,6 +7,7 @@ import '../models/locale_model.dart';
 import '../models/sales_model.dart';
 import '../payment/payment_navigation.dart';
 import '../services/guilgee_service.dart';
+import '../utils/app_snackbar.dart';
 import '../utils/mnt_amount_formatter.dart';
 import '../utils/mongolian_date_formatter.dart';
 
@@ -112,23 +113,20 @@ class _ParkedGuilgeeSheetShellState extends State<_ParkedGuilgeeSheetShell> {
     );
     if (ok != true || !sheetContext.mounted) return;
     if (row.mongoId.isEmpty) {
-      ScaffoldMessenger.of(sheetContext).showSnackBar(
-        SnackBar(content: Text(l10n.tr('pos_park_delete_failed'))),
-      );
+      showAppSnackBar(sheetContext, l10n.tr('pos_park_delete_failed'),
+          variant: AppSnackVariant.error);
       return;
     }
 
     final deleted = await guilgeeService.deleteGuilgeeniiTuukhById(row.mongoId);
     if (!sheetContext.mounted) return;
     if (!deleted) {
-      ScaffoldMessenger.of(sheetContext).showSnackBar(
-        SnackBar(content: Text(l10n.tr('pos_park_delete_failed'))),
-      );
+      showAppSnackBar(sheetContext, l10n.tr('pos_park_delete_failed'),
+          variant: AppSnackVariant.error);
       return;
     }
-    ScaffoldMessenger.of(sheetContext).showSnackBar(
-      SnackBar(content: Text(l10n.tr('pos_park_delete_success'))),
-    );
+    showAppSnackBar(sheetContext, l10n.tr('pos_park_delete_success'),
+        variant: AppSnackVariant.success);
     await _onRefresh();
   }
 
@@ -184,17 +182,15 @@ class _ParkedGuilgeeSheetShellState extends State<_ParkedGuilgeeSheetShell> {
     final deleted = await guilgeeService.deleteGuilgeeniiTuukhById(row.mongoId);
     if (!sheetContext.mounted) return;
     if (!deleted) {
-      ScaffoldMessenger.of(sheetContext).showSnackBar(
-        SnackBar(content: Text(l10n.tr('pos_park_recall_failed'))),
-      );
+      showAppSnackBar(sheetContext, l10n.tr('pos_park_recall_failed'),
+          variant: AppSnackVariant.error);
       return;
     }
 
     final lines = saleItemsFromParkedGuilgeeDoc(row.doc);
     if (lines.isEmpty) {
-      ScaffoldMessenger.of(sheetContext).showSnackBar(
-        SnackBar(content: Text(l10n.tr('pos_park_recall_failed'))),
-      );
+      showAppSnackBar(sheetContext, l10n.tr('pos_park_recall_failed'),
+          variant: AppSnackVariant.error);
       return;
     }
 
@@ -208,9 +204,8 @@ class _ParkedGuilgeeSheetShellState extends State<_ParkedGuilgeeSheetShell> {
 
     if (sheetContext.mounted) Navigator.pop(sheetContext);
     if (!widget.parentContext.mounted) return;
-    ScaffoldMessenger.of(widget.parentContext).showSnackBar(
-      SnackBar(content: Text(l10n.tr('pos_park_recalled'))),
-    );
+    showAppSnackBar(widget.parentContext, l10n.tr('pos_park_recalled'),
+        variant: AppSnackVariant.success);
     // Jump straight to payment regardless of which tab this was opened from —
     // pushed on the parent's Navigator, so popping it (paid or cancelled)
     // returns to that same tab, not a fixed screen.

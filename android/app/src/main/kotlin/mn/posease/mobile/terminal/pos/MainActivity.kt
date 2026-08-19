@@ -296,7 +296,15 @@ class MainActivity : FlutterFragmentActivity() {
                                     return@setMethodCallHandler
                                 }
                                 pendingEposInAppResult = result
-                                eposBridgePb.startPrintBitmap(base64)
+                                if (!eposBridgePb.startPrintBitmap(base64)) {
+                                    // Same fail-fast as the other EPOS-in-app call sites: no
+                                    // onResult/onActivityResult will ever arrive for a transaction
+                                    // the SDK never started, and pendingEposInAppResult gates every
+                                    // other EPOS call — leaving it set here silently "BUSY"-locks
+                                    // all later prints/purchases for the rest of the process.
+                                    pendingEposInAppResult = null
+                                    result.error("PRINT_ERROR", "EPOS SDK rejected the print request (startTrans returned false)", null)
+                                }
                                 return@setMethodCallHandler
                             }
                             val amount = call.argument<String>("amount") ?: "0.00"

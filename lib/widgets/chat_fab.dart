@@ -122,12 +122,12 @@ class _ChatFabState extends State<ChatFab> with SingleTickerProviderStateMixin {
 
   Offset _defaultPos(Size screen) => Offset(
         screen.width - _kBtnSize - 18,
-        screen.height - _kBtnSize - 96,
+        screen.height - _kBtnSize - 190,
       );
 
   Offset _clamp(Offset p, Size screen) => Offset(
         p.dx.clamp(0.0, screen.width - _kBtnSize),
-        p.dy.clamp(0.0, screen.height - _kBtnSize),
+        p.dy.clamp(0.0, screen.height - _kBtnSize - 80),
       );
 
   bool _hitTrash(Offset p, Size screen) =>

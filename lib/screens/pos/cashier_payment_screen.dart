@@ -1933,7 +1933,7 @@ class _KhariltsagchPromoSheetState extends State<_KhariltsagchPromoSheet> {
                           )
                         else
                           Text(
-                            'Хөнгөлөх дүн: ${_selected!['khunglukhEsekh'] == true ? MntAmountFormatter.format(_num(_selected!['khunglukhDun'])) : "0"} ₮',
+                            'Хөнгөлөх дүн: ${_selected!['khunglukhEsekh'] == true ? MntAmountFormatter.format(_num(_selected!['khunglukhDun'])) : "0"}',
                             style: tt.bodyMedium,
                           ),
                         if (_loyaltyBonusEnabled) ...[

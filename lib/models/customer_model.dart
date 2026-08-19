@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../services/api_service.dart';
 import '../services/khariltsagch_service.dart';
 import 'pos_session.dart';
 
@@ -126,6 +127,19 @@ class Customer {
       createdAt = DateTime.tryParse(ca) ?? createdAt;
     }
 
+    final purchases = (m['guilgeeniiToo'] as num?)?.toInt() ??
+        (m['totalPurchases'] as num?)?.toInt() ??
+        (m['too'] as num?)?.toInt() ??
+        (m['borluulaltToo'] as num?)?.toInt() ??
+        0;
+
+    final spent = (m['niitDun'] as num?)?.toDouble() ??
+        (m['totalSpent'] as num?)?.toDouble() ??
+        (m['borluulaltiinDun'] as num?)?.toDouble() ??
+        (m['borluulaltDun'] as num?)?.toDouble() ??
+        (m['avlagaUldegdel'] as num?)?.toDouble() ??
+        0.0;
+
     return Customer(
       id: id.isNotEmpty ? id : 'unknown',
       name: displayName,
@@ -134,8 +148,8 @@ class Customer {
       address: khayag?.trim().isNotEmpty == true ? khayag!.trim() : null,
       type: type,
       createdAt: createdAt,
-      totalPurchases: 0,
-      totalSpent: 0,
+      totalPurchases: purchases,
+      totalSpent: spent,
     );
   }
 }
@@ -195,9 +209,55 @@ class CustomerModel extends ChangeNotifier {
     );
 
     if (result.success) {
+      final list = result.rows.map(Customer.fromKhariltsagch).toList();
+
+      try {
+        final salesStatsRes = await posApiService.post<List<dynamic>>(
+          '/khariltsagchaarKHudaldanAvalt',
+          body: {
+            'baiguullagiinId': session.baiguullagiinId,
+            'salbariinId': session.salbariinId,
+            'ekhlekhOgnoo': DateTime(2020, 1, 1).toIso8601String(),
+            'duusakhOgnoo':
+                DateTime.now().add(const Duration(days: 1)).toIso8601String(),
+          },
+          parser: (d) => d is List ? d : [],
+        );
+
+        if (salesStatsRes.success && salesStatsRes.data != null) {
+          final statsMap = <String, Map<String, dynamic>>{};
+          for (final item in salesStatsRes.data!) {
+            if (item is Map) {
+              final kid = item['_id']?['khariltsagchiinId']?.toString() ??
+                  item['khariltsagchiinId']?.toString();
+              if (kid != null && kid.isNotEmpty) {
+                statsMap[kid] = Map<String, dynamic>.from(item);
+              }
+            }
+          }
+
+          if (statsMap.isNotEmpty) {
+            for (var i = 0; i < list.length; i++) {
+              final c = list[i];
+              final stat = statsMap[c.id];
+              if (stat != null) {
+                final cnt =
+                    (stat['tooShirkheg'] as num?)?.toInt() ?? c.totalPurchases;
+                final amt =
+                    (stat['niitZarakhUne'] as num?)?.toDouble() ?? c.totalSpent;
+                list[i] = c.copyWith(
+                  totalPurchases: cnt,
+                  totalSpent: amt,
+                );
+              }
+            }
+          }
+        }
+      } catch (_) {}
+
       _customers
         ..clear()
-        ..addAll(result.rows.map(Customer.fromKhariltsagch));
+        ..addAll(list);
       _error = null;
     } else {
       _customers.clear();

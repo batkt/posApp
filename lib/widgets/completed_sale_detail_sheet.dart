@@ -651,7 +651,7 @@ class _ProductItemCard extends StatelessWidget {
 
           // Line total
           Text(
-            _fmtMnt(item.total),
+            _fmtMntPlain(item.total),
             style: textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w800,
               fontFeatures: const [FontFeature.tabularFigures()],
@@ -734,11 +734,11 @@ class _SaleFooter extends StatelessWidget {
             ),
 
             // Discount
-            if (sale.discount > 0.009) ...[
+            if (sale.effectiveDiscount > 0.009) ...[
               const SizedBox(height: 5),
               _PriceRow(
                 label: l10n.tr('discount'),
-                amount: -sale.discount,
+                amount: -sale.effectiveDiscount,
                 colorScheme: colorScheme,
                 textTheme: textTheme,
                 isDeduction: true,

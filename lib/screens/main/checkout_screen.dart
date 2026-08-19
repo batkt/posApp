@@ -384,7 +384,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                 ),
                 Text(
-                  '${item.quantity} × ${MntAmountFormatter.format(item.unitPrice)} ₮',
+                  '${item.quantity} × ${MntAmountFormatter.format(item.unitPrice)}',
                   style: textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),

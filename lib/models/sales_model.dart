@@ -112,6 +112,22 @@ class CompletedSale {
   /// From `guilgee.ebarimtAvsanEsekh` when loaded from POS API.
   final bool ebarimtAvsan;
 
+  /// Total discount amount, including header discount, promotional discounts,
+  /// and line-level discounts.
+  double get effectiveDiscount {
+    if (discount > 0.009) return discount;
+    double itemDisc = 0.0;
+    for (final item in items) {
+      final orig = item.retailUnitPrice * item.quantity;
+      final paid = item.total;
+      final diff = orig - paid;
+      if (diff > 0.001) {
+        itemDisc += diff;
+      }
+    }
+    return itemDisc;
+  }
+
   CompletedSale({
     required this.id,
     required this.items,
@@ -258,7 +274,28 @@ class SalesModel extends ChangeNotifier {
     }
   }
 
-  double get subtotal => _currentSale.fold(0, (sum, item) => sum + item.total);
+  /// 📊 Gross subtotal before discounts (retail unit price × quantity)
+  double get subtotal {
+    double sum = 0.0;
+    for (final item in _currentSale) {
+      sum += item.retailUnitPrice * item.quantity;
+    }
+    return sum;
+  }
+
+  /// 🎁 Total promotional & line discount amount
+  double get effectiveDiscount {
+    double itemDisc = dorvonNegCalc.discount;
+    for (final item in _currentSale) {
+      final orig = item.retailUnitPrice * item.quantity;
+      final paid = item.total;
+      final diff = orig - paid;
+      if (diff > 0.001) {
+        itemDisc += diff;
+      }
+    }
+    return itemDisc;
+  }
 
   double get tax {
     final ctx = _webTaxContext;
@@ -278,7 +315,8 @@ class SalesModel extends ChangeNotifier {
     return PosPaymentCore.calculateStandardSaleTotals(subtotal).vat;
   }
 
-  double get total => subtotal;
+  /// 💰 Final net payable total (subtotal - discount)
+  double get total => (subtotal - effectiveDiscount).clamp(0.0, double.infinity);
 
   // Sales history getters
   List<CompletedSale> get salesHistory => List.unmodifiable(_salesHistory);

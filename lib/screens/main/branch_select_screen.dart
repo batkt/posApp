@@ -64,84 +64,103 @@ class _BranchSelectScreenState extends State<BranchSelectScreen> {
             ),
           ),
           body: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    height: 140,
-                    child: Image.asset(
-                      'assets/images/poslogo.png',
-                      fit: BoxFit.contain,
-                      cacheWidth: 480,
-                      gaplessPlayback: true,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Icon(
-                          Icons.store_rounded,
-                          size: 72,
-                          color: colorScheme.primary,
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.tr('login_brand_subtitle'),
-                    textAlign: TextAlign.center,
-                    style: textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  Text(
-                    l10n.tr('branch_select_hint'),
-                    style: textTheme.bodyLarge?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-                  InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: l10n.tr('branch_field_label'),
-                      filled: true,
-                      border: const OutlineInputBorder(),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        isExpanded: true,
-                        value: _selectedId != null &&
-                                opts.any((b) => b.id == _selectedId)
-                            ? _selectedId
-                            : opts.first.id,
-                        items: opts
-                            .map(
-                              (b) => DropdownMenuItem<String>(
-                                value: b.id,
-                                child: Text(
-                                  b.label,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints:
+                        BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Align(
+                      alignment: Alignment.center,
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 440),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 32),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(
+                              height: 140,
+                              child: Image.asset(
+                                'assets/images/poslogo.png',
+                                fit: BoxFit.contain,
+                                cacheWidth: 480,
+                                gaplessPlayback: true,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Icon(
+                                    Icons.store_rounded,
+                                    size: 72,
+                                    color: colorScheme.primary,
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              l10n.tr('login_brand_subtitle'),
+                              textAlign: TextAlign.center,
+                              style: textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            Text(
+                              l10n.tr('branch_select_hint'),
+                              style: textTheme.bodyLarge?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 20),
+                            InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: l10n.tr('branch_field_label'),
+                                filled: true,
+                                border: const OutlineInputBorder(),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  isExpanded: true,
+                                  value: _selectedId != null &&
+                                          opts.any((b) => b.id == _selectedId)
+                                      ? _selectedId
+                                      : opts.first.id,
+                                  items: opts
+                                      .map(
+                                        (b) => DropdownMenuItem<String>(
+                                          value: b.id,
+                                          child: Text(
+                                            b.label,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (v) =>
+                                      setState(() => _selectedId = v),
                                 ),
                               ),
-                            )
-                            .toList(),
-                        onChanged: (v) => setState(() => _selectedId = v),
+                            ),
+                            const SizedBox(height: 28),
+                            FilledButton(
+                              onPressed:
+                                  _selectedId == null ? null : _continue,
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size.fromHeight(52),
+                              ),
+                              child: Text(l10n.tr('branch_continue')),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 28),
-                  FilledButton(
-                    onPressed: _selectedId == null ? null : _continue,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                    ),
-                    child: Text(l10n.tr('branch_continue')),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
         );

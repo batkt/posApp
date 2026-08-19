@@ -206,3 +206,5 @@ class TailanPostResult {
   factory TailanPostResult.fail(String message) =>
       TailanPostResult._(ok: false, error: message);
 }
+
+final tailanService = TailanService();

@@ -5,9 +5,7 @@ import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../services/hudaldan_avalt_service.dart';
 import '../../theme/app_theme.dart';
-import '../../utils/app_date_range_picker.dart';
 import '../../utils/mnt_amount_formatter.dart';
-import '../../utils/mongolian_date_formatter.dart';
 import '../../widgets/app_date_range_filter_button.dart';
 
 /// Web parity: `barimtiinJagsaalt` tab **Худалдан авалт** (`/orlogoZarlagiinTuukh`).
@@ -45,44 +43,13 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
     super.initState();
     final now = DateTime.now();
     _range = DateTimeRange(
-      start: DateTime(now.year, now.month, now.day),
-      end: DateTime(now.year, now.month, now.day, 23, 59, 59),
+      start: DateTime(now.year, now.month, 1, 0, 0, 0),
+      end: DateTime(now.year, now.month + 1, 0, 23, 59, 59),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) => _load(reset: true));
   }
 
-  Future<void> _pickRange() async {
-    final l10n = AppLocalizations.of(context);
-    final picked = await showAppDateRangePicker(
-      context: context,
-      initialDateRange: _range,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      helpText: l10n.tr('date_picker_range_help'),
-      cancelText: l10n.tr('date_picker_cancel'),
-      confirmText: l10n.tr('date_picker_confirm'),
-    );
-    if (picked == null || !mounted) return;
-    setState(() {
-      _range = DateTimeRange(
-        start: DateTime(
-          picked.start.year,
-          picked.start.month,
-          picked.start.day,
-        ),
-        end: DateTime(
-          picked.end.year,
-          picked.end.month,
-          picked.end.day,
-          23,
-          59,
-          59,
-        ),
-      );
-      _page = 1;
-    });
-    await _load(reset: true);
-  }
+
 
   Future<void> _load({bool reset = false}) async {
     final session = context.read<AuthModel>().posSession;
@@ -258,28 +225,380 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
         }
         final r = res.rows[index];
         final ognooLocal = r.ognoo.toLocal();
+        final dateStr =
+            '${ognooLocal.year}-${ognooLocal.month.toString().padLeft(2, '0')}-${ognooLocal.day.toString().padLeft(2, '0')} ${ognooLocal.hour.toString().padLeft(2, '0')}:${ognooLocal.minute.toString().padLeft(2, '0')}';
+
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
+            onTap: () {
+              showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Theme.of(context).colorScheme.surface,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                builder: (ctx) => _PurchaseDetailSheet(row: r),
+              );
+            },
             title: Text(
               r.khariltsagchiinNer.isEmpty ? '—' : r.khariltsagchiinNer,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
             subtitle: Text(
-              '${MongolianDateFormatter.formatDateYmdWords(ognooLocal)} ${MongolianDateFormatter.formatTime(ognooLocal)} · ${_khelberMn(r.khelber)} · ${l10n.tr('hudaldan_lines')}: ${r.lineQtySum.toStringAsFixed(0)}',
+              '$dateStr · ${_khelberMn(r.khelber)} · ${l10n.tr('hudaldan_lines')}: ${r.lineQtySum % 1 == 0 ? r.lineQtySum.toInt() : r.lineQtySum}',
               style: textTheme.bodySmall,
             ),
-            trailing: Text(
-              MntAmountFormatter.formatTugrik(r.niitDun),
-              style: textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: colorScheme.primary,
-              ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  MntAmountFormatter.formatTugrik(r.niitDun),
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right_rounded, size: 18),
+              ],
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _PurchaseDetailSheet extends StatelessWidget {
+  const _PurchaseDetailSheet({required this.row});
+
+  final HudaldanAvaltRow row;
+
+  String _khelberLabel(String? k) {
+    switch (k?.toLowerCase()) {
+      case 'belen':
+        return 'Бэлэн';
+      case 'zeel':
+        return 'Зээл';
+      case 'kart':
+        return 'Карт';
+      case 'qpay':
+        return 'QPay';
+      default:
+        return k ?? 'Бэлэн';
+    }
+  }
+
+  Color _khelberColor(String? k, ColorScheme cs) {
+    switch (k?.toLowerCase()) {
+      case 'belen':
+        return Colors.green;
+      case 'zeel':
+        return Colors.orange;
+      case 'kart':
+        return cs.primary;
+      case 'qpay':
+        return Colors.blue;
+      default:
+        return cs.secondary;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final ognooLocal = row.ognoo.toLocal();
+    final dateStr =
+        '${ognooLocal.year}-${ognooLocal.month.toString().padLeft(2, '0')}-${ognooLocal.day.toString().padLeft(2, '0')} ${ognooLocal.hour.toString().padLeft(2, '0')}:${ognooLocal.minute.toString().padLeft(2, '0')}';
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.khariltsagchiinNer.isEmpty
+                          ? 'Худалдан авалт'
+                          : row.khariltsagchiinNer,
+                      style: textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      dateStr,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _khelberColor(row.khelber, colorScheme)
+                      .withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _khelberColor(row.khelber, colorScheme)
+                        .withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  _khelberLabel(row.khelber),
+                  style: textTheme.labelSmall?.copyWith(
+                    color: _khelberColor(row.khelber, colorScheme),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Divider(height: 1, color: colorScheme.outlineVariant),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Барааны жагсаалт (${row.items.length})',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                'Нийт: ${MntAmountFormatter.formatTugrikSpaced(row.niitDun)}',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: colorScheme.primary,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: row.items.isEmpty
+                ? Center(
+                    child: Text(
+                      'Барааны мэдээлэл олдсонгүй',
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    itemCount: row.items.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final item = row.items[index];
+                      final itemKhelber = item.khelber ?? row.khelber;
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant
+                                .withValues(alpha: 0.6),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    item.ner,
+                                    style: textTheme.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                if (item.code.isNotEmpty)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      item.code,
+                                      style: textTheme.labelSmall?.copyWith(
+                                        fontFamily: 'monospace',
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _InputDisplayField(
+                                    label: 'Тоо ширхэг',
+                                    value:
+                                        '${item.too % 1 == 0 ? item.too.toInt() : item.too} ширхэг',
+                                    icon: Icons.inventory_2_outlined,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _InputDisplayField(
+                                    label: 'Нэгж үнэ',
+                                    value:
+                                        MntAmountFormatter.formatTugrikSpaced(
+                                            item.urtugUne),
+                                    icon: Icons.sell_outlined,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _InputDisplayField(
+                                    label: 'Худалдах үнэ',
+                                    value:
+                                        MntAmountFormatter.formatTugrikSpaced(
+                                            item.zarakhUne),
+                                    icon: Icons.monetization_on_outlined,
+                                    isPrimary: true,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _InputDisplayField(
+                                    label: 'Төлбөрийн хэлбэр',
+                                    value: _khelberLabel(itemKhelber),
+                                    icon: Icons.account_balance_wallet_outlined,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Хаах'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InputDisplayField extends StatelessWidget {
+  const _InputDisplayField({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.isPrimary = false,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final bool isPrimary;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isPrimary
+            ? colorScheme.primaryContainer.withValues(alpha: 0.3)
+            : colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isPrimary
+              ? colorScheme.primary.withValues(alpha: 0.3)
+              : colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color:
+                isPrimary ? colorScheme.primary : colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: textTheme.labelSmall?.copyWith(
+                    fontSize: 9,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color:
+                        isPrimary ? colorScheme.primary : colorScheme.onSurface,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

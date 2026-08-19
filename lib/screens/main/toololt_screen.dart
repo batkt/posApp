@@ -13,6 +13,7 @@ import '../../services/category_service.dart';
 import '../../services/product_service.dart';
 import '../../services/toololt_service.dart';
 import '../../utils/app_date_range_picker.dart';
+import '../../utils/app_snackbar.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/app_date_range_filter_button.dart';
 import '../../widgets/barcode_scan_sheet.dart';
@@ -176,9 +177,8 @@ class _ToololtScreenState extends State<ToololtScreen> {
     final v = double.tryParse(rawText.replaceAll(',', '.').trim());
     if (v == null || v < 0) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('toololt_action_error'))),
-      );
+      showAppSnackBar(context, l10n.tr('toololt_action_error'),
+          variant: AppSnackVariant.error);
       return;
     }
     final res = await toololtService.saveCountedQty(
@@ -190,9 +190,8 @@ class _ToololtScreenState extends State<ToololtScreen> {
     if (res.success) {
       _refresh();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res.error ?? l10n.tr('toololt_action_error'))),
-      );
+      showAppSnackBar(context, res.error ?? l10n.tr('toololt_action_error'),
+          variant: AppSnackVariant.error);
     }
   }
 
@@ -376,13 +375,11 @@ class _ToololtScreenState extends State<ToololtScreen> {
     if (res.success) {
       _activePage = 1;
       _refresh();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('toololt_status_done'))),
-      );
+      showAppSnackBar(context, l10n.tr('toololt_status_done'),
+          variant: AppSnackVariant.success);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res.error ?? l10n.tr('toololt_action_error'))),
-      );
+      showAppSnackBar(context, res.error ?? l10n.tr('toololt_action_error'),
+          variant: AppSnackVariant.error);
     }
   }
 
@@ -415,9 +412,8 @@ class _ToololtScreenState extends State<ToololtScreen> {
       _activePage = 1;
       _refresh();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res.error ?? l10n.tr('toololt_action_error'))),
-      );
+      showAppSnackBar(context, res.error ?? l10n.tr('toololt_action_error'),
+          variant: AppSnackVariant.error);
     }
   }
 
@@ -583,8 +579,10 @@ class _ToololtScreenState extends State<ToololtScreen> {
                               : null,
                     ),
                   ),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 32),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: MediaQuery.of(context).viewInsets.bottom + 64,
+                  ),
                 ),
               ],
             ),
@@ -891,6 +889,7 @@ class _ActiveCountCard extends StatelessWidget {
                                           key: ValueKey(
                                             '${line.code}_${line.toolsonToo}',
                                           ),
+                                          scrollPadding: const EdgeInsets.only(bottom: 220),
                                           initialValue:
                                               MntAmountFormatter.format(
                                             line.toolsonToo,
@@ -1258,10 +1257,8 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
     );
     if (!mounted) return;
     if (!res.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(res.error ?? widget.l10n.tr('toololt_action_error'))),
-      );
+      showAppSnackBar(context, res.error ?? widget.l10n.tr('toololt_action_error'),
+          variant: AppSnackVariant.error);
       return;
     }
     final searchCtrl = TextEditingController();
@@ -1422,15 +1419,13 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
     final l10n = widget.l10n;
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('toololt_start_name'))),
-      );
+      showAppSnackBar(context, l10n.tr('toololt_start_name'),
+          variant: AppSnackVariant.warning);
       return;
     }
     if (_turul == 'Бараа сонгох' && _codes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('toololt_pick_products'))),
-      );
+      showAppSnackBar(context, l10n.tr('toololt_pick_products'),
+          variant: AppSnackVariant.warning);
       return;
     }
     final songogsonAngilal = _angilal
@@ -1438,9 +1433,8 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
         .where((e) => e.isNotEmpty)
         .toList();
     if (_turul == 'Ангилал' && songogsonAngilal.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('toololt_pick_categories'))),
-      );
+      showAppSnackBar(context, l10n.tr('toololt_pick_categories'),
+          variant: AppSnackVariant.warning);
       return;
     }
     setState(() => _submitting = true);
@@ -1461,9 +1455,8 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
     if (r.success) {
       widget.onDone();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(r.error ?? l10n.tr('toololt_action_error'))),
-      );
+      showAppSnackBar(context, r.error ?? l10n.tr('toololt_action_error'),
+          variant: AppSnackVariant.error);
     }
   }
 

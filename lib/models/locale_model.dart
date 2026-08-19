@@ -966,7 +966,7 @@ class AppLocalizations {
       'toololt_no_active_hint':
           'Одоо явагдаж буй тооллого байхгүй. Агуулахын үлдэгдлийг системийн бүртгэлтэй тааруулахын тулд шинээр тооллого эхлүүлнэ үү.',
       'toololt_metric_total_lines': 'Нийт мөр',
-      'toololt_metric_uncounted_products': 'Тоогоогүй бараа',
+      'toololt_metric_uncounted_products': 'Тоолоогүй бараа',
       'toololt_metric_retail_sum': 'Нийт жижиг дүн',
       'toololt_metric_cost_sum': 'Нийт өртөг',
       'toololt_table_no': '№',

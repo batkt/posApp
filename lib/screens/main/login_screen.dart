@@ -53,6 +53,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
+    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
+
     if (!_formKey.currentState!.validate()) return;
 
     // Check network connectivity
@@ -96,6 +99,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (success) {
       // [AuthWrapper] shows [TwoFactorAuthScreen], [BranchSelectScreen], or [PostLoginHome].
     } else {
+      FocusScope.of(context).unfocus();
+      FocusManager.instance.primaryFocus?.unfocus();
       final l10n = AppLocalizations.of(context);
       final err = auth.lastAuthError;
       showAppSnackBar(
@@ -107,6 +112,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _loginWithBiometric() async {
+    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _isLoading = true);
     var success = false;
     try {
@@ -167,15 +174,18 @@ class _LoginScreenState extends State<LoginScreen> {
             return SingleChildScrollView(
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
+                child: Align(
+                  alignment: Alignment.center,
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                 // Header Logo
                 SizedBox(
                   height: 180,
@@ -391,10 +401,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
-    );
+    ),
+  );
   }
 }

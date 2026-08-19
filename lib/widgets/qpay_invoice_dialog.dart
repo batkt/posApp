@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../services/qpay_service.dart';
+import '../utils/app_snackbar.dart';
 import '../utils/mnt_amount_formatter.dart';
 
 /// Same flow as web [QpayModal]: QR + **Шалгах** + background polling.
@@ -76,12 +77,8 @@ class _QpayInvoiceDialogState extends State<QpayInvoiceDialog> {
       if (ok) {
         Navigator.of(context).pop(true);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('QPay төлөгдөөгүй байна.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showAppSnackBar(context, 'QPay төлөгдөөгүй байна.',
+            variant: AppSnackVariant.warning);
       }
     } finally {
       if (mounted) setState(() => _checking = false);

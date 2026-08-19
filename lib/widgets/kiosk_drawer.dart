@@ -15,6 +15,7 @@ import '../screens/main/purchase_list_screen.dart';
 import '../screens/main/pos_settings_hub_screen.dart';
 import '../screens/main/tailan_screen.dart';
 import '../screens/main/toololt_screen.dart';
+import '../screens/main/uramshuulal_screen.dart';
 import '../theme/app_theme.dart';
 import '../utils/pos_native_debug_log.dart';
 import '../services/printer_service.dart';
@@ -174,6 +175,16 @@ class KioskDrawer extends StatelessWidget {
             titleKey: 'customers',
           ),
         ),
+      _KioskMenuAction(
+        icon: Icons.local_offer_outlined,
+        labelKey: 'pos_sale_promo',
+        onTap: (ctx) => kioskDrawerLeavePosForPage(
+          ctx,
+          const UramshuulalScreen(showAppBar: false),
+          mobileStaffShell: drawerShell,
+          titleKey: 'pos_sale_promo',
+        ),
+      ),
       if (auth.posSession != null)
         _KioskMenuAction(
           icon: Icons.tune_rounded,

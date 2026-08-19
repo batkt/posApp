@@ -323,7 +323,7 @@ class _POSScreenState extends State<POSScreen> {
                   ListTile(
                     leading: const Icon(Icons.layers_outlined),
                     title: Text(
-                      '≥ ${t['buuniiToo']} — ${MntAmountFormatter.format((t['buuniiUne'] as num?)?.toDouble() ?? 0)} ₮',
+                      '≥ ${t['buuniiToo']} — ${MntAmountFormatter.format((t['buuniiUne'] as num?)?.toDouble() ?? 0)}',
                     ),
                     onTap: () {
                       final u = (t['buuniiUne'] as num?)?.toDouble() ?? 0;
@@ -973,10 +973,10 @@ class _POSScreenState extends State<POSScreen> {
           flex: 7,
           child: Container(
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
               border: Border(
                 left: BorderSide(
-                  color: Theme.of(context).colorScheme.outlineVariant,
+                  color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
                 ),
               ),
             ),
@@ -1006,10 +1006,10 @@ class _POSScreenState extends State<POSScreen> {
           flex: 4,
           child: Container(
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
               border: Border(
                 left: BorderSide(
-                  color: Theme.of(context).colorScheme.outlineVariant,
+                  color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
                 ),
               ),
             ),
@@ -1336,59 +1336,89 @@ class _POSScreenState extends State<POSScreen> {
     final summaryBlock = _buildClassicSaleSummary(context, sales);
 
     return [
+      // Modern Glass / Elevated Header Card
       Container(
-        padding: context.responsivePadding,
+        margin: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: colorScheme.outlineVariant),
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: colorScheme.outlineVariant.withValues(alpha: 0.6),
           ),
+          boxShadow: [
+            BoxShadow(
+              color: colorScheme.shadow.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.shopping_bag_rounded,
+                    color: colorScheme.primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     _staffSalePanelTitle(context),
-                    style: textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontSize: context.responsiveFontSize(18),
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      fontSize: context.responsiveFontSize(17),
+                      letterSpacing: 0.2,
                     ),
                   ),
                 ),
-                if (!sales.isSaleEmpty)
-                  TextButton.icon(
-                    onPressed: () => _clearSaleAndRestock(context, sales),
-                    icon:
-                        Icon(Icons.clear, size: context.responsiveIconSize(18)),
-                    label: Text(
-                      'Цэвэрлэх',
-                      style:
-                          TextStyle(fontSize: context.responsiveFontSize(14)),
+                if (!sales.isSaleEmpty) ...[
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${sales.saleItemCount} бараа',
+                      style: textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 6),
+                  IconButton(
+                    tooltip: 'Цэвэрлэх',
+                    onPressed: () => _clearSaleAndRestock(context, sales),
+                    icon: const Icon(
+                      Icons.delete_outline_rounded,
+                      size: 20,
+                      color: AppColors.error,
+                    ),
+                  ),
+                ],
               ],
-            ),
-            SizedBox(height: context.spacing * 0.5),
-            Text(
-              sales.saleItemCount == 0
-                  ? 'Бүтээгдэхүүн нэмээгүй'
-                  : '${sales.saleItemCount} бүтээгдэхүүн',
-              style: textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontSize: context.responsiveFontSize(14),
-              ),
             ),
             if (sales.dorvonNegPromo != null &&
                 sales.dorvonNegCalc.freeCount > 0) ...[
-              SizedBox(height: context.spacing * 0.5),
+              const SizedBox(height: 10),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
                   color: AppColors.successContainer,
                   borderRadius: BorderRadius.circular(10),
@@ -1409,7 +1439,7 @@ class _POSScreenState extends State<POSScreen> {
               ),
             ],
             if (sales.dorvonNegCalc.hasTie) ...[
-              SizedBox(height: context.spacing * 0.5),
+              const SizedBox(height: 8),
               Material(
                 color: Colors.amber.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
@@ -1445,24 +1475,45 @@ class _POSScreenState extends State<POSScreen> {
       ),
       if (sales.isSaleEmpty)
         Padding(
-          padding: EdgeInsets.symmetric(
-            vertical: context.spacing * 2,
-            horizontal: context.spacing,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 44, horizontal: 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.shopping_cart_outlined,
-                size: context.responsiveIconSize(48),
-                color: colorScheme.onSurfaceVariant,
+              Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: colorScheme.primary.withValues(alpha: 0.1),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  Icons.shopping_bag_outlined,
+                  size: 54,
+                  color: colorScheme.primary,
+                ),
               ),
-              SizedBox(height: context.spacing),
+              const SizedBox(height: 16),
               Text(
-                'Сагс хоосон',
+                'Сагс хоосон байна',
                 style: textTheme.titleMedium?.copyWith(
+                  color: colorScheme.onSurface,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Зүүн талын бүтээгдэхүүнүүдээс сонгон сагсанд нэмнэ үү',
+                style: textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
-                  fontSize: context.responsiveFontSize(16),
+                  fontSize: 13,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -1471,7 +1522,7 @@ class _POSScreenState extends State<POSScreen> {
         )
       else
         Padding(
-          padding: EdgeInsets.all(context.spacing),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1486,54 +1537,108 @@ class _POSScreenState extends State<POSScreen> {
 
   Widget _buildClassicSaleSummary(BuildContext context, SalesModel sales) {
     final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     final auth = context.watch<AuthModel>();
     return Container(
-      padding: context.responsivePadding,
+      margin: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: colorScheme.outlineVariant),
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.7),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text(
+            'Тооцоо',
+            style: textTheme.labelLarge?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 12),
           _buildSummaryRow(
             context: context,
             label: 'Дүн',
             amount: sales.subtotal,
             isTotal: false,
           ),
-          if (sales.tax > 0) ...[
+          if (sales.effectiveDiscount > 0.009) ...[
+            const SizedBox(height: 6),
             _buildSummaryRow(
               context: context,
-              label: 'НӨАТ',
+              label: 'Хөнгөлөлт',
+              amount: -sales.effectiveDiscount,
+              isTotal: false,
+            ),
+          ],
+          if (sales.tax > 0) ...[
+            const SizedBox(height: 6),
+            _buildSummaryRow(
+              context: context,
+              label: 'НӨАТ (10%)',
               amount: sales.tax,
               isTotal: false,
             ),
-            SizedBox(height: context.spacing * 0.5),
           ],
-          _buildSummaryRow(
-            context: context,
-            label: 'Нийт',
-            amount: sales.total,
-            isTotal: true,
+          const SizedBox(height: 12),
+          Divider(height: 1, color: colorScheme.outlineVariant),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Нийт төлөх',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                ),
+              ),
+              Text(
+                MntAmountFormatter.formatTugrikSpaced(sales.total),
+                style: textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: colorScheme.primary,
+                  fontSize: 22,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: context.spacing),
+          const SizedBox(height: 16),
           _buildParkSaleActions(context, sales),
-          SizedBox(height: context.spacing),
+          const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
+            height: 52,
             child: FilledButton.icon(
               onPressed:
                   sales.isSaleEmpty ? null : () => _openPaymentScreen(context),
-              icon: Icon(Icons.payment, size: context.responsiveIconSize(20)),
-              label: Text(
-                'Төлөх',
-                style: TextStyle(fontSize: context.responsiveFontSize(16)),
+              icon: const Icon(Icons.payments_rounded, size: 22),
+              label: const Text(
+                'Төлбөр төлөх',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                ),
               ),
               style: FilledButton.styleFrom(
-                padding: EdgeInsets.symmetric(vertical: context.spacing * 0.75),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 2,
               ),
             ),
           ),
@@ -1541,9 +1646,10 @@ class _POSScreenState extends State<POSScreen> {
               auth.staffAccess.allowsMobile ||
               auth.staffAccess.allowsPosSystem ||
               auth.canSubmitPosSales) ...[
-            SizedBox(height: context.spacing * 0.5),
+            const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
+              height: 48,
               child: OutlinedButton.icon(
                 onPressed: sales.isSaleEmpty
                     ? null
@@ -1552,13 +1658,15 @@ class _POSScreenState extends State<POSScreen> {
                 label: Text(
                   AppLocalizations.of(context)
                       .tr('terminal_signal_send_kiosk'),
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontWeight: FontWeight.w700,
-                    fontSize: context.responsiveFontSize(15),
+                    fontSize: 14,
                   ),
                 ),
                 style: OutlinedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: context.spacing * 0.65),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
               ),
             ),
@@ -2325,7 +2433,7 @@ class _SaleItemTile extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          '${MntAmountFormatter.format(item.unitPrice)} × ${item.quantity} ₮',
+                          '${MntAmountFormatter.format(item.unitPrice)} × ${item.quantity}',
                           style: textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w600,
@@ -2338,7 +2446,7 @@ class _SaleItemTile extends StatelessWidget {
                       ),
                       if (dorvonNegFullyFree) ...[
                         Text(
-                          '${MntAmountFormatter.format(lineTotal)} ₮',
+                          MntAmountFormatter.format(lineTotal),
                           style: textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                             decoration: TextDecoration.lineThrough,
@@ -2347,7 +2455,7 @@ class _SaleItemTile extends StatelessWidget {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          '0 ₮',
+                          '0',
                           style: textTheme.titleMedium?.copyWith(
                             color: AppColors.success,
                             fontWeight: FontWeight.w900,
@@ -2356,7 +2464,7 @@ class _SaleItemTile extends StatelessWidget {
                         ),
                       ] else
                         Text(
-                          '${MntAmountFormatter.format(lineTotal)} ₮',
+                          MntAmountFormatter.format(lineTotal),
                           style: textTheme.titleMedium?.copyWith(
                             color: colorScheme.primary,
                             fontWeight: FontWeight.w900,
