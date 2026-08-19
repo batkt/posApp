@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/customer_model.dart';
@@ -490,8 +491,14 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
                         TextFormField(
                           controller: _utas,
                           keyboardType: TextInputType.phone,
+                          maxLength: 8,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(8),
+                          ],
                           decoration: InputDecoration(
                             labelText: l10n.tr('customer_field_utas'),
+                            counterText: '',
                             filled: true,
                             border: const OutlineInputBorder(),
                           ),
@@ -501,8 +508,8 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
                               return 'Утасны дугаар оруулна уу';
                             }
                             final digitsOnly = val.replaceAll(RegExp(r'\D'), '');
-                            if (digitsOnly.length < 8) {
-                              return 'Утасны дугаар доод тал нь 8 оронтой тоо байна';
+                            if (digitsOnly.length != 8) {
+                              return 'Утасны дугаар яг 8 оронтой байх ёстой';
                             }
                             return null;
                           },

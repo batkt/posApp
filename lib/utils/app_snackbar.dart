@@ -151,8 +151,17 @@ class _TopToastWidgetState extends State<_TopToastWidget>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final mediaQuery = MediaQuery.of(context);
+    final deviceTopPadding = mediaQuery.padding.top;
+
+    // Dynamic top inset calculation: on iOS notch/Dynamic Island devices, padding.top is ~47-59px.
+    // Recalculate using root Overlay context so topInset is never trapped at 10px if called from modal sheets.
+    final effectiveTop = deviceTopPadding > 0
+        ? deviceTopPadding + 10.0
+        : (widget.topInset > 20.0 ? widget.topInset : 50.0);
+
     return Positioned(
-      top: widget.topInset,
+      top: effectiveTop,
       left: 16,
       right: 16,
       child: SafeArea(

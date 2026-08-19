@@ -6,6 +6,7 @@ import 'package:local_auth/local_auth.dart';
 import '../auth/staff_screen_access.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/pos_settings_service.dart';
 import '../services/socket_service.dart';
 import '../services/terminal_session_store.dart';
 import 'branch_option.dart';
@@ -78,6 +79,7 @@ class AuthModel extends ChangeNotifier {
   PosSession? _posSession;
   /// When [login] / [verifyTwoFactorCode] returns multiple `salbaruud`, user picks one here.
   List<BranchOption>? _pendingBranchOptions;
+  List<BranchOption>? _allBranchOptions;
   StaffScreenAccess _staffAccess = StaffScreenAccess.denied;
   final LocalAuthentication _localAuth = LocalAuthentication();
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
@@ -131,11 +133,39 @@ class AuthModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Branches from `posSession.ajiltan['salbaruud']` — drawer switcher when length > 1.
-  List<BranchOption> get branchSwitchOptions =>
-      BranchOption.parseList(_posSession?.ajiltan['salbaruud']);
+  /// Branches available for switching (login options, employee salbaruud, or org branches).
+  List<BranchOption> get branchSwitchOptions {
+    if (_allBranchOptions != null && _allBranchOptions!.isNotEmpty) {
+      return _allBranchOptions!;
+    }
+    if (_pendingBranchOptions != null && _pendingBranchOptions!.isNotEmpty) {
+      return _pendingBranchOptions!;
+    }
+    return BranchOption.parseList(_posSession?.ajiltan['salbaruud']);
+  }
 
-  bool get canSwitchBranch => branchSwitchOptions.length > 1;
+  bool get canSwitchBranch =>
+      branchSwitchOptions.length > 1 ||
+      (_currentUser != null && _currentUser!.role == UserRole.admin) ||
+      _staffAccess.allowsDashboard;
+
+  /// Loads org branch list for admins / multi-branch users if not loaded yet.
+  Future<void> ensureBranchOptionsLoaded() async {
+    if (_allBranchOptions != null && _allBranchOptions!.length > 1) return;
+    final session = _posSession;
+    if (session == null) return;
+    final bid = session.baiguullagiinId.trim();
+    if (bid.isEmpty) return;
+    try {
+      final settings = PosSettingsService(api: posApiService);
+      final orgRows = await settings.fetchSalbaruud(bid);
+      final fromOrg = BranchOption.parseList(orgRows);
+      if (fromOrg.isNotEmpty) {
+        _allBranchOptions = fromOrg;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
 
   /// Label for the active `salbariinId` within [branchSwitchOptions], else raw id.
   String get activeSalbariinLabel {

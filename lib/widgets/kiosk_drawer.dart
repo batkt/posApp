@@ -10,13 +10,12 @@ import '../screens/main/customers_screen.dart';
 import '../screens/main/inventory_screen.dart';
 import '../screens/main/out_of_stock_baraa_screen.dart';
 import '../screens/main/sales_history_screen.dart';
-import '../screens/main/income_overview_screen.dart';
-import '../screens/main/purchase_list_screen.dart';
 import '../screens/main/pos_settings_hub_screen.dart';
 import '../screens/main/tailan_screen.dart';
 import '../screens/main/toololt_screen.dart';
 import '../screens/main/uramshuulal_screen.dart';
 import '../theme/app_theme.dart';
+import '../utils/app_snackbar.dart';
 import '../utils/pos_native_debug_log.dart';
 import '../services/printer_service.dart';
 import '../services/terminal_hardware_service.dart';
@@ -615,6 +614,74 @@ class KioskDrawer extends StatelessWidget {
                 ],
               ),
             ),
+            if (auth.canSwitchBranch || auth.branchSwitchOptions.length > 1) ...[
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      auth.ensureBranchOptionsLoaded();
+                      _showBranchSwitchSheet(context, auth);
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: colorScheme.primary.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.storefront_rounded,
+                            size: 20,
+                            color: colorScheme.primary,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Салбар солих',
+                                  style: textTheme.labelSmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                                Text(
+                                  auth.activeSalbariinLabel.isEmpty
+                                      ? 'Салбар сонгох'
+                                      : auth.activeSalbariinLabel,
+                                  style: textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: colorScheme.primary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.swap_horiz_rounded,
+                            size: 18,
+                            color: colorScheme.primary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+            ],
             const SizedBox(height: 8),
             Expanded(
               child: menuActions.isEmpty
@@ -941,4 +1008,130 @@ void kioskDrawerLeavePosForPage(
     // If on the root POS screen, push normally
     nav.push(route);
   }
+}
+
+void _showBranchSwitchSheet(BuildContext context, AuthModel auth) {
+  auth.ensureBranchOptionsLoaded();
+  final currentId = auth.posSession?.salbariinId;
+  final colorScheme = Theme.of(context).colorScheme;
+  final textTheme = Theme.of(context).textTheme;
+
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: colorScheme.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => StatefulBuilder(
+      builder: (sheetCtx, setState) {
+        final currentOptions = auth.branchSwitchOptions;
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.75,
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: colorScheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Салбар солих',
+                    style: textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    '${currentOptions.length} салбар',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Divider(height: 1, color: colorScheme.outlineVariant),
+              const SizedBox(height: 12),
+              if (currentOptions.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: currentOptions.length,
+                    itemBuilder: (context, index) {
+                      final b = currentOptions[index];
+                      final isSelected = b.id == currentId;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? colorScheme.primaryContainer
+                                  .withValues(alpha: 0.3)
+                              : colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected
+                                ? colorScheme.primary
+                                : colorScheme.outlineVariant
+                                    .withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: ListTile(
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            auth.applySelectedBranch(b.id);
+                            showAppSnackBar(
+                              context,
+                              'Салбар амжилттай солигдлоо: ${b.label}',
+                              variant: AppSnackVariant.success,
+                            );
+                          },
+                          leading: Icon(
+                            Icons.storefront_rounded,
+                            color: isSelected
+                                ? colorScheme.primary
+                                : colorScheme.onSurfaceVariant,
+                          ),
+                          title: Text(
+                            b.label,
+                            style: textTheme.titleMedium?.copyWith(
+                              fontWeight:
+                                  isSelected ? FontWeight.bold : FontWeight.w600,
+                              color: isSelected
+                                  ? colorScheme.primary
+                                  : colorScheme.onSurface,
+                            ),
+                          ),
+                          trailing: isSelected
+                              ? Icon(Icons.check_circle_rounded,
+                                  color: colorScheme.primary)
+                              : null,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
 }

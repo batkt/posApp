@@ -38,8 +38,35 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingUniPosResult: MethodChannel.Result? = null
     private var pendingEposResult: MethodChannel.Result? = null
     private var pendingEposInAppResult: MethodChannel.Result? = null
+    private var pendingEposInAppTimestamp: Long = 0L
     private lateinit var terminalProfile: TerminalHardwareProfile
     private var eposInApp: EposOpenInAppHelper? = null
+
+    private fun clearEposInAppBusy() {
+        pendingEposInAppResult = null
+        pendingEposInAppTimestamp = 0L
+    }
+
+    private fun prepareEposInAppRequest(result: MethodChannel.Result): Boolean {
+        val now = System.currentTimeMillis()
+        val pending = pendingEposInAppResult
+        if (pending != null) {
+            // Auto-expire stale lock after 12 seconds
+            if (now - pendingEposInAppTimestamp > 12000L) {
+                Log.w(eposLogTag, "Clearing stale pendingEposInAppResult after 12s timeout")
+                try {
+                    pending.error("TIMEOUT", "Stale EPOS in-app request timed out", null)
+                } catch (_: Throwable) {}
+                clearEposInAppBusy()
+            } else {
+                result.error("BUSY", "EPOS in-app request already in progress", null)
+                return false
+            }
+        }
+        pendingEposInAppResult = result
+        pendingEposInAppTimestamp = now
+        return true
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -106,6 +133,10 @@ class MainActivity : FlutterFragmentActivity() {
                             ),
                         )
                     }
+                    "android.epos.resetBusyState" -> {
+                        clearEposInAppBusy()
+                        result.success(true)
+                    }
                     "android.epos.tasks.printBitmap" -> {
                         val base64 = call.argument<String>("base64")
                         if (base64.isNullOrEmpty()) {
@@ -114,21 +145,14 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         val eposBridge = eposInApp
                         if (eposBridge != null) {
-                            if (pendingEposInAppResult != null) {
-                                result.error("BUSY", "EPOS in-app request already in progress", null)
-                                return@setMethodCallHandler
-                            }
-                            pendingEposInAppResult = result
+                            if (!prepareEposInAppRequest(result)) return@setMethodCallHandler
                             try {
                                 if (!eposBridge.startPrintBitmap(base64)) {
-                                    // No onResult/onActivityResult will ever arrive for a
-                                    // transaction the SDK never started — fail now instead of
-                                    // leaving this Result (and the Dart-side await) hanging forever.
-                                    pendingEposInAppResult = null
+                                    clearEposInAppBusy()
                                     result.error("PRINT_ERROR", "EPOS SDK rejected the print request (startTrans returned false)", null)
                                 }
                             } catch (e: Throwable) {
-                                pendingEposInAppResult = null
+                                clearEposInAppBusy()
                                 result.error("PRINT_ERROR", e.message, null)
                             }
                             return@setMethodCallHandler
@@ -159,14 +183,10 @@ class MainActivity : FlutterFragmentActivity() {
                             val bitmap = buildTestBitmap(text)
                             val eposBridgeTest = eposInApp
                             if (eposBridgeTest != null) {
-                                if (pendingEposInAppResult != null) {
-                                    result.error("BUSY", "EPOS in-app request already in progress", null)
-                                    return@setMethodCallHandler
-                                }
-                                pendingEposInAppResult = result
+                                if (!prepareEposInAppRequest(result)) return@setMethodCallHandler
                                 val b64 = bitmapToBase64(bitmap)
                                 if (!eposBridgeTest.startPrintBitmap(b64)) {
-                                    pendingEposInAppResult = null
+                                    clearEposInAppBusy()
                                     result.error("PRINT_ERROR", "EPOS SDK rejected the test print request (startTrans returned false)", null)
                                 }
                                 return@setMethodCallHandler
@@ -228,16 +248,12 @@ class MainActivity : FlutterFragmentActivity() {
                             }
                             val eposBridgePay = eposInApp
                             if (eposBridgePay != null) {
-                                if (pendingEposInAppResult != null) {
-                                    result.error("BUSY", "EPOS in-app request already in progress", null)
-                                    return@setMethodCallHandler
-                                }
-                                pendingEposInAppResult = result
+                                if (!prepareEposInAppRequest(result)) return@setMethodCallHandler
                                 val minor = EposOpenInAppHelper.amountDoubleToMinorUnits(amount)
                                 val dbRef =
                                     "${System.currentTimeMillis()}_${originalId}_${code.hashCode()}"
                                 if (!eposBridgePay.startSaleNoReceipt(minor, dbRef)) {
-                                    pendingEposInAppResult = null
+                                    clearEposInAppBusy()
                                     result.error("UNIPOS_ERROR", "EPOS SDK rejected the sale request (startTrans returned false)", null)
                                 }
                                 return@setMethodCallHandler
@@ -291,18 +307,9 @@ class MainActivity : FlutterFragmentActivity() {
                             }
                             val eposBridgePb = eposInApp
                             if (eposBridgePb != null) {
-                                if (pendingEposInAppResult != null) {
-                                    result.error("BUSY", "EPOS in-app request already in progress", null)
-                                    return@setMethodCallHandler
-                                }
-                                pendingEposInAppResult = result
+                                if (!prepareEposInAppRequest(result)) return@setMethodCallHandler
                                 if (!eposBridgePb.startPrintBitmap(base64)) {
-                                    // Same fail-fast as the other EPOS-in-app call sites: no
-                                    // onResult/onActivityResult will ever arrive for a transaction
-                                    // the SDK never started, and pendingEposInAppResult gates every
-                                    // other EPOS call — leaving it set here silently "BUSY"-locks
-                                    // all later prints/purchases for the rest of the process.
-                                    pendingEposInAppResult = null
+                                    clearEposInAppBusy()
                                     result.error("PRINT_ERROR", "EPOS SDK rejected the print request (startTrans returned false)", null)
                                 }
                                 return@setMethodCallHandler
@@ -327,13 +334,9 @@ class MainActivity : FlutterFragmentActivity() {
                         try {
                             val eposBridgeHc = eposInApp
                             if (eposBridgeHc != null) {
-                                if (pendingEposInAppResult != null) {
-                                    result.error("BUSY", "EPOS in-app request already in progress", null)
-                                    return@setMethodCallHandler
-                                }
-                                pendingEposInAppResult = result
+                                if (!prepareEposInAppRequest(result)) return@setMethodCallHandler
                                 if (!eposBridgeHc.startHealthCheck()) {
-                                    pendingEposInAppResult = null
+                                    clearEposInAppBusy()
                                     result.error("EPOS_ERROR", "EPOS SDK rejected the health check request (startTrans returned false)", null)
                                 }
                                 return@setMethodCallHandler
@@ -556,7 +559,14 @@ class MainActivity : FlutterFragmentActivity() {
             val p = pendingEposInAppResult!!
             val delivered = eposBridgeResult.tryDeliverActivityResult(requestCode, resultCode, data, p)
             if (delivered) {
-                pendingEposInAppResult = null
+                clearEposInAppBusy()
+                return
+            } else {
+                Log.w(eposLogTag, "EPOS in-app tryDeliverActivityResult returned false for requestCode=$requestCode")
+                try {
+                    p.error("EPOS_CANCELLED", "EPOS transaction cancelled or returned null response", null)
+                } catch (_: Throwable) {}
+                clearEposInAppBusy()
                 return
             }
         }

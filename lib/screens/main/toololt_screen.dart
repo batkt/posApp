@@ -12,7 +12,6 @@ import '../../models/pos_session.dart';
 import '../../services/category_service.dart';
 import '../../services/product_service.dart';
 import '../../services/toololt_service.dart';
-import '../../utils/app_date_range_picker.dart';
 import '../../utils/app_snackbar.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/app_date_range_filter_button.dart';
@@ -1100,36 +1099,7 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
     return '$y-$m-$day 23:59:59';
   }
 
-  Future<void> _pickRange() async {
-    final l10n = widget.l10n;
-    final picked = await showAppDateRangePicker(
-      context: context,
-      initialDateRange: _range,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-      helpText: l10n.tr('date_picker_range_help'),
-      cancelText: l10n.tr('date_picker_cancel'),
-      confirmText: l10n.tr('date_picker_confirm'),
-    );
-    if (picked == null || !mounted) return;
-    setState(() {
-      _range = DateTimeRange(
-        start: DateTime(
-          picked.start.year,
-          picked.start.month,
-          picked.start.day,
-        ),
-        end: DateTime(
-          picked.end.year,
-          picked.end.month,
-          picked.end.day,
-          23,
-          59,
-          59,
-        ),
-      );
-    });
-  }
+
 
   Future<void> _pickProducts() async {
     final productService = ProductService();
@@ -1419,7 +1389,7 @@ class _ToololtStartSheetState extends State<_ToololtStartSheet> {
     final l10n = widget.l10n;
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
-      showAppSnackBar(context, l10n.tr('toololt_start_name'),
+      showAppSnackBar(context, l10n.tr('toololt_start_name_req'),
           variant: AppSnackVariant.warning);
       return;
     }
@@ -1794,7 +1764,12 @@ class _ToololtMultiScanSheetState
     final entries = _scanned.values.toList().reversed.toList();
     final hasEntries = entries.isNotEmpty;
 
-    final topInset = MediaQuery.paddingOf(context).top;
+    final rawViewTop = MediaQuery.of(context).viewPadding.top;
+    final rawPadTop = MediaQuery.of(context).padding.top;
+    final rawWinTop =
+        View.of(context).padding.top / View.of(context).devicePixelRatio;
+    final topInset = [rawViewTop, rawPadTop, rawWinTop, 47.0]
+        .firstWhere((v) => v > 0);
     const scanBoxWidth = 280.0;
     const scanBoxHeight = 160.0;
     final scanBoxTop = topInset + 88.0;

@@ -48,10 +48,6 @@ IconData _posSettingsIcon(PosSettingsSection s) {
       return Icons.receipt_long_outlined;
     case PosSettingsSection.dans:
       return Icons.account_balance_outlined;
-    case PosSettingsSection.bonus:
-      return Icons.card_giftcard_outlined;
-    case PosSettingsSection.door:
-      return Icons.door_front_door_outlined;
     case PosSettingsSection.branches:
       return Icons.storefront_outlined;
     case PosSettingsSection.chatbot:
@@ -93,8 +89,6 @@ enum PosSettingsSection {
   notifications,
   ebarimt,
   dans,
-  bonus,
-  door,
   branches,
   chatbot,
 }
@@ -237,34 +231,58 @@ class _PosSettingsHubScreenState extends State<PosSettingsHubScreen> {
                                         vertical: 6,
                                       ),
                                       children: [
-                                        for (final s in sections)
-                                          Padding(
-                                            padding:
-                                                const EdgeInsets.only(right: 6),
-                                            child: FilterChip(
-                                              showCheckmark: false,
-                                              selectedColor: colorScheme
-                                                  .primaryContainer
-                                                  .withValues(alpha: 0.6),
-                                              avatar: Icon(
-                                                _posSettingsIcon(s),
-                                                size: 18,
-                                                color: _section == s
-                                                    ? colorScheme.onPrimaryContainer
-                                                    : colorScheme
-                                                        .onSurfaceVariant,
+                                        for (final s in sections) ...[
+                                          Builder(builder: (context) {
+                                            final isSelected = _section == s;
+                                            return Padding(
+                                              padding:
+                                                  const EdgeInsets.only(right: 6),
+                                              child: FilterChip(
+                                                showCheckmark: false,
+                                                selected: isSelected,
+                                                label: Text(
+                                                  posSettingsSectionLabel(
+                                                      l10n, s),
+                                                  style: TextStyle(
+                                                    fontWeight: isSelected
+                                                        ? FontWeight.bold
+                                                        : FontWeight.w600,
+                                                    color: isSelected
+                                                        ? Colors.white
+                                                        : colorScheme
+                                                            .onSurfaceVariant,
+                                                  ),
+                                                ),
+                                                avatar: Icon(
+                                                  _posSettingsIcon(s),
+                                                  size: 18,
+                                                  color: isSelected
+                                                      ? Colors.white
+                                                      : colorScheme
+                                                          .onSurfaceVariant,
+                                                ),
+                                                backgroundColor:
+                                                    colorScheme.surfaceContainerLow,
+                                                selectedColor:
+                                                    colorScheme.primary,
+                                                side: BorderSide(
+                                                  color: isSelected
+                                                      ? colorScheme.primary
+                                                      : colorScheme.outlineVariant
+                                                          .withValues(alpha: 0.5),
+                                                  width: isSelected ? 1.5 : 1.0,
+                                                ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(20),
+                                                ),
+                                                onSelected: (_) => setState(
+                                                  () => _section = s,
+                                                ),
                                               ),
-                                              label: Text(
-                                                posSettingsSectionLabel(
-                                                    l10n, s),
-                                                style: textTheme.labelLarge,
-                                              ),
-                                              selected: _section == s,
-                                              onSelected: (_) => setState(
-                                                () => _section = s,
-                                              ),
-                                            ),
-                                          ),
+                                            );
+                                          }),
+                                        ],
                                       ],
                                     ),
                                   ),
@@ -300,9 +318,10 @@ class _PosSettingsHubScreenState extends State<PosSettingsHubScreen> {
           onSaved: _reload,
         );
       case PosSettingsSection.baraa:
-        return _BaraaTokhirgooPanel(
+        return _CombinedBaraaBonusKhaaltPanel(
           l10n: l10n,
           baiguullaga: bg,
+          baiguullagiinId: pos.baiguullagiinId,
           salbariinId: pos.salbariinId,
           onSaved: _reload,
         );
@@ -328,18 +347,6 @@ class _PosSettingsHubScreenState extends State<PosSettingsHubScreen> {
           l10n: l10n,
           salbariinId: pos.salbariinId,
         );
-      case PosSettingsSection.bonus:
-        return _LoyaltyPanel(
-          l10n: l10n,
-          baiguullagiinId: pos.baiguullagiinId,
-        );
-      case PosSettingsSection.door:
-        return _KhaaltPanel(
-          l10n: l10n,
-          baiguullaga: bg,
-          baiguullagiinId: pos.baiguullagiinId,
-          onSaved: _reload,
-        );
       case PosSettingsSection.branches:
         return _BranchesPanel(
           l10n: l10n,
@@ -357,7 +364,7 @@ String posSettingsSectionLabel(AppLocalizations l10n, PosSettingsSection s) {
     case PosSettingsSection.personal:
       return l10n.tr('pos_settings_nav_personal');
     case PosSettingsSection.baraa:
-      return l10n.tr('pos_settings_nav_baraa');
+      return 'Бараа, бонус & хаалт';
     case PosSettingsSection.categories:
       return l10n.tr('pos_settings_nav_categories');
     case PosSettingsSection.notifications:
@@ -366,10 +373,6 @@ String posSettingsSectionLabel(AppLocalizations l10n, PosSettingsSection s) {
       return l10n.tr('pos_settings_nav_ebarimt');
     case PosSettingsSection.dans:
       return l10n.tr('pos_settings_nav_dans');
-    case PosSettingsSection.bonus:
-      return l10n.tr('pos_settings_nav_bonus');
-    case PosSettingsSection.door:
-      return l10n.tr('pos_settings_nav_door');
     case PosSettingsSection.branches:
       return l10n.tr('pos_settings_nav_branches');
     case PosSettingsSection.chatbot:
@@ -844,6 +847,55 @@ class _PersonalSettingsPanelState extends State<_PersonalSettingsPanel> {
   }
 }
 
+class _CombinedBaraaBonusKhaaltPanel extends StatelessWidget {
+  const _CombinedBaraaBonusKhaaltPanel({
+    required this.l10n,
+    required this.baiguullaga,
+    required this.baiguullagiinId,
+    required this.salbariinId,
+    required this.onSaved,
+  });
+
+  final AppLocalizations l10n;
+  final Map<String, dynamic>? baiguullaga;
+  final String baiguullagiinId;
+  final String salbariinId;
+  final Future<void> Function() onSaved;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      children: [
+        _BaraaTokhirgooPanel(
+          l10n: l10n,
+          baiguullaga: baiguullaga,
+          salbariinId: salbariinId,
+          onSaved: onSaved,
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Divider(height: 1),
+        ),
+        _LoyaltyPanel(
+          l10n: l10n,
+          baiguullagiinId: baiguullagiinId,
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Divider(height: 1),
+        ),
+        _KhaaltPanel(
+          l10n: l10n,
+          baiguullaga: baiguullaga,
+          baiguullagiinId: baiguullagiinId,
+          onSaved: onSaved,
+        ),
+      ],
+    );
+  }
+}
+
 class _BaraaTokhirgooPanel extends StatefulWidget {
   const _BaraaTokhirgooPanel({
     required this.l10n,
@@ -938,6 +990,8 @@ class _BaraaTokhirgooPanelState extends State<_BaraaTokhirgooPanel> {
       return Center(child: Text(l10n.tr('pos_settings_load_failed')));
     }
     return ListView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.all(20),
       children: [
         Text(l10n.tr('pos_settings_baraa_head'), style: Theme.of(context).textTheme.titleMedium),
@@ -965,8 +1019,10 @@ class _CategoryPanel extends StatefulWidget {
 class _CategoryPanelState extends State<_CategoryPanel> {
   final _svc = CategoryService();
   final _ctrl = TextEditingController();
+  final _dedCtrl = TextEditingController();
   List<Category> _list = [];
   bool _loading = true;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -977,6 +1033,7 @@ class _CategoryPanelState extends State<_CategoryPanel> {
   @override
   void dispose() {
     _ctrl.dispose();
+    _dedCtrl.dispose();
     super.dispose();
   }
 
@@ -993,15 +1050,109 @@ class _CategoryPanelState extends State<_CategoryPanel> {
   Future<void> _add() async {
     final name = _ctrl.text.trim();
     if (name.isEmpty) return;
+    setState(() => _saving = true);
     final ok = await posSettingsService.angilalNemii(
       baiguullagiinId: widget.baiguullagiinId,
       angilal: name,
+      dedAngilal: _dedCtrl.text.trim(),
+    );
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (ok) {
+      _ctrl.clear();
+      _dedCtrl.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.l10n.tr('pos_settings_saved'))),
+      );
+      await _load();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.l10n.tr('pos_settings_save_failed'))),
+      );
+    }
+  }
+
+  Future<void> _deleteCategory(Category c) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ангилал устгах уу?'),
+        content: Text('"${c.angilal}" ангилалыг устгахдаа итгэлтэй байна уу?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Болих'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFE53935),
+            ),
+            child: const Text('Устгах'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final ok = await posSettingsService.angilalUstga(c.id);
+    if (!mounted) return;
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ангилал амжилттай устгагдлаа')),
+      );
+      await _load();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.l10n.tr('pos_settings_save_failed'))),
+      );
+    }
+  }
+
+  Future<void> _showAddSubcategoryDialog(Category cat) async {
+    final subCtrl = TextEditingController();
+    final subName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${cat.angilal} — Дэд ангилал нэмэх'),
+        content: TextField(
+          controller: subCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Дэд ангилалын нэр',
+            hintText: 'нэр оруулна уу',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Болих'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(ctx, subCtrl.text.trim()),
+            icon: const Icon(Icons.check_circle_rounded),
+            label: const Text('Хадгалах'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF4CAF50),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (subName == null || subName.isEmpty) return;
+    final ok = await posSettingsService.dedAngilalNemii(
+      baiguullagiinId: widget.baiguullagiinId,
+      angilalId: cat.id,
+      angilal: cat.angilal,
+      dedAngilal: subName,
     );
     if (!mounted) return;
     if (ok) {
-      _ctrl.clear();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.l10n.tr('pos_settings_saved'))),
+        const SnackBar(content: Text('Дэд ангилал нэмэгдлээ')),
       );
       await _load();
     } else {
@@ -1014,31 +1165,197 @@ class _CategoryPanelState extends State<_CategoryPanel> {
   @override
   Widget build(BuildContext context) {
     final l10n = widget.l10n;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     if (_loading) return const Center(child: CircularProgressIndicator());
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text(l10n.tr('pos_settings_categories_head'), style: Theme.of(context).textTheme.titleMedium),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
+        Text(
+          l10n.tr('pos_settings_categories_head'),
+          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.6),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Шинэ ангилал болон дэд ангилал нэмэх',
+                style: textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
                 controller: _ctrl,
                 decoration: InputDecoration(
                   labelText: l10n.tr('pos_settings_category_new'),
+                  hintText: 'Ангилалын нэр оруулна уу',
+                  filled: true,
+                  border: const OutlineInputBorder(),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            FilledButton(onPressed: _add, child: Text(l10n.tr('pos_settings_category_add'))),
-          ],
-        ),
-        const SizedBox(height: 12),
-        for (final c in _list)
-          ListTile(
-            title: Text(c.angilal),
-            dense: true,
+              const SizedBox(height: 12),
+              TextField(
+                controller: _dedCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Дэд ангилал (сонголттой)',
+                  hintText: 'Дэд ангилалын нэр оруулна уу',
+                  filled: true,
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _saving ? null : _add,
+                  icon: const Icon(Icons.check_circle_rounded, size: 20),
+                  label: const Text(
+                    '✅  Хадгалах',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF4CAF50),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'Бүртгэгдсэн ангилалууд (${_list.length})',
+          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+        if (_list.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text(
+              'Ангилал бүртгэгдээгүй байна',
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        else
+          for (final c in _list)
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.category_rounded,
+                          size: 20, color: colorScheme.primary),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          c.angilal,
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _showAddSubcategoryDialog(c),
+                        icon: const Icon(Icons.add_rounded, size: 16),
+                        label: const Text('Дэд ангилал'),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => _deleteCategory(c),
+                        icon: const Icon(Icons.delete_outline_rounded,
+                            size: 20, color: Color(0xFFE53935)),
+                        tooltip: 'Ангилал устгах',
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                  if (c.subcategoryNames.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: c.subcategoryNames.map((sub) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primaryContainer
+                                .withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: colorScheme.primary
+                                  .withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.check_circle_rounded,
+                                size: 13,
+                                color: Color(0xFF4CAF50),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                sub,
+                                style: textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: colorScheme.onSurface,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
       ],
     );
   }
@@ -1240,24 +1557,144 @@ class _DansListPanelState extends State<_DansListPanel> {
   @override
   Widget build(BuildContext context) {
     final l10n = widget.l10n;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     if (_loading) return const Center(child: CircularProgressIndicator());
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text(l10n.tr('pos_settings_dans_head'), style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Text(l10n.tr('pos_settings_dans_hint'), style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(height: 12),
+        Text(
+          l10n.tr('pos_settings_dans_head'),
+          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          l10n.tr('pos_settings_dans_hint'),
+          style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 16),
         if (_rows.isEmpty)
-          Text(l10n.tr('pos_settings_dans_empty'))
-        else
-          for (final r in _rows)
-            Card(
-              child: ListTile(
-                title: Text(r['dansniiNer']?.toString() ?? '—'),
-                subtitle: Text('${r['dugaar'] ?? ''} · ${r['valyut'] ?? ''}'),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              l10n.tr('pos_settings_dans_empty'),
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
+          )
+        else
+          for (final r in _rows) ...[
+            Builder(builder: (context) {
+              final bankName = (r['bankniiNer'] ??
+                      r['bankName'] ??
+                      r['bank'] ??
+                      r['bankNer'] ??
+                      r['bankCode'] ??
+                      r['nermshil'])
+                  ?.toString()
+                  .trim();
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.6),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        Icons.account_balance_rounded,
+                        color: colorScheme.primary,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  r['dansniiNer']?.toString() ?? '—',
+                                  style: textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (bankName != null && bankName.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primary.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    bankName,
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: colorScheme.primary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Text(
+                                r['dugaar']?.toString() ?? '—',
+                                style: textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              if (r['valyut'] != null &&
+                                  r['valyut'].toString().isNotEmpty) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.secondaryContainer
+                                        .withValues(alpha: 0.5),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    r['valyut'].toString(),
+                                    style: textTheme.labelSmall?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
       ],
     );
   }
@@ -1341,6 +1778,8 @@ class _LoyaltyPanelState extends State<_LoyaltyPanel> {
     final l10n = widget.l10n;
     if (_loading) return const Center(child: CircularProgressIndicator());
     return ListView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.all(20),
       children: [
         Text(l10n.tr('pos_settings_bonus_head'), style: Theme.of(context).textTheme.titleMedium),
@@ -1427,6 +1866,8 @@ class _KhaaltPanelState extends State<_KhaaltPanel> {
       return Center(child: Text(l10n.tr('pos_settings_load_failed')));
     }
     return ListView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.all(20),
       children: [
         Text(l10n.tr('pos_settings_door_head'), style: Theme.of(context).textTheme.titleMedium),

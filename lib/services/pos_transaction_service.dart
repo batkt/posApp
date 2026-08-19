@@ -529,6 +529,12 @@ class PosTransactionException implements Exception {
     }
 
     final l = t.toLowerCase();
+    if (l.contains('in progress') ||
+        l.contains('already in progress') ||
+        l.contains('busy')) {
+      return 'Терминал одоогоор ажиллаж байна. Түр хүлээнэ үү.';
+    }
+
     if (t.contains('Гүйлгээ цуцлагдсан') ||
         (l.contains('гүйлгээ') && l.contains('цуцлагдсан')) ||
         (l.contains('transaction') && l.contains('cancel')) ||

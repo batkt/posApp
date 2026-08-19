@@ -51,7 +51,12 @@ Future<String?> showBarcodeScanSheet(BuildContext context) {
       );
       final size = MediaQuery.sizeOf(context);
       var handled = false;
-      final topInset = MediaQuery.paddingOf(context).top;
+      final rawViewTop = MediaQuery.of(context).viewPadding.top;
+      final rawPadTop = MediaQuery.of(context).padding.top;
+      final rawWinTop =
+          View.of(context).padding.top / View.of(context).devicePixelRatio;
+      final topInset = [rawViewTop, rawPadTop, rawWinTop, 47.0]
+          .firstWhere((v) => v > 0);
       const scanBoxWidth = 280.0;
       const scanBoxHeight = 160.0;
       final scanBoxTop = topInset + 88.0;
@@ -344,7 +349,12 @@ class _QuickScanSheetState extends State<_QuickScanSheet> {
     final items = _batch.values.toList();
     final hasItems = items.isNotEmpty;
 
-    final topInset = MediaQuery.paddingOf(context).top;
+    final rawViewTop = MediaQuery.of(context).viewPadding.top;
+    final rawPadTop = MediaQuery.of(context).padding.top;
+    final rawWinTop =
+        View.of(context).padding.top / View.of(context).devicePixelRatio;
+    final topInset = [rawViewTop, rawPadTop, rawWinTop, 47.0]
+        .firstWhere((v) => v > 0);
     const scanBoxWidth = 280.0;
     const scanBoxHeight = 160.0;
     final scanBoxTop = topInset + 88.0;

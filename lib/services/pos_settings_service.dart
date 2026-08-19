@@ -106,6 +106,7 @@ class PosSettingsService {
   Future<bool> angilalNemii({
     required String baiguullagiinId,
     required String angilal,
+    String? dedAngilal,
   }) async {
     try {
       final response = await _api.post<dynamic>(
@@ -113,11 +114,50 @@ class PosSettingsService {
         body: {
           'baiguullagiinId': baiguullagiinId,
           'angilal': angilal.trim(),
+          if (dedAngilal != null && dedAngilal.trim().isNotEmpty)
+            'dedAngilal': dedAngilal.trim(),
         },
         parser: (data) => data,
       );
       return response.success &&
           (response.data == 'Amjilttai' || response.data?.toString() == 'Amjilttai');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// `POST /dedAngilalNemii` — add a subcategory to an existing category.
+  Future<bool> dedAngilalNemii({
+    required String baiguullagiinId,
+    String? angilalId,
+    String? angilal,
+    required String dedAngilal,
+  }) async {
+    try {
+      final response = await _api.post<dynamic>(
+        '/dedAngilalNemii',
+        body: {
+          'baiguullagiinId': baiguullagiinId,
+          if (angilalId != null && angilalId.isNotEmpty) 'angilalId': angilalId,
+          if (angilal != null && angilal.isNotEmpty) 'angilal': angilal,
+          'dedAngilal': dedAngilal.trim(),
+        },
+        parser: (data) => data,
+      );
+      return response.success;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// `DELETE /BaraaniiAngilal/:id` — delete category
+  Future<bool> angilalUstga(String categoryId) async {
+    try {
+      final response = await _api.delete<dynamic>(
+        '/BaraaniiAngilal/$categoryId',
+        parser: (data) => data,
+      );
+      return response.success;
     } catch (_) {
       return false;
     }

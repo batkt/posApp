@@ -582,54 +582,6 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
                   onPressed: () => setState(() => _editing = true),
                   child: Text(l10n.tr('baraa_edit')),
                 ),
-              if (canEdit && _editing) ...[
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: FilledButton.tonal(
-                    onPressed: _saving
-                        ? null
-                        : () {
-                            setState(() {
-                              _editing = false;
-                              _applyProductToForm();
-                            });
-                          },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: colorScheme.surfaceContainerHighest,
-                      foregroundColor: colorScheme.onSurfaceVariant,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      minimumSize: const Size(0, 36),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: Text(l10n.tr('baraa_cancel')),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilledButton(
-                    onPressed: _saving ? null : _onSave,
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      minimumSize: const Size(0, 36),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: _saving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Text(l10n.tr('baraa_save')),
-                  ),
-                ),
-              ],
             ],
             flexibleSpace: FlexibleSpaceBar(
               stretchModes: const [StretchMode.zoomBackground],

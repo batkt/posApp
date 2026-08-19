@@ -44,6 +44,21 @@ class UniPosService {
       PosNativeDebugLog.record('UniPos', 'android.unipos.purchase response', parsed);
       return parsed;
     } on PlatformException catch (e, st) {
+      if (e.code == 'BUSY' || (e.message?.contains('already in progress') ?? false)) {
+        try {
+          await _channel.invokeMethod<void>('android.epos.resetBusyState');
+        } catch (_) {}
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+        try {
+          final retryRaw = await _channel.invokeMethod<dynamic>(
+            'android.unipos.purchase',
+            args,
+          );
+          final parsed = _parseResult(retryRaw);
+          PosNativeDebugLog.record('UniPos', 'android.unipos.purchase retry response', parsed);
+          return parsed;
+        } catch (_) {}
+      }
       PosNativeDebugLog.record(
         'UniPos',
         'android.unipos.purchase PlatformException',

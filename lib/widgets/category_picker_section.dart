@@ -57,38 +57,72 @@ class _CategoryPickerSectionState extends State<CategoryPickerSection> {
           borderRadius: BorderRadius.circular(12),
           onTap: () => setState(() => _expanded = !_expanded),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
-              border: Border.all(color: colorScheme.outlineVariant),
+              color: colorScheme.surfaceContainerLow,
+              border: Border.all(
+                color: hasCurrent
+                    ? const Color(0xFF4CAF50)
+                    : colorScheme.outlineVariant,
+                width: hasCurrent ? 1.5 : 1.0,
+              ),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               children: [
+                Icon(
+                  hasCurrent
+                      ? Icons.check_circle_rounded
+                      : Icons.category_rounded,
+                  color: hasCurrent
+                      ? const Color(0xFF4CAF50)
+                      : colorScheme.primary,
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    hasCurrent ? current : 'Ангилал сонгоогүй',
-                    style: tt.bodyMedium?.copyWith(
-                      color: hasCurrent
-                          ? colorScheme.onSurface
-                          : colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Ангилал',
+                        style: tt.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        hasCurrent ? current : 'Ангилал сонгоогүй',
+                        style: tt.bodyMedium?.copyWith(
+                          color: hasCurrent
+                              ? colorScheme.onSurface
+                              : colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
                 Icon(
-                  _expanded
-                      ? Icons.remove_circle_outline
-                      : Icons.add_circle_outline,
-                  color: colorScheme.primary,
+                  hasCurrent
+                      ? Icons.check_circle_rounded
+                      : (_expanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded),
+                  color: hasCurrent
+                      ? const Color(0xFF4CAF50)
+                      : colorScheme.primary,
                 ),
               ],
             ),
           ),
         ),
         if (_expanded) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           if (widget.categoryList.isNotEmpty)
             DropdownButtonFormField<Category>(
               isExpanded: true,
@@ -98,7 +132,14 @@ class _CategoryPickerSectionState extends State<CategoryPickerSection> {
               decoration: InputDecoration(
                 labelText: 'Ангилал сонгох',
                 border: const OutlineInputBorder(),
-                prefixIcon: Icon(Icons.add, color: colorScheme.primary),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+                prefixIcon: const Icon(
+                  Icons.check_circle_rounded,
+                  color: Color(0xFF4CAF50),
+                ),
                 suffixIcon: widget.loadingCategories
                     ? const SizedBox(
                         width: 16,
