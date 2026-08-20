@@ -128,12 +128,11 @@ class VisualReceiptRenderer {
           ),
           (() {
             final salbarNer = (data['salbarNer'] ?? data['salbariinNer'] ?? data['salbarName'] ?? data['salbar'] ?? '').toString().trim();
-            final displaySalbar = salbarNer.isNotEmpty ? salbarNer : companyNer;
-            if (displaySalbar.isEmpty) return const SizedBox.shrink();
+            if (salbarNer.isEmpty) return const SizedBox.shrink();
             return Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Text(
-                'Салбар: $displaySalbar',
+                'Салбар: $salbarNer',
                 style: const TextStyle(
                   color: Colors.black,
                   fontWeight: FontWeight.w700,

@@ -423,14 +423,15 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final ebarimtCompanyNer = _companyNameFromEbarimt(e);
     final khungulE = _ebarimtKhungulukh(e);
     final auth = context.read<AuthModel>();
-    final merchantName = _merchantSalbarName.isNotEmpty
-        ? _merchantSalbarName
-        : (auth.activeSalbariinLabel.isNotEmpty
-            ? auth.activeSalbariinLabel
-            : (auth.merchantDisplayName.isNotEmpty
-                ? auth.merchantDisplayName
-                : ebarimtCompanyNer))
-            .trim();
+    final orgName = (auth.merchantDisplayName.isNotEmpty
+            ? auth.merchantDisplayName
+            : (auth.posSession?.baiguullagiinNer ?? ebarimtCompanyNer))
+        .trim();
+    final salbarName = (_merchantSalbarName.isNotEmpty
+            ? _merchantSalbarName
+            : auth.activeSalbariinLabel)
+        .trim();
+
     final canPosEbarimt = auth.canSubmitPosSales &&
         widget.guilgeeniiMongoId != null &&
         widget.guilgeeniiMongoId!.isNotEmpty;
@@ -462,7 +463,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
         SizedBox(
           width: double.infinity,
           child: Text(
-            '${merchantName.isNotEmpty ? merchantName.toUpperCase() : 'POSEASE'} БАРИМТ',
+            '${orgName.isNotEmpty ? orgName.toUpperCase() : 'POSEASE'} БАРИМТ',
             textAlign: TextAlign.center,
             style: textTheme.titleSmall?.copyWith(
               color: Colors.black,
@@ -472,10 +473,10 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             ),
           ),
         ),
-        if (merchantName.isNotEmpty) ...[
+        if (salbarName.isNotEmpty) ...[
           const SizedBox(height: 2),
           Text(
-            'Салбар: $merchantName',
+            'Салбар: $salbarName',
             textAlign: TextAlign.start,
             style: textTheme.labelMedium?.copyWith(
               color: Colors.black,
