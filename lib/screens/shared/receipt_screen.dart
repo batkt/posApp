@@ -563,7 +563,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             ),
           ),
         ],
-        if (ebarimtType == 'ААН' && ebarimtCompanyNer.isNotEmpty && ebarimtCompanyNer != merchantName) ...[
+        if (ebarimtType == 'ААН' && ebarimtCompanyNer.isNotEmpty && ebarimtCompanyNer != orgName) ...[
           const SizedBox(height: 2),
           Text(
             'Худалдан авагч: $ebarimtCompanyNer',
