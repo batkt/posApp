@@ -425,7 +425,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final auth = context.read<AuthModel>();
     final orgName = (auth.merchantDisplayName.isNotEmpty
             ? auth.merchantDisplayName
-            : (auth.posSession?.baiguullagiinNer ?? ebarimtCompanyNer))
+            : ebarimtCompanyNer)
         .trim();
     final salbarName = (_merchantSalbarName.isNotEmpty
             ? _merchantSalbarName
