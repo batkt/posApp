@@ -80,7 +80,7 @@ class VisualReceiptRenderer {
     final lottery = (data['lottery'] ?? data['lotteryNo'] ?? '').toString().trim();
     final billId = (data['billId'] ?? data['ddtd'] ?? '').toString().trim();
     final register = (data['register'] ?? '').toString().trim();
-    final companyNer = (data['baiguullagiinNer'] ?? data['merchantName'] ?? '').toString().trim();
+    final companyNer = (data['baiguullagiinNer'] ?? data['baiguullagaNer'] ?? data['merchantName'] ?? data['companyName'] ?? data['baiguullaga_ner'] ?? '').toString().trim();
     final buyerCompanyNer = (data['customerName'] ?? data['companyDisplayName'] ?? data['buyerName'] ?? '').toString().trim();
     final qrData = _qrDataFromBarimt(data);
 

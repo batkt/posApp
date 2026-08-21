@@ -49,6 +49,20 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        externalNativeBuild {
+            cmake {
+                arguments("-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON")
+            }
+            ndkBuild {
+                arguments("APP_LDFLAGS+=-Wl,-z,max-page-size=16384")
+            }
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     signingConfigs {
@@ -80,6 +94,9 @@ android {
             signingConfig =
                 signingConfigs.findByName("debug")
                     ?: signingConfigs.getByName("release")
+            // signingConfig =
+            //     signingConfigs.findByName("release")
+            //         ?: signingConfigs.getByName("debug")
             // When you enable isMinifyEnabled = true, PAX/Neptune needs these keeps (see proguard-rules.pro).
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

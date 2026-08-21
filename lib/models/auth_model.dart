@@ -182,7 +182,7 @@ class AuthModel extends ChangeNotifier {
     final s = _posSession;
     if (s == null) return '';
     final a = s.ajiltan;
-    final bgn = a['baiguullagiinNer'] ?? a['baiguullagaNer'] ?? a['merchantName'] ?? a['ner'] ?? a['name'];
+    final bgn = a['baiguullagiinNer'] ?? a['baiguullagaNer'] ?? a['merchantName'] ?? a['baiguullaga_ner'] ?? a['orgName'] ?? a['companyName'];
     if (bgn != null && bgn.toString().trim().isNotEmpty) {
       return bgn.toString().trim();
     }
@@ -198,8 +198,6 @@ class AuthModel extends ChangeNotifier {
         return sName.toString().trim();
       }
     }
-    final label = activeSalbariinLabel;
-    if (label.isNotEmpty) return label;
     return '';
   }
 

@@ -37,23 +37,42 @@ class AuthService {
         _baiguullagaService =
             baiguullagaService ?? BaiguullagaService(apiService: apiService ?? posApiService);
 
-  /// When [ajiltan.salbaruud] is empty, [PosSession.tryParse] falls back to org id as
-  /// `salbariinId`, which does not match `/aguulakh` rows — load the org's first branch.
+  /// Fetches org details (`baiguullaga.ner`) and resolves branch ID if missing.
   Future<PosSession?> _resolvePosSession(Map<String, dynamic>? userData) async {
     final base = PosSession.tryParse(userData);
     if (base == null) return null;
-    final sal = userData?['salbaruud'];
-    if (sal is List && sal.isNotEmpty) return base;
 
-    final resolved = await _baiguullagaService.fetchFirstSalbariinId(
-      base.baiguullagiinId,
-    );
-    if (resolved == null || resolved.isEmpty) return base;
+    final updatedAjiltan = Map<String, dynamic>.from(base.ajiltan);
+    String? resolvedSalbarId;
+
+    try {
+      final orgDoc = await _baiguullagaService.fetchBaiguullagaDoc(base.baiguullagiinId);
+      if (orgDoc != null) {
+        final orgName = orgDoc['ner'] ?? orgDoc['name'];
+        if (orgName != null && orgName.toString().trim().isNotEmpty) {
+          updatedAjiltan['baiguullagiinNer'] = orgName.toString().trim();
+        }
+        final sal = orgDoc['salbaruud'];
+        if (sal is List && sal.isNotEmpty) {
+          final first = sal.first;
+          if (first is Map) {
+            resolvedSalbarId = first['_id']?.toString();
+          } else if (first is String) {
+            resolvedSalbarId = first;
+          }
+        }
+      }
+    } catch (_) {}
+
+    final sal = userData?['salbaruud'];
+    final finalSalbarId = (sal is List && sal.isNotEmpty)
+        ? base.salbariinId
+        : (resolvedSalbarId ?? base.salbariinId);
 
     return PosSession(
       baiguullagiinId: base.baiguullagiinId,
-      salbariinId: resolved,
-      ajiltan: base.ajiltan,
+      salbariinId: finalSalbarId,
+      ajiltan: updatedAjiltan,
     );
   }
 

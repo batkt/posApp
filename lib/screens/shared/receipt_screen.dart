@@ -423,9 +423,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final ebarimtCompanyNer = _companyNameFromEbarimt(e);
     final khungulE = _ebarimtKhungulukh(e);
     final auth = context.read<AuthModel>();
-    final orgName = (auth.merchantDisplayName.isNotEmpty
-            ? auth.merchantDisplayName
-            : ebarimtCompanyNer)
+    final orgName = (ebarimtCompanyNer.isNotEmpty
+            ? ebarimtCompanyNer
+            : auth.merchantDisplayName)
         .trim();
     final salbarName = (_merchantSalbarName.isNotEmpty
             ? _merchantSalbarName
