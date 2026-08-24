@@ -6,8 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/payment_display_config.dart';
 import '../models/auth_model.dart';
+import '../models/cart_model.dart';
+import '../models/sales_model.dart';
+import '../payment/pos_payment_core.dart';
+import '../screens/shared/receipt_screen.dart';
 import '../services/background_watchdog_service.dart';
+import '../services/pos_transaction_service.dart';
 import '../services/socket_service.dart';
 import '../services/terminal_tulbur_signal_service.dart';
 import '../services/unipos_service.dart';
@@ -180,15 +186,137 @@ class _KioskTerminalPaySignalListenerState
 
       await _svc.markCompleted(item.id);
       debugPrint('>>> [KioskTerminalPaySignalListener] Card payment successfully completed for ${item.id}');
+
       if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              '${MntAmountFormatter.formatTugrik(item.amountMnt)} — UniPOS гүйлгээ амжилттай дууслаа!',
-            ),
-            backgroundColor: Colors.green,
-          ),
+        final sales = context.read<SalesModel>();
+        final auth = context.read<AuthModel>();
+        final session = auth.posSession;
+
+        final due = (sales.isSaleEmpty || sales.total <= 0) ? item.amountMnt : sales.total;
+        final std = PosPaymentCore.calculateStandardSaleTotals(due);
+        final tw = CashierTotals(
+          cappedDiscount: 0,
+          net: std.net,
+          vat: std.vat,
+          nhhat: 0,
+          total: due,
         );
+
+        String? guilgeeMongoId;
+        String finalOrderNo = PaymentDisplayConfig.generateOrderPreview();
+
+        if (session != null) {
+          try {
+            final svc = PosTransactionService();
+            var orderNo = sales.guilgeeniiDugaar;
+            if (orderNo == null || orderNo.isEmpty) {
+              final d = await svc.fetchZakhialgiinDugaar(
+                baiguullagiinId: session.baiguullagiinId,
+              );
+              if (d != null && d.isNotEmpty) {
+                orderNo = d;
+                sales.setGuilgeeniiDugaar(d);
+              }
+            }
+
+            if (orderNo != null && orderNo.isNotEmpty) {
+              finalOrderNo = orderNo;
+            }
+
+            if (!sales.isSaleEmpty) {
+              final saveResp = await svc.submitGuilgeeniiTuukh(
+                session: session,
+                sales: sales,
+                paymentTurul: 'карт',
+                niitUne: due,
+                tulsunDun: due,
+                hariult: 0,
+                hungulsunDun: 0,
+                noatiinDun: std.vat,
+                noatguiDun: std.net,
+                nhatiinDun: 0,
+                guilgeeniiDugaar: finalOrderNo,
+                webTaxContext: sales.webTaxContext,
+              );
+              guilgeeMongoId =
+                  PosTransactionService.parseGuilgeeniiMongoIdFromSaveResponse(saveResp);
+            }
+          } catch (e) {
+            debugPrint('Error submitting guilgeenii tuukh after card payment: $e');
+          }
+        }
+
+        final List<CartItem> receiptItems = (!sales.isSaleEmpty && sales.currentSaleItems.isNotEmpty)
+            ? sales.currentSaleItems
+                .map((i) => CartItem(product: i.product, quantity: i.quantity))
+                .toList()
+            : [
+                CartItem(
+                  product: Product(
+                    id: 'card_pay_${item.id}',
+                    name: item.tailbar.isNotEmpty ? item.tailbar : 'Картын төлбөр',
+                    description: 'Картын хүсэлтийн төлбөр',
+                    price: item.amountMnt,
+                    category: 'Картын төлбөр',
+                    imageUrl: '',
+                    code: 'CARD',
+                    barCode: 'CARD',
+                    khemjikhNegj: 'шир',
+                  ),
+                  quantity: 1,
+                ),
+              ];
+
+        final completed = (!sales.isSaleEmpty && sales.currentSaleItems.isNotEmpty)
+            ? sales.completeCashierSale(
+                paymentMethod: PosPaymentCore.methodCard,
+                discountMnt: 0,
+                totalsSnapshot: tw,
+                orderId: finalOrderNo,
+              )
+            : CompletedSale(
+                id: finalOrderNo,
+                items: receiptItems
+                    .map((i) => SaleItem(
+                          product: i.product,
+                          unitPrice: i.product.price,
+                          retailUnitPrice: i.product.price,
+                          quantity: i.quantity,
+                        ))
+                    .toList(),
+                subtotal: due,
+                tax: std.vat,
+                total: due,
+                paymentMethod: PosPaymentCore.methodCard,
+                timestamp: DateTime.now(),
+                noatguiSum: std.net,
+              );
+
+        if (mounted) {
+          final slip = CashierSlipTotals(
+            grossSubtotal: completed.subtotal,
+            discount: completed.discount,
+            noatgui: completed.noatguiSum,
+            noat: completed.tax,
+            nhat: completed.nhhat,
+            payable: completed.total,
+          );
+
+          debugPrint('>>> [KioskTerminalPaySignalListener] PUSHING RECEIPT SCREEN orderNo=$finalOrderNo, total=$due');
+
+          await Navigator.of(context, rootNavigator: true).push(
+            MaterialPageRoute(
+              builder: (ctx) => ReceiptScreen(
+                items: receiptItems,
+                total: completed.total,
+                paymentMethod: completed.paymentMethod,
+                orderNumber: completed.id,
+                guilgeeniiMongoId: guilgeeMongoId,
+                cashierSlipTotals: slip,
+              ),
+            ),
+          );
+        }
       }
     } on Exception catch (e) {
       debugPrint('>>> [KioskTerminalPaySignalListener] UniPOS transaction cancelled/failed: $e');

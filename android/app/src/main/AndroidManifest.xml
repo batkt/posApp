@@ -83,6 +83,13 @@
         <package android:name="com.paxservice" />
         <!-- UniPOS terminal app visibility -->
         <package android:name="mn.genesis.unipos.terminal" />
+        <!-- DataBank EPOS OpenAPI package visibility -->
+        <package android:name="mn.databank.epos" />
+        <package android:name="mn.databank.eposopenapi" />
+        <package android:name="com.golomt.epos" />
+        <intent>
+            <action android:name="android.epos.payment.entry" />
+        </intent>
         <!-- Discover terminal apps that receive payment JSON via ACTION_SEND (PAX / various acquirers). -->
         <intent>
             <action android:name="android.intent.action.SEND" />

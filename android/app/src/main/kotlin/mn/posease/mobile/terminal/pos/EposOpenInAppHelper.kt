@@ -41,7 +41,10 @@ class EposOpenInAppHelper(
         val args = Bundle()
         args.putString("request-type", "healthCheck")
         request.setExtraBundle(args)
+        request.setAppId(activity.packageName)
         request.setCategory(SdkConstants.CATEGORY_HEALTH_CHECK)
+        val commandType = MessageUtils.getType(request)
+        Log.i(logTag, "EPOS healthCheck commandType=$commandType")
         val started = api.startTrans(activity, request)
         if (!started) Log.e(logTag, "EPOS in-app health check: startTrans returned false")
         return started
@@ -52,8 +55,11 @@ class EposOpenInAppHelper(
         val request = PrintBitmapMsg.Request()
         val args = Bundle()
         request.setExtraBundle(args)
+        request.setAppId(activity.packageName)
         request.setBitmap(base64Image)
         request.setCategory(SdkConstants.CATEGORY_PRINT_BITMAP)
+        val commandType = MessageUtils.getType(request)
+        Log.i(logTag, "EPOS printBitmap commandType=$commandType")
         val started = api.startTrans(activity, request)
         if (!started) Log.e(logTag, "EPOS in-app printBitmap: startTrans returned false")
         return started
@@ -68,11 +74,14 @@ class EposOpenInAppHelper(
         val request = SaleNoReceiptMsg.Request()
         val args = Bundle()
         request.setExtraBundle(args)
+        request.setAppId(activity.packageName)
         request.setAmount(amountMinor)
         if (!dbRefNo.isNullOrBlank()) {
             request.setDbRefNo(dbRefNo)
         }
         request.setCategory(SdkConstants.CATEGORY_SALE)
+        val commandType = MessageUtils.getType(request)
+        Log.i(logTag, "EPOS saleNoReceipt commandType=$commandType")
         val started = api.startTrans(activity, request)
         if (!started) Log.e(logTag, "EPOS in-app saleNoReceipt: startTrans returned false")
         return started
