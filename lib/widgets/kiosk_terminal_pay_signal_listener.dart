@@ -141,7 +141,7 @@ class _KioskTerminalPaySignalListenerState
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
         terminalWatchdogHeartbeatKey,
-        DateTime.now().add(const Duration(minutes: 2)).toIso8601String(),
+        DateTime.now().add(const Duration(minutes: 5)).toIso8601String(),
       );
     } catch (_) {}
     try {
@@ -223,24 +223,41 @@ class _KioskTerminalPaySignalListenerState
               finalOrderNo = orderNo;
             }
 
-            if (!sales.isSaleEmpty) {
-              final saveResp = await svc.submitGuilgeeniiTuukh(
-                session: session,
-                sales: sales,
-                paymentTurul: 'карт',
-                niitUne: due,
-                tulsunDun: due,
-                hariult: 0,
-                hungulsunDun: 0,
-                noatiinDun: std.vat,
-                noatguiDun: std.net,
-                nhatiinDun: 0,
-                guilgeeniiDugaar: finalOrderNo,
-                webTaxContext: sales.webTaxContext,
+            if (sales.isSaleEmpty) {
+              sales.addToSale(
+                Product(
+                  id: 'card_pay_${item.id}',
+                  name: item.tailbar.isNotEmpty ? item.tailbar : 'Картын төлбөр',
+                  description: 'Картын хүсэлтийн төлбөр',
+                  price: item.amountMnt,
+                  category: 'Картын төлбөр',
+                  imageUrl: '',
+                  code: 'CARD',
+                  barCode: 'CARD',
+                  khemjikhNegj: 'шир',
+                  noatBodohEsekh: true,
+                  ajilUilchilgeeEsekh: true,
+                ),
               );
-              guilgeeMongoId =
-                  PosTransactionService.parseGuilgeeniiMongoIdFromSaveResponse(saveResp);
             }
+
+            final saveResp = await svc.submitGuilgeeniiTuukh(
+              session: session,
+              sales: sales,
+              paymentTurul:
+                  PosTransactionService.paymentMethodToTurul(PosPaymentCore.methodCard),
+              niitUne: due,
+              tulsunDun: due,
+              hariult: 0,
+              hungulsunDun: 0,
+              noatiinDun: std.vat,
+              noatguiDun: std.net,
+              nhatiinDun: 0,
+              guilgeeniiDugaar: finalOrderNo,
+              webTaxContext: sales.webTaxContext,
+            );
+            guilgeeMongoId =
+                PosTransactionService.parseGuilgeeniiMongoIdFromSaveResponse(saveResp);
           } catch (e) {
             debugPrint('Error submitting guilgeenii tuukh after card payment: $e');
           }
@@ -262,6 +279,8 @@ class _KioskTerminalPaySignalListenerState
                     code: 'CARD',
                     barCode: 'CARD',
                     khemjikhNegj: 'шир',
+                    noatBodohEsekh: true,
+                    ajilUilchilgeeEsekh: true,
                   ),
                   quantity: 1,
                 ),
@@ -302,12 +321,23 @@ class _KioskTerminalPaySignalListenerState
             payable: completed.total,
           );
 
-          debugPrint('>>> [KioskTerminalPaySignalListener] PUSHING RECEIPT SCREEN orderNo=$finalOrderNo, total=$due');
+          // Always reset cart & sales model so main screen returns to a clean state
+          sales.clearSale();
 
-          await Navigator.of(context, rootNavigator: true).push(
+          // Pop active payment modals/dialogs so user lands directly on root main screen
+          final nav = Navigator.of(context, rootNavigator: true);
+          if (nav.canPop()) {
+            nav.popUntil((route) => route.isFirst);
+          }
+
+          debugPrint('>>> [KioskTerminalPaySignalListener] REDIRECTING TO RECEIPT SCREEN orderNo=$finalOrderNo, total=$due');
+
+          await nav.push(
             MaterialPageRoute(
               builder: (ctx) => ReceiptScreen(
-                items: receiptItems,
+                items: completed.items
+                    .map((i) => CartItem(product: i.product, quantity: i.quantity))
+                    .toList(),
                 total: completed.total,
                 paymentMethod: completed.paymentMethod,
                 orderNumber: completed.id,
@@ -336,6 +366,13 @@ class _KioskTerminalPaySignalListenerState
       }
     } finally {
       _isProcessingCardRequest = false;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(
+          terminalWatchdogHeartbeatKey,
+          DateTime.now().toIso8601String(),
+        );
+      } catch (_) {}
     }
   }
 

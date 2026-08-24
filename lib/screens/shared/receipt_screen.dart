@@ -332,23 +332,15 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       return;
     }
     final auth = context.read<AuthModel>();
-    final id = widget.guilgeeniiMongoId;
-    if (id == null || id.isEmpty || !auth.canSubmitPosSales) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('И-Баримт авах боломжгүй')),
-        );
-      }
-      return;
-    }
-    final session = auth.posSession!;
+    final session = auth.posSession;
+    final id = widget.guilgeeniiMongoId ?? '';
     final result = await showDialog<Map<String, dynamic>?>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => _EbarimtBuyerDialog(
         guilgeeniiMongoId: id,
-        baiguullagiinId: session.baiguullagiinId,
-        salbariinId: session.salbariinId,
+        baiguullagiinId: session?.baiguullagiinId ?? '',
+        salbariinId: session?.salbariinId ?? '',
       ),
     );
     if (!mounted || result == null) return;
@@ -941,28 +933,32 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      if (canPosEbarimt) ...[
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () => _onEbarimtPrintPressed(context),
-                            icon: const Icon(Icons.print_outlined),
-                            label: Text(
-                              _ebarimt == null
-                                  ? 'И-Баримт сонгоод хэвлэх'
-                                  : 'И-Баримт хэвлэх',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
+                      SizedBox(
+                        width: double.infinity,
+                        child: _taxContext.eBarimtShine
+                            ? OutlinedButton.icon(
+                                onPressed: () => _onEbarimtPrintPressed(context),
+                                icon: const Icon(Icons.print_outlined),
+                                label: Text(
+                                  _ebarimt != null
+                                      ? 'И-Баримт хэвлэх'
+                                      : 'И-Баримт сонгоод хэвлэх',
+                                ),
+                              )
+                            : OutlinedButton.icon(
+                                onPressed: () => _printOnPaxDevice(context),
+                                icon: const Icon(Icons.print_outlined),
+                                label: const Text('Баримт хэвлэх'),
+                              ),
+                      ),
+                      const SizedBox(height: 8),
                       SizedBox(
                         width: double.infinity,
                         child: PrintReceiptToPosButton(
                           salbariinId: context.read<AuthModel>().posSession?.salbariinId ?? '',
                           barimtType: 'ebarimt',
                           onBeforeSend: () async {
-                            if (_ebarimt == null && canPosEbarimt) {
+                            if (_ebarimt == null && canPosEbarimt && _taxContext.eBarimtShine) {
                               await _onEbarimtPrintPressed(context);
                             }
                             return _buildCompleteBarimtData();

@@ -102,6 +102,7 @@ class PosTransactionService {
       'zurgiinId': product.zurgiinId,
       'noatBodohEsekh': noatBodohEsekh,
       'nhatBodohEsekh': nhatBodohEsekh,
+      'ajilUilchilgeeEsekh': product.ajilUilchilgeeEsekh == true,
       'ognooniiMedeelelBurtgekhEsekh': product.ognooniiMedeelelBurtgekhEsekh,
       'noatiinDun': _fixed2Num(lineVat),
       'nhatiinDun': _fixed2Num(webLineTax?.nhatiinDun ?? 0),

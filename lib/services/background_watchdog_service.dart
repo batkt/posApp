@@ -135,6 +135,9 @@ Future<void> _watchdogTick() async {
   if (pendingCount == 0) return; // nothing waiting, no reason to relaunch
 
   final prefs = await SharedPreferences.getInstance();
+  try {
+    await prefs.reload();
+  } catch (_) {}
   final lastBeatStr = prefs.getString(terminalWatchdogHeartbeatKey);
   final lastBeat = DateTime.tryParse(lastBeatStr ?? '');
   final now = DateTime.now();

@@ -30,6 +30,7 @@ class Product {
   final bool? shirkheglekhEsekh;
   final bool? noatBodohEsekh;
   final bool? nhatBodohEsekh;
+  final bool? ajilUilchilgeeEsekh;
   final bool? ognooniiMedeelelBurtgekhEsekh;
   final int? uldegdel;
   final int? negKhairtsaganDahiShirhegiinToo;
@@ -84,6 +85,7 @@ class Product {
     this.shirkheglekhEsekh,
     this.noatBodohEsekh,
     this.nhatBodohEsekh,
+    this.ajilUilchilgeeEsekh,
     this.ognooniiMedeelelBurtgekhEsekh,
     this.uldegdel,
     this.negKhairtsaganDahiShirhegiinToo,
