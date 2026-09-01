@@ -21,18 +21,31 @@ enum class TerminalHardwareProfile {
 
     companion object {
         fun detect(): TerminalHardwareProfile {
-            val m = "${Build.MODEL} ${Build.DEVICE} ${Build.PRODUCT}".uppercase(Locale.US)
+            val m = "${Build.MODEL} ${Build.DEVICE} ${Build.PRODUCT} ${Build.MANUFACTURER}".uppercase(Locale.US)
             // RTX first — model string may contain both "A930" and "RTX".
             if (m.contains("A930RTX") || m.contains("930RTX") || (m.contains("A930") && m.contains("RTX"))) {
                 return NEPTUNE_PAX
             }
-            if (m.contains("A8900") || m.contains("8900")) {
-                return EPOS_OPEN_IN_APP
+            if (m.contains("A8900") || m.contains("8900") || m.contains("A930") || m.contains("930") ||
+                m.contains("A920") || m.contains("920") || m.contains("A80") || m.contains("A35") ||
+                m.contains("PAX") || m.contains("EPOS")) {
+                if (hasEposOpenSdk()) {
+                    return EPOS_OPEN_IN_APP
+                }
             }
-            if (m.contains("A930")) {
+            if (hasEposOpenSdk() && (m.contains("PAX") || m.contains("DATABANK") || m.contains("EPOS"))) {
                 return EPOS_OPEN_IN_APP
             }
             return LEGACY_INTENT
+        }
+
+        private fun hasEposOpenSdk(): Boolean {
+            return try {
+                Class.forName("mn.databank.eposopenapi.factory.EposTransAPIFactory")
+                true
+            } catch (_: Throwable) {
+                false
+            }
         }
     }
 }

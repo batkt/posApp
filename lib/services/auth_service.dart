@@ -305,6 +305,7 @@ class AuthService {
     } finally {
       _apiService.clearToken();
       posApiService.clearToken();
+      await TerminalSessionStore.instance.clear();
     }
   }
 

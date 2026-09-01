@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/api_service.dart';
+
 /// Ring buffer of recent native-bridge + optional HTTP lines for support / debugging
 /// without switching to the bank EPOS or UniPOS app.
 ///
@@ -16,8 +18,14 @@ class PosNativeDebugLog {
   static const int _maxCharsPerEntry = 12000;
   static final List<String> _lines = [];
 
-  /// Appends a timestamped entry (trimmed). Also [debugPrint]s in debug mode.
-  static void record(String source, String title, Object? payload) {
+  /// Appends a timestamped entry (trimmed). Also [debugPrint]s in debug mode and streams to posBack.
+  static void record(
+    String source,
+    String title,
+    Object? payload, {
+    String? baiguullagiinId,
+    String? salbariinId,
+  }) {
     final ts = DateTime.now().toIso8601String();
     String body;
     try {
@@ -44,6 +52,40 @@ class PosNativeDebugLog {
     while (_lines.length > _maxEntries) {
       _lines.removeAt(0);
     }
+
+    _streamToBackend(
+      source: source,
+      title: title,
+      payload: payload,
+      baiguullagiinId: baiguullagiinId,
+      salbariinId: salbariinId,
+      timestamp: ts,
+    );
+  }
+
+  static void _streamToBackend({
+    required String source,
+    required String title,
+    required Object? payload,
+    String? baiguullagiinId,
+    String? salbariinId,
+    required String timestamp,
+  }) {
+    Future<void>.microtask(() async {
+      try {
+        await posApiService.post<dynamic>(
+          '/terminalLog',
+          body: {
+            'source': source,
+            'title': title,
+            'payload': payload,
+            'baiguullagiinId': baiguullagiinId,
+            'salbariinId': salbariinId,
+            'timestamp': timestamp,
+          },
+        );
+      } catch (_) {}
+    });
   }
 
   static String get formattedSession {

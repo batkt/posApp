@@ -551,6 +551,17 @@ class MainActivity : FlutterFragmentActivity() {
         return false
     }
 
+    private fun bringAppToForeground() {
+        try {
+            val intent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            startActivity(intent)
+        } catch (e: Throwable) {
+            Log.w(eposLogTag, "Failed to bring MainActivity to foreground on result: ${e.message}")
+        }
+    }
+
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
@@ -558,6 +569,7 @@ class MainActivity : FlutterFragmentActivity() {
         if (pendingEposInAppResult != null && eposBridgeResult != null) {
             val p = pendingEposInAppResult!!
             val delivered = eposBridgeResult.tryDeliverActivityResult(requestCode, resultCode, data, p)
+            bringAppToForeground()
             if (delivered) {
                 clearEposInAppBusy()
                 return

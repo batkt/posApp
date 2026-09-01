@@ -18,6 +18,7 @@ import '../services/socket_service.dart';
 import '../services/terminal_tulbur_signal_service.dart';
 import '../services/unipos_service.dart';
 import '../utils/mnt_amount_formatter.dart';
+import '../utils/pos_native_debug_log.dart';
 
 /// Listens for mobile-initiated card payment requests (`terminalTulburKhuseelt`)
 /// and automatically opens UniPOS card payment terminal on this POS device.
@@ -132,6 +133,20 @@ class _KioskTerminalPaySignalListenerState
     }
     _isProcessingCardRequest = true;
     _handledIds.add(item.id); // Permanently remember to prevent infinite loops on resume!
+    final auth = context.read<AuthModel>();
+    final session = auth.posSession;
+    PosNativeDebugLog.record(
+      'KioskPaySignal',
+      'EXECUTING CARD PAY REQUEST',
+      <String, dynamic>{
+        'id': item.id,
+        'amountMnt': item.amountMnt,
+        'initiatorNer': item.initiatorNer,
+        'tailbar': item.tailbar,
+      },
+      baiguullagiinId: session?.baiguullagiinId,
+      salbariinId: session?.salbariinId,
+    );
     debugPrint('>>> [KioskTerminalPaySignalListener] EXECUTING CARD PAY REQUEST: ${item.id} (${item.amountMnt}₮) from ${item.initiatorNer}');
 
     final messenger = ScaffoldMessenger.of(context);
@@ -182,7 +197,26 @@ class _KioskTerminalPaySignalListenerState
 
       // Auto-launch UniPOS payment terminal
       final res = await UniPosService.purchase(amount: item.amountMnt);
+      PosNativeDebugLog.record('KioskPaySignal', 'UNIPOS PURCHASE RESPONSE', res);
       UniPosService.requireSuccessfulTerminalCardPayment(res);
+
+      // Re-bring MainActivity to foreground immediately after purchase completes on touchscreen devices
+      try {
+        await const AndroidIntent(
+          action: 'android.intent.action.MAIN',
+          category: 'android.intent.category.LAUNCHER',
+          package: 'mn.posease.mobile.terminal.pos',
+          componentName: 'mn.posease.mobile.terminal.pos.MainActivity',
+          flags: <int>[
+            Flag.FLAG_ACTIVITY_NEW_TASK,
+            Flag.FLAG_ACTIVITY_CLEAR_TOP,
+            Flag.FLAG_ACTIVITY_SINGLE_TOP,
+          ],
+        ).launch();
+        await Future.delayed(const Duration(milliseconds: 300));
+      } catch (e) {
+        debugPrint('Failed to re-bring MainActivity to foreground: $e');
+      }
 
       await _svc.markCompleted(item.id);
       debugPrint('>>> [KioskTerminalPaySignalListener] Card payment successfully completed for ${item.id}');
@@ -349,6 +383,7 @@ class _KioskTerminalPaySignalListenerState
         }
       }
     } on Exception catch (e) {
+      PosNativeDebugLog.record('KioskPaySignal', 'PAYMENT EXCEPTION / CANCELLED', '$e');
       debugPrint('>>> [KioskTerminalPaySignalListener] UniPOS transaction cancelled/failed: $e');
       // Cancel on backend so it is marked cancelled instead of staying pending
       try {

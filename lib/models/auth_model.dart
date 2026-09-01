@@ -122,7 +122,7 @@ class AuthModel extends ChangeNotifier {
   List<BranchOption>? get pendingBranchOptions => _pendingBranchOptions;
 
   /// Applies chosen салбар and clears [needsBranchSelection].
-  void applySelectedBranch(String salbariinId) {
+  Future<void> applySelectedBranch(String salbariinId) async {
     if (_posSession == null) return;
     _posSession = PosSession(
       baiguullagiinId: _posSession!.baiguullagiinId,
@@ -130,6 +130,17 @@ class AuthModel extends ChangeNotifier {
       ajiltan: _posSession!.ajiltan,
     );
     _pendingBranchOptions = null;
+    try {
+      final token = posApiService.token ?? '';
+      if (token.isNotEmpty) {
+        await TerminalSessionStore.instance.persist(
+          token: token,
+          baiguullagiinId: _posSession!.baiguullagiinId,
+          salbariinId: salbariinId,
+          ajiltan: _posSession!.ajiltan,
+        );
+      }
+    } catch (_) {}
     notifyListeners();
   }
 
