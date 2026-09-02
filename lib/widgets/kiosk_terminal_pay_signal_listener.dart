@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -45,6 +46,10 @@ class _KioskTerminalPaySignalListenerState
   @override
   void initState() {
     super.initState();
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      debugPrint('>>> [KioskTerminalPaySignalListener] Non-Android platform detected (iPad/iOS/Web) — disabling remote terminal listener');
+      return;
+    }
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _listenSocket();
@@ -127,6 +132,7 @@ class _KioskTerminalPaySignalListenerState
   }
 
   Future<void> _processPayRequest(TerminalPaySignalItem item) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     if (_handledIds.contains(item.id) || _isProcessingCardRequest) {
       debugPrint('>>> [KioskTerminalPaySignalListener] Skipping duplicate/concurrent card pay request: ${item.id}');
       return;
