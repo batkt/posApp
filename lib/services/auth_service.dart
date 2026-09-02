@@ -84,24 +84,44 @@ class AuthService {
     PosSession? posSession,
   ) async {
     if (userData == null) return null;
-    final fromEmployee = BranchOption.parseList(userData['salbaruud']);
-    if (fromEmployee.length > 1) {
-      return List<BranchOption>.from(fromEmployee);
+    final bid = (posSession?.baiguullagiinId ??
+            userData['baiguullagiinId']?.toString() ??
+            '')
+        .trim();
+
+    List<Map<String, dynamic>> orgRows = [];
+    if (bid.isNotEmpty) {
+      try {
+        final settings = PosSettingsService(api: _apiService);
+        orgRows = await settings.fetchSalbaruud(bid);
+      } catch (_) {}
     }
-    if (userData['AdminEsekh'] == true || userData['adminEsekh'] == true) {
-      final bid = (posSession?.baiguullagiinId ??
-              userData['baiguullagiinId']?.toString() ??
-              '')
-          .trim();
-      if (bid.isEmpty) return null;
-      final settings = PosSettingsService(api: _apiService);
-      final orgRows = await settings.fetchSalbaruud(bid);
-      if (orgRows.isEmpty) return null;
+
+    final fromEmployee = BranchOption.parseList(
+      userData['salbaruud'],
+      orgSalbaruud: orgRows,
+    );
+
+    final isAdmin = userData['AdminEsekh'] == true || userData['adminEsekh'] == true;
+
+    if (orgRows.isNotEmpty && (isAdmin || fromEmployee.isEmpty || fromEmployee.any((b) => b.label == b.id))) {
       final fromOrg = BranchOption.parseList(orgRows);
-      if (fromOrg.length > 1) {
+      if (fromOrg.isNotEmpty) {
         return fromOrg;
       }
     }
+
+    if (fromEmployee.isNotEmpty) {
+      return List<BranchOption>.from(fromEmployee);
+    }
+
+    if (orgRows.isNotEmpty) {
+      final fromOrg = BranchOption.parseList(orgRows);
+      if (fromOrg.isNotEmpty) {
+        return fromOrg;
+      }
+    }
+
     return null;
   }
 

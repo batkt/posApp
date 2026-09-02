@@ -216,9 +216,11 @@ class PosTransactionService {
           uramshuulaliinId: line.uramshuulaliinId,
           webLineTax: webSplits != null ? webSplits[i] : null,
         ),
-        'niitUne': _fixed2String(lineTotal),
+        'niitUne': _fixed2Num(lineTotal),
         'too': qty,
-        'salbariinId': p.salbariinId ?? session.salbariinId,
+        'salbariinId': (p.salbariinId != null && p.salbariinId!.isNotEmpty)
+            ? p.salbariinId
+            : session.salbariinId,
       });
     }
     return baraanuud;

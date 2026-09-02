@@ -365,6 +365,15 @@ class _KioskTerminalPaySignalListenerState
           }
 
           debugPrint('>>> [KioskTerminalPaySignalListener] REDIRECTING TO RECEIPT SCREEN orderNo=$finalOrderNo, total=$due');
+          PosNativeDebugLog.record(
+            'KioskPaySignal',
+            'REDIRECTING TO RECEIPT SCREEN',
+            <String, dynamic>{
+              'orderNo': finalOrderNo,
+              'total': due,
+              'guilgeeMongoId': guilgeeMongoId,
+            },
+          );
 
           await nav.push(
             MaterialPageRoute(

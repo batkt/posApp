@@ -16,6 +16,16 @@ class _BranchSelectScreenState extends State<BranchSelectScreen> {
   String? _selectedId;
   bool _didInitSelection = false;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AuthModel>().ensureBranchOptionsLoaded();
+      }
+    });
+  }
+
   void _ensureSelection(AuthModel auth) {
     if (_didInitSelection) return;
     final opts = auth.pendingBranchOptions;

@@ -162,7 +162,6 @@ class AuthModel extends ChangeNotifier {
 
   /// Loads org branch list for admins / multi-branch users if not loaded yet.
   Future<void> ensureBranchOptionsLoaded() async {
-    if (_allBranchOptions != null && _allBranchOptions!.length > 1) return;
     final session = _posSession;
     if (session == null) return;
     final bid = session.baiguullagiinId.trim();
@@ -170,10 +169,12 @@ class AuthModel extends ChangeNotifier {
     try {
       final settings = PosSettingsService(api: posApiService);
       final orgRows = await settings.fetchSalbaruud(bid);
-      final fromOrg = BranchOption.parseList(orgRows);
-      if (fromOrg.isNotEmpty) {
-        _allBranchOptions = fromOrg;
-        notifyListeners();
+      if (orgRows.isNotEmpty) {
+        final fromOrg = BranchOption.parseList(orgRows);
+        if (fromOrg.isNotEmpty) {
+          _allBranchOptions = fromOrg;
+          notifyListeners();
+        }
       }
     } catch (_) {}
   }
@@ -181,9 +182,14 @@ class AuthModel extends ChangeNotifier {
   /// Label for the active `salbariinId` within [branchSwitchOptions], else raw id.
   String get activeSalbariinLabel {
     final id = _posSession?.salbariinId;
-    if (id == null) return '';
+    if (id == null || id.isEmpty) return '';
     for (final b in branchSwitchOptions) {
-      if (b.id == id) return b.label;
+      if (b.id == id && b.label != b.id) return b.label;
+    }
+    if (_allBranchOptions != null) {
+      for (final b in _allBranchOptions!) {
+        if (b.id == id && b.label != b.id) return b.label;
+      }
     }
     return id;
   }
