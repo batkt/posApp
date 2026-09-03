@@ -263,7 +263,35 @@ class _KioskTerminalPaySignalListenerState
               finalOrderNo = orderNo;
             }
 
-            if (sales.isSaleEmpty) {
+            if (item.baraanuud.isNotEmpty) {
+              sales.clearSale();
+              for (int i = 0; i < item.baraanuud.length; i++) {
+                final raw = item.baraanuud[i];
+                if (raw is Map) {
+                  final b = Map<String, dynamic>.from(raw);
+                  final double price = (b['price'] ?? b['zakhialakhPrice'] ?? b['hudaldahUne'] ?? 0).toDouble();
+                  final double qty = (b['quantity'] ?? b['too'] ?? b['tooShirkheg'] ?? 1).toDouble();
+                  final String rawCode = (b['code'] ?? b['dotooCode'] ?? '').toString();
+                  final String rawBarCode = (b['barCode'] ?? (b['barKoduud'] is List && (b['barKoduud'] as List).isNotEmpty ? b['barKoduud'][0] : null) ?? rawCode).toString();
+
+                  sales.addToSale(
+                    Product(
+                      id: (b['id'] ?? b['_id'] ?? 'item_${item.id}_$i').toString(),
+                      name: (b['name'] ?? b['ner'] ?? 'Бараа').toString(),
+                      description: (b['description'] ?? b['tailbar'] ?? '').toString(),
+                      price: price,
+                      category: (b['category'] ?? b['angilal'] ?? '').toString(),
+                      imageUrl: (b['imageUrl'] ?? b['zurag'] ?? '').toString(),
+                      code: rawCode.isNotEmpty ? rawCode : 'CARD',
+                      barCode: rawBarCode.isNotEmpty ? rawBarCode : 'CARD',
+                      khemjikhNegj: (b['khemjikhNegj'] ?? 'ш').toString(),
+                      noatBodohEsekh: b['noatBodohEsekh'] ?? true,
+                      quantity: qty > 0 ? qty : 1.0,
+                    ),
+                  );
+                }
+              }
+            } else if (sales.isSaleEmpty) {
               sales.addToSale(
                 Product(
                   id: 'card_pay_${item.id}',

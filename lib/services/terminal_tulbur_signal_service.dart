@@ -22,6 +22,7 @@ class TerminalPaySignalItem {
     required this.initiatorNer,
     required this.initiatorAjiltanId,
     this.tailbar = '',
+    this.baraanuud = const [],
   });
 
   final String id;
@@ -29,6 +30,7 @@ class TerminalPaySignalItem {
   final String initiatorNer;
   final String initiatorAjiltanId;
   final String tailbar;
+  final List<dynamic> baraanuud;
 
   static TerminalPaySignalItem? tryParse(Map<String, dynamic>? m) {
     if (m == null) return null;
@@ -37,12 +39,14 @@ class TerminalPaySignalItem {
     final amt = (m['amountMnt'] is num)
         ? (m['amountMnt'] as num).toDouble()
         : double.tryParse(m['amountMnt']?.toString() ?? '') ?? 0;
+    final rawBaraanuud = m['baraanuud'] ?? m['items'];
     return TerminalPaySignalItem(
       id: id,
       amountMnt: amt,
       initiatorNer: m['initiatorNer']?.toString() ?? '',
       initiatorAjiltanId: m['initiatorAjiltanId']?.toString() ?? '',
       tailbar: m['tailbar']?.toString() ?? '',
+      baraanuud: (rawBaraanuud is List) ? rawBaraanuud : const [],
     );
   }
 }
