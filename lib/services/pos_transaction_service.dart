@@ -59,6 +59,8 @@ class PosTransactionService {
     required double lineQuantity,
     String? uramshuulaliinId,
     PosWebLineTax? webLineTax,
+    double? undsenZarakhUne,
+    bool dorvonNegGiftLine = false,
   }) {
     final noatBodohEsekh = product.noatBodohEsekh == true;
     final nhatBodohEsekh = product.nhatBodohEsekh == true;
@@ -95,7 +97,19 @@ class PosTransactionService {
       // posBack ebarimtShine builder uses this directly for totalAmount.
       'zarsanNiitUne':
           _fixed2Num(webLineTax?.zarsanNiitUne ?? lineTotal),
-      'hungulsunDun': 0,
+      // Урамшууллын бэлэг мөр 0 үнээр бичигддэг — жинхэнэ үнэ нь мөрийн
+      // хөнгөлөлт. `guilgeeRoute` буцаалт хийхдээ мөр тус бүрийн
+      // `hungulsunDun`-г хувааж тооцдог тул энд заавал байх ёстой.
+      'hungulsunDun': _fixed2Num(
+        (undsenZarakhUne != null && undsenZarakhUne > 0)
+            ? undsenZarakhUne * lineQuantity
+            : 0,
+      ),
+      // Вэб ПОС хүлээлгэсэн/буцаасан гүйлгээг сэргээхдээ үүнээс үнийг нь
+      // сэргээдэг (`posSystem/index.js` → `paidLine.undsenZarakhUne`).
+      if (undsenZarakhUne != null && undsenZarakhUne > 0)
+        'undsenZarakhUne': _fixed2Num(undsenZarakhUne),
+      if (dorvonNegGiftLine) 'dorvonNegGiftLine': true,
       'urtugUne': _fixed2Num(product.urtugUne ?? product.costPrice),
       'uldegdel': _fixed2Num(product.uldegdel ?? product.stock),
       'idevkhteiEsekh': product.isAvailable,
@@ -215,6 +229,8 @@ class PosTransactionService {
           lineQuantity: qty,
           uramshuulaliinId: line.uramshuulaliinId,
           webLineTax: webSplits != null ? webSplits[i] : null,
+          undsenZarakhUne: line.undsenZarakhUne,
+          dorvonNegGiftLine: line.dorvonNegGiftLine,
         ),
         'niitUne': _fixed2Num(lineTotal),
         'too': qty,

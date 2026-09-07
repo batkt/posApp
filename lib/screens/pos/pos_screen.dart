@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
@@ -14,6 +16,7 @@ import '../../widgets/barcode_scan_sheet.dart';
 import '../../widgets/test_image_widget.dart';
 import '../../widgets/authenticated_image.dart';
 import '../../widgets/box_line_pieces_sheet.dart';
+import '../../widgets/beleg_songokh_sheet.dart';
 import '../../widgets/dorvon_neg_tie_breaker_sheet.dart';
 import '../../services/terminal_tulbur_signal_service.dart';
 import '../../services/pos_transaction_service.dart';
@@ -59,6 +62,16 @@ class _POSScreenState extends State<POSScreen> {
   static const Duration _cashierPageAnim = Duration(milliseconds: 320);
   static const Curve _cashierPageCurve = Curves.easeOutCubic;
 
+  /// Урамшууллын сервер тооцоо (`POST /uramshuulalShalgay`) — вэбийн
+  /// `debouncedUramshuulalShalgakh`-тай ижил.
+  Timer? _promoSyncTimer;
+  bool _promoSyncInFlight = false;
+  bool _belegSheetOpen = false;
+  String? _lastPromoSignature;
+  SalesModel? _promoWatchedSales;
+
+  static const Duration _promoSyncDebounce = Duration(milliseconds: 350);
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +80,129 @@ class _POSScreenState extends State<POSScreen> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadTaxContext());
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadDorvonNegPromo());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _attachPromoSync());
+  }
+
+  void _attachPromoSync() {
+    if (!mounted) return;
+    final sales = context.read<SalesModel>();
+    if (identical(_promoWatchedSales, sales)) return;
+    _promoWatchedSales?.removeListener(_onCartChangedForPromo);
+    _promoWatchedSales = sales..addListener(_onCartChangedForPromo);
+    _onCartChangedForPromo();
+  }
+
+  /// Сагсны "хэрэглэгчийн санаа"-г илэрхийлэх гарын үсэг. Серверийн хариуг
+  /// хэрэглэсний ДАРАА үүссэн гарын үсгийг тэмдэглэдэг тул хариу нь өөрөө
+  /// дахин синк өдөөж, төгсгөлгүй давтагдахгүй.
+  static String _cartSignature(SalesModel sales) {
+    final b = StringBuffer();
+    for (final line in sales.currentSaleItems) {
+      b
+        ..write(line.product.id)
+        ..write('|')
+        ..write(line.quantity)
+        ..write('|')
+        ..write(line.unitPrice)
+        ..write('|')
+        ..write(line.boxPiecesSold ?? '')
+        ..write('|')
+        ..write(line.uramshuulaliinId ?? '')
+        ..write(';');
+    }
+    b.write('#picks:');
+    final picks = sales.dorvonNegManualPicks.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    for (final e in picks) {
+      b
+        ..write(e.key)
+        ..write('=')
+        ..write(e.value)
+        ..write(',');
+    }
+    // Кассчны сонгосон бэлэг өөрчлөгдвөл сервер дахин тооцох ёстой.
+    b.write('#beleg:');
+    final belguud = sales.songogdsonBelegnuud
+        .map((g) => '${g['uramshuulaliinId'] ?? ''}|${g['code'] ?? ''}')
+        .toList()
+      ..sort();
+    for (final k in belguud) {
+      b
+        ..write(k)
+        ..write(',');
+    }
+    return b.toString();
+  }
+
+  void _onCartChangedForPromo() {
+    if (!mounted) return;
+    final sales = _promoWatchedSales;
+    if (sales == null) return;
+    final signature = _cartSignature(sales);
+    if (signature == _lastPromoSignature) return;
+    _promoSyncTimer?.cancel();
+    _promoSyncTimer = Timer(_promoSyncDebounce, _runPromoSync);
+  }
+
+  Future<void> _runPromoSync() async {
+    if (!mounted || _promoSyncInFlight) return;
+    final sales = _promoWatchedSales;
+    if (sales == null) return;
+    final auth = context.read<AuthModel>();
+    final session = auth.posSession;
+    // Урамшууллыг зөвхөн POS API идэвхтэй үед сервер тооцно; офлайн үед
+    // клиентийн [DorvonNegUramshuulal] хэвээрээ ажиллана.
+    if (session == null || !auth.canSubmitPosSales) return;
+    if (sales.isSaleEmpty) {
+      _lastPromoSignature = _cartSignature(sales);
+      return;
+    }
+
+    final requestSignature = _cartSignature(sales);
+    // [applyUramshuulalResult] нь `notifyListeners()`-ээ ШУУД дууддаг тул
+    // серверийн хариуг хэрэглэх үед дахин нэг debounce timer төлөвлөгддөг.
+    // Тэр таймер асахад сагс аль хэдийн синкчлэгдсэн байдаг — дахин хүсэлт
+    // явуулахгүй.
+    if (requestSignature == _lastPromoSignature) return;
+    _promoSyncInFlight = true;
+    try {
+      final result = await uramshuulalService.shalgay(
+        baiguullagiinId: session.baiguullagiinId,
+        salbariinId: session.salbariinId,
+        songogdsonEmnuud: sales.buildUramshuulalRows(
+          fallbackSalbariinId: session.salbariinId,
+        ),
+        songogdsonBelegnuud: sales.songogdsonBelegnuud,
+        dorvonNegManualPicks: sales.dorvonNegManualPicks,
+      );
+      if (!mounted || result == null) return;
+      // Хүсэлт явж байх зуур кассчин сагсаа өөрчилсөн бол хариуг хаяад
+      // шинэ төлөвөөр дахин тооцуулна.
+      if (_cartSignature(sales) != requestSignature) {
+        _promoSyncInFlight = false;
+        _onCartChangedForPromo();
+        return;
+      }
+      sales.applyUramshuulalResult(
+        songogdsonEmnuud: result.songogdsonEmnuud,
+        songokhBelegnuud: result.songokhBelegnuud,
+        dorvonNegTie: result.dorvonNegTie,
+      );
+      _lastPromoSignature = _cartSignature(sales);
+    } finally {
+      _promoSyncInFlight = false;
+    }
+
+    // Нэг урамшуулалд олон бэлэг байвал сервер аль нь ч өгөхгүй — кассчин
+    // сонгож өгтөл урамшуулал хэрэгжихгүй тул сонголтыг нэн даруй асууна.
+    if (mounted && sales.songokhBelegnuud.isNotEmpty && !_belegSheetOpen) {
+      _belegSheetOpen = true;
+      try {
+        await showBelegSongokhSheet(context, sales);
+      } finally {
+        _belegSheetOpen = false;
+      }
+    }
   }
 
   Future<void> _loadTaxContext() async {
@@ -101,6 +237,8 @@ class _POSScreenState extends State<POSScreen> {
 
   @override
   void dispose() {
+    _promoSyncTimer?.cancel();
+    _promoWatchedSales?.removeListener(_onCartChangedForPromo);
     _searchController.dispose();
     _cashierPageController?.dispose();
     super.dispose();
@@ -365,15 +503,20 @@ class _POSScreenState extends State<POSScreen> {
                         ),
                   ),
                 ),
-                if (item.uramshuulaliinId != null)
-                  ListTile(
-                    leading: Icon(Icons.clear_all, color: Theme.of(ctx).colorScheme.error),
-                    title: Text(l10n.tr('pos_sale_clear_promo')),
-                    onTap: () {
-                      ctx.read<SalesModel>().setLineUramshuulal(item.product.id, null);
-                      Navigator.pop(ctx);
-                    },
+                // Урамшууллыг сервер (`POST /uramshuulalShalgay`) тооцож,
+                // бэлгийг 0 үнэтэй ТУСДАА мөр болгож сагсанд нэмдэг. Тиймээс
+                // энэ хуудас нь зөвхөн МЭДЭЭЛЭЛ. Өмнө нь эндээс мөрөнд гараар
+                // `uramshuulaliinId` тавьдаг байсан нь үндсэн барааг бэлэг мөр
+                // мэт болгож, төлөх дүнг буруу гаргадаг байв.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Text(
+                    'Урамшууллын бэлэг автоматаар сагсанд нэмэгдэнэ',
+                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                        ),
                   ),
+                ),
                 if (active.isEmpty)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -396,14 +539,6 @@ class _POSScreenState extends State<POSScreen> {
                                   color: Theme.of(ctx).colorScheme.primary,
                                 )
                               : null,
-                      onTap: () {
-                        final id = UramshuulalHelper.promotionPickId(r);
-                        ctx.read<SalesModel>().setLineUramshuulal(
-                              item.product.id,
-                              id,
-                            );
-                        Navigator.pop(ctx);
-                      },
                     ),
               ],
             ),
@@ -1649,7 +1784,9 @@ class _POSScreenState extends State<POSScreen> {
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
-              height: 48,
+              // Тогтмол 48px өндөр + урт шошго ("Касс руу картын хүсэлт
+              // илгээх") нарийн дэлгэц дээр багтахгүй тасардаг байсан тул
+              // хамгийн багадаа 48px, шаардлагатай бол 2 мөрөөр өснө.
               child: OutlinedButton.icon(
                 onPressed: sales.isSaleEmpty
                     ? null
@@ -1658,12 +1795,21 @@ class _POSScreenState extends State<POSScreen> {
                 label: Text(
                   AppLocalizations.of(context)
                       .tr('terminal_signal_send_kiosk'),
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
+                    height: 1.15,
                   ),
                 ),
                 style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -1775,13 +1921,20 @@ class _POSScreenState extends State<POSScreen> {
                   label: Text(
                     AppLocalizations.of(context)
                         .tr('terminal_signal_send_kiosk'),
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
+                      height: 1.15,
                     ),
                   ),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 14,
+                      horizontal: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -1914,6 +2067,15 @@ class _ProductCard extends StatelessWidget {
     final stock = item.currentStock;
     final stockHealthy = stock > 20;
     final stockColor = stockHealthy ? _stockPlentyGreen : _stockLowRed;
+
+    // Үлдэгдэл ба үнийн шошго нь ИЖИЛ хэлбэртэй байх ёстой — доорх
+    // хэмжээсүүдийг хоёул хуваалцана (өмнө нь радиус 100/10, доторх зай
+    // 3/5, үсгийн хэмжээ 9/11 гэж зөрж, өөр өндөртэй харагддаг байв).
+    const badgeRadius = 100.0;
+    const badgePadding =
+        EdgeInsets.symmetric(horizontal: 10, vertical: 4);
+    final badgeFontSize = context.responsiveFontSize(10);
+    const badgeFontWeight = FontWeight.w700;
 
     final borderColor =
         inCart ? colorScheme.primary : colorScheme.outlineVariant;
@@ -2118,20 +2280,41 @@ class _ProductCard extends StatelessWidget {
                               ),
                             ],
                           ),
+                          // Үлдэгдлийг бөөрөнхий "шошго" (pill) хэлбэрээр.
+                          // Урьд нь энгийн текст байсан тул нарийн хайрцагт
+                          // "Үлдэгдэл: 2..." гэж тасардаг байв — одоо
+                          // [FittedBox] дотор багтаж, бүтнээрээ харагдана.
                           Tooltip(
                             message: item.product.boxPiecesPerBoxHint ??
                                 'Үлдэгдэл: $stock ${item.product.posStockQuantitySuffix}',
-                            child: Text(
-                              'Үлдэгдэл: $stock ${item.product.posStockQuantitySuffix}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.labelSmall?.copyWith(
-                                color: stockColor,
-                                fontWeight: FontWeight.w700,
-                                fontSize: context.responsiveFontSize(9),
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Container(
+                                  padding: badgePadding,
+                                  decoration: BoxDecoration(
+                                    color: stockColor.withValues(alpha: 0.13),
+                                    borderRadius:
+                                        BorderRadius.circular(badgeRadius),
+                                  ),
+                                  child: Text(
+                                    '$stock '
+                                    '${item.product.posStockQuantitySuffix}',
+                                    maxLines: 1,
+                                    softWrap: false,
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: stockColor,
+                                      fontWeight: badgeFontWeight,
+                                      fontSize: badgeFontSize,
+                                      height: 1.1,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -2147,22 +2330,20 @@ class _ProductCard extends StatelessWidget {
                           DecoratedBox(
                             decoration: BoxDecoration(
                               color: colorScheme.primaryContainer,
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius:
+                                  BorderRadius.circular(badgeRadius),
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 5,
-                              ),
+                              padding: badgePadding,
                               child: FittedBox(
                                 fit: BoxFit.scaleDown,
                                 child: Text(
                                   MntAmountFormatter.formatTugrikSpaced(
                                       item.product.price),
-                                  style: textTheme.labelLarge?.copyWith(
+                                  style: textTheme.labelSmall?.copyWith(
                                     color: colorScheme.onPrimaryContainer,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: context.responsiveFontSize(11),
+                                    fontWeight: badgeFontWeight,
+                                    fontSize: badgeFontSize,
                                     height: 1.1,
                                     fontFeatures: const [
                                       FontFeature.tabularFigures(),

@@ -328,6 +328,13 @@ List<SaleItem> saleItemsFromParkedGuilgeeDoc(Map<String, dynamic> doc) {
     final lineNiit = _parseDouble(line['niitUne']);
     final promoId = baraa['uramshuulaliinId']?.toString().trim();
     final promo = promoId != null && promoId.isNotEmpty ? promoId : null;
+    // Бэлэг мөрийн жинхэнэ үнэ / "N-т 1 үнэгүй" тэмдэглэгээ — эдгээргүйгээр
+    // хүлээлгэсэн гүйлгээг буцааж дуудахад урамшуулал алдагдана
+    // (`POST /uramshuulalShalgay` эдгээрээр өмнөх төлөвөө таньдаг).
+    final undsen = baraa.containsKey('undsenZarakhUne')
+        ? _parseDouble(baraa['undsenZarakhUne'])
+        : null;
+    final isDorvonNegGift = baraa['dorvonNegGiftLine'] == true;
 
     if (product.isBoxSaleUnit) {
       final negD =
@@ -345,6 +352,9 @@ List<SaleItem> saleItemsFromParkedGuilgeeDoc(Map<String, dynamic> doc) {
         uramshuulaliinId: promo,
         forceRetailPricing: true,
         boxPiecesSold: roundedBoxes ? null : pieces,
+        serverRow: baraa,
+        undsenZarakhUne: undsen,
+        dorvonNegGiftLine: isDorvonNegGift,
       ));
     } else {
       final qty = math.max(1, tooD.round());
@@ -356,6 +366,9 @@ List<SaleItem> saleItemsFromParkedGuilgeeDoc(Map<String, dynamic> doc) {
         quantity: qty,
         uramshuulaliinId: promo,
         forceRetailPricing: true,
+        serverRow: baraa,
+        undsenZarakhUne: undsen,
+        dorvonNegGiftLine: isDorvonNegGift,
       ));
     }
   }

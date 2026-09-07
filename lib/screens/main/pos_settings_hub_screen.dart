@@ -13,6 +13,7 @@ import '../../services/api_service.dart';
 import '../../models/category_model.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../widgets/chat_fab.dart';
+import 'support_chat_page.dart';
 
 /// Web parity: `pages/khyanalt/tokhirgoo` — profile + org/branch settings.
 
@@ -1507,17 +1508,21 @@ class _EbarimtBranchPanelState extends State<_EbarimtBranchPanel> {
           value: _autoTax,
           onChanged: _shine ? (v) => setState(() => _autoTax = v) : null,
         ),
+        const SizedBox(height: 12),
         TextField(
           controller: _tin,
           enabled: _shine,
           decoration: InputDecoration(labelText: l10n.tr('pos_settings_ebarimt_tin')),
         ),
+        // Хоёр талбар зэрэгцэн наалдсанаас доод талбарын гарчиг нь дээд
+        // талбарын хүрээтэй давхцаж, уншигдахгүй байсан.
+        const SizedBox(height: 16),
         TextField(
           controller: _district,
           enabled: _shine,
           decoration: InputDecoration(labelText: l10n.tr('pos_settings_ebarimt_district')),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         FilledButton(onPressed: _saving ? null : _save, child: Text(l10n.tr('save'))),
       ],
     );
@@ -2241,6 +2246,33 @@ class _ChatbotSettingsPanelState extends State<_ChatbotSettingsPanel> {
 
           const SizedBox(height: 16),
 
+          // ── Чат нээх ─────────────────────────────────────────────────────
+          // Хөвдөг товчийг унтраасан үед чатбот руу орох өөр зам байдаггүй
+          // байсан тул тохиргооноос шууд нээх боломж.
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SupportChatPage()),
+              ),
+              icon: const Icon(Icons.chat_bubble_outline_rounded, size: 20),
+              label: const Text(
+                'Чат нээх',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFFF4469),
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
           // ── Info tip ─────────────────────────────────────────────────────
           Material(
             color: cs.surfaceContainerLow,
@@ -2271,7 +2303,8 @@ class _ChatbotSettingsPanelState extends State<_ChatbotSettingsPanel> {
                         Text(
                           '• Товчийг чирч байрлуулна уу\n'
                           '• Дэлгэцийн доод хэсэг рүү чирвэл устгагдана\n'
-                          '• Товчийг дахин харуулахыг хүсвэл энэ тохиргооноос асаана уу',
+                          '• Товчийг дахин харуулахыг хүсвэл энэ тохиргооноос асаана уу\n'
+                          '• Товчгүйгээр ч дээрх "Чат нээх"-ээр орж болно',
                           style: textTheme.bodySmall?.copyWith(
                             color: cs.onSurfaceVariant,
                             height: 1.6,

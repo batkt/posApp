@@ -41,6 +41,59 @@ class CashierSlipTotals {
   final double payable;
 }
 
+/// Баримт дээр хэвлэгдэх нэг мөр.
+///
+/// [CartItem] нь зөвхөн (бараа, тоо) агуулдаг тул нэгж үнэ нь ВАРИАНТГҮЙ
+/// каталогийн `product.price` болж, бөөний үнэ / гараар засварласан үнэ /
+/// хайрцаг задалсан мөр дээр баримт нь бодит зарсан үнээ харуулдаггүй байв.
+class ReceiptLine {
+  const ReceiptLine({
+    required this.name,
+    required this.quantityLabel,
+    required this.unitPrice,
+    required this.lineTotal,
+    this.noatBodohEsekh = false,
+    this.nhatiinDunPerUnit = 0,
+    this.units = 1,
+  });
+
+  final String name;
+
+  /// Тоо баганад бичигдэх бэлэн текст ("3" эсвэл "2\nхайрцаг").
+  final String quantityLabel;
+
+  /// Нэг нэгжийн бодит зарсан үнэ.
+  final double unitPrice;
+
+  /// Мөрийн нийт дүн (хөнгөлөлтийн өмнөх).
+  final double lineTotal;
+
+  final bool noatBodohEsekh;
+  final double nhatiinDunPerUnit;
+  final int units;
+}
+
+/// [CompletedSale]-ийн мөрүүдийг баримтын мөр болгоно — каталогийн үнэ биш,
+/// БОДИТ зарсан нэгж үнэ / мөрийн дүнг авч явна.
+List<ReceiptLine> buildReceiptLines(List<SaleItem> items) {
+  return [
+    for (final i in items)
+      ReceiptLine(
+        name: i.product.name,
+        quantityLabel: i.product.isBoxSaleUnit
+            ? '${i.apiTooUnits.toStringAsFixed(i.apiTooUnits % 1 == 0 ? 0 : 2)}\nхайрцаг'
+            : '${i.quantity}',
+        unitPrice: i.product.isBoxSaleUnit
+            ? (i.negPerBox > 0 ? i.unitPrice / i.negPerBox : i.unitPrice)
+            : i.unitPrice,
+        lineTotal: i.total,
+        noatBodohEsekh: i.product.noatBodohEsekh == true,
+        nhatiinDunPerUnit: i.product.nhatiinDun ?? 0,
+        units: i.quantity,
+      ),
+  ];
+}
+
 class ReceiptScreen extends StatefulWidget {
   const ReceiptScreen({
     super.key,
@@ -51,7 +104,12 @@ class ReceiptScreen extends StatefulWidget {
     this.initialEbarimt,
     this.guilgeeniiMongoId,
     this.cashierSlipTotals,
+    this.saleLines,
   });
+
+  /// Бодит зарсан үнэ/дүнтэй мөрүүд. Өгөгдсөн бол [items]-ын оронд
+  /// хэвлэгдэнэ.
+  final List<ReceiptLine>? saleLines;
 
   final List<CartItem> items;
   final double total;
@@ -137,25 +195,45 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     return _num(e['khungulukhDun']);
   }
 
+  /// Баримтад хэвлэх мөрүүд — бодит зарсан үнэтэй [ReceiptScreen.saleLines]
+  /// байвал түүнийг, эс бөгөөс каталогийн үнээр [ReceiptScreen.items]-ээс
+  /// зохионо (хуучин дуудагчидтай нийцтэй байх).
+  List<ReceiptLine> get _lines {
+    final provided = widget.saleLines;
+    if (provided != null) return provided;
+    return [
+      for (final i in widget.items)
+        ReceiptLine(
+          name: i.product.name,
+          quantityLabel: i.product.isBoxSaleUnit
+              ? '${i.quantity}\nхайрцаг'
+              : '${i.quantity}',
+          unitPrice: i.product.price,
+          lineTotal: i.total,
+          noatBodohEsekh: i.product.noatBodohEsekh == true,
+          nhatiinDunPerUnit: i.product.nhatiinDun ?? 0,
+          units: i.quantity,
+        ),
+    ];
+  }
+
   /// Approximate НӨАТ / НӨАТ-гүй / НХАТ from cart when И-Баримт map is missing.
   static ({double noatgui, double noat, double nhat}) _cartTaxApprox(
-      List<CartItem> items, {bool enableVat = true}) {
+      List<ReceiptLine> lines, {bool enableVat = true}) {
     var noatgui = 0.0;
     var noat = 0.0;
     var nhat = 0.0;
-    for (final i in items) {
-      final lt = i.total;
-      final p = i.product;
-      if (enableVat && p.noatBodohEsekh == true) {
+    for (final i in lines) {
+      final lt = i.lineTotal;
+      if (enableVat && i.noatBodohEsekh) {
         final net = lt / 1.1;
         noatgui += net;
         noat += lt - net;
       } else {
         noatgui += lt;
       }
-      final nh = p.nhatiinDun;
-      if (nh != null && nh > 0) {
-        nhat += nh * i.quantity;
+      if (i.nhatiinDunPerUnit > 0) {
+        nhat += i.nhatiinDunPerUnit * i.units;
       }
     }
     return (noatgui: noatgui, noat: noat, nhat: nhat);
@@ -334,6 +412,22 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final auth = context.read<AuthModel>();
     final session = auth.posSession;
     final id = widget.guilgeeniiMongoId ?? '';
+    // `POST /ebarimtShivye` нь гүйлгээний Mongo id-гүйгээр ажиллахгүй (офлайн
+    // хадгалсан борлуулалт г.м.) — тэр үед дуугүй бүтэлгүйтэхийн оронд
+    // шалтгааныг хэлээд энгийн баримтыг нь хэвлүүлнэ.
+    if (id.isEmpty) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Гүйлгээ сервер дээр бүртгэгдээгүй тул И-Баримт авах боломжгүй — '
+            'энгийн баримт хэвлэлээ',
+          ),
+        ),
+      );
+      await _printOnPaxDevice(context);
+      return;
+    }
     final result = await showDialog<Map<String, dynamic>?>(
       context: context,
       barrierDismissible: false,
@@ -343,8 +437,10 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
         salbariinId: session?.salbariinId ?? '',
       ),
     );
-    if (!mounted || result == null) return;
-    if (!context.mounted) return;
+    // Цонхыг цуцалсан бол цаас дэмий үрэхгүйн тулд автоматаар хэвлэхгүй —
+    // оронд нь доод талын товчны эгнээнд И-Баримтаас хамаарахгүй "Баримт
+    // хэвлэх" товч үргэлж байна.
+    if (!mounted || !context.mounted || result == null) return;
     setState(() => _ebarimt = result);
     await SchedulerBinding.instance.endOfFrame;
     await Future<void>.delayed(const Duration(milliseconds: 80));
@@ -428,7 +524,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
         widget.guilgeeniiMongoId != null &&
         widget.guilgeeniiMongoId!.isNotEmpty;
     final enableTax = _taxContext.eBarimtShine || _taxContext.borluulaltNUAT;
-    final cartTax = _cartTaxApprox(widget.items, enableVat: enableTax && (e != null || canPosEbarimt));
+    final receiptLines = _lines;
+    final cartTax = _cartTaxApprox(receiptLines,
+        enableVat: enableTax && (e != null || canPosEbarimt));
     final slip = widget.cashierSlipTotals;
     final thermalPay = e != null
         ? (totalAmount > 0 ? totalAmount : widget.total)
@@ -444,7 +542,14 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
         ? (thermalPay - thermalVat - thermalCt)
         : (useSlip ? slip.noatgui : cartTax.noatgui);
     final thermalNoatgui = thermalNoatguiRaw < 0 ? 0.0 : thermalNoatguiRaw;
-    final thermalNiitDun = e != null ? (thermalPay + khungulE) : thermalPay;
+    // Баримт дээр харагдах хөнгөлөлт — И-Баримт авсан бол түүний `khungulukhDun`,
+    // эс бөгөөс кассын тооцооны хөнгөлөлт.
+    final thermalKhungulult = e != null ? khungulE : (useSlip ? slip.discount : 0.0);
+    // "Нийт дүн" бол хөнгөлөлт хасахаас **өмнөх** суурь (вэб `niitDunNoat`:
+    // `niitDun + hungulsunDun`). Өмнө нь И-Баримтгүй үед хөнгөлсний **дараах**
+    // төлөх дүнг хэвлэчихээд дээр нь "Хөнгөлөлт −X" мөрийг бас гаргадаг байсан
+    // тул баримт дээр хөнгөлөлт хоёр дахин хасагдсан мэт харагддаг байв.
+    final thermalNiitDun = thermalPay + thermalKhungulult;
     final thermalTulukh = thermalPay;
     final thermalIb = thermalPay;
 
@@ -587,13 +692,13 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                 ),
               ),
               SizedBox(
-                width: 76,
+                width: 46,
                 height: 12,
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.center,
                   child: Text(
-                    'Тоо ширхэг',
+                    'Тоо',
                     maxLines: 1,
                     textAlign: TextAlign.center,
                     style: textTheme.labelSmall?.copyWith(
@@ -606,9 +711,21 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                 ),
               ),
               SizedBox(
-                width: 84,
+                width: 76,
                 child: Text(
                   'Үнэ',
+                  textAlign: TextAlign.right,
+                  style: textTheme.labelSmall?.copyWith(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 84,
+                child: Text(
+                  'Дүн',
                   textAlign: TextAlign.right,
                   style: textTheme.labelSmall?.copyWith(
                     color: Colors.black,
@@ -621,15 +738,15 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           ),
         ),
         const SizedBox(height: 1),
-        ...widget.items.take(8).map(
-              (item) => Padding(
+        ...receiptLines.take(8).map(
+              (line) => Padding(
                 padding: const EdgeInsets.only(bottom: 2),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Text(
-                        item.product.name,
+                        line.name,
                         style: textTheme.bodySmall?.copyWith(
                           color: Colors.black,
                           fontWeight: FontWeight.w500,
@@ -640,19 +757,37 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                       ),
                     ),
                     SizedBox(
-                      width: 76,
+                      width: 46,
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          item.product.isBoxSaleUnit
-                              ? '${item.quantity}\nхайрцаг'
-                              : '${item.quantity}',
+                          line.quantityLabel,
                           textAlign: TextAlign.center,
                           style: textTheme.bodySmall?.copyWith(
                             color: Colors.black,
                             fontWeight: FontWeight.w500,
                             fontSize: 13,
-                            height: item.product.isBoxSaleUnit ? 1.05 : null,
+                            height: line.quantityLabel.contains('\n') ? 1.05 : null,
+                            fontFeatures: const [
+                              ui.FontFeature.tabularFigures(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 76,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          _fmtMntPlain(line.unitPrice),
+                          textAlign: TextAlign.right,
+                          maxLines: 1,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: Colors.black,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
                             fontFeatures: const [
                               ui.FontFeature.tabularFigures(),
                             ],
@@ -662,16 +797,21 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                     ),
                     SizedBox(
                       width: 84,
-                      child: Text(
-                        _fmtMnt(item.product.price),
-                        textAlign: TextAlign.right,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: Colors.black,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                          fontFeatures: const [
-                            ui.FontFeature.tabularFigures(),
-                          ],
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          _fmtMntPlain(line.lineTotal),
+                          textAlign: TextAlign.right,
+                          maxLines: 1,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: Colors.black,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            fontFeatures: const [
+                              ui.FontFeature.tabularFigures(),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -679,11 +819,11 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                 ),
               ),
             ),
-        if (widget.items.length > 8)
+        if (receiptLines.length > 8)
           Padding(
             padding: const EdgeInsets.only(top: 2, bottom: 2),
             child: Text(
-              '+${widget.items.length - 8} бараа...',
+              '+${receiptLines.length - 8} бараа...',
               style: textTheme.labelSmall?.copyWith(
                 color: Colors.black,
                 fontSize: 12,
@@ -715,14 +855,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             ],
           ),
         ),
-        if (useSlip && slip.discount > 0.009)
-          _thermalPaymentMoneyRow(
-            textTheme,
-            label: 'Хөнгөлөлт',
-            value: '−${_fmtMnt(slip.discount)}',
-            topPad: 4,
-            fontSize: 14,
-          ),
+        // "Нийт дүн" (хөнгөлөхөөс өмнөх) → "Хөнгөлөлт" → … → "Төлөх дүн" гэсэн
+        // дарааллаар: хасалт нь дээрх суурь дүнгээс хийгдэж байгаа нь баримт
+        // дээр уншигдана.
         _thermalPaymentMoneyRow(
           textTheme,
           label: 'Нийт дүн',
@@ -730,6 +865,13 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           topPad: 6,
           fontSize: 15,
         ),
+        if (thermalKhungulult > 0.009)
+          _thermalPaymentMoneyRow(
+            textTheme,
+            label: 'Хөнгөлөлт',
+            value: '−${_fmtMnt(thermalKhungulult)}',
+            fontSize: 14,
+          ),
         if (e != null && thermalVat > 0) ...[
           _thermalPaymentMoneyRow(
             textTheme,
@@ -933,23 +1075,34 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
+                      // И-Баримтын тохиргоо асаалттай үед нэмэлт товч гарна —
+                      // гэхдээ энгийн "Баримт хэвлэх" нь ҮРГЭЛЖ байна. Өмнө нь
+                      // `eBarimtShine` асаалттай бол цорын ганц товч нь
+                      // И-Баримтын цонхоор дамждаг байсан тул цонхыг цуцлах /
+                      // И-Баримт амжилтгүй болоход баримт огт хэвлэгддэггүй
+                      // байв.
+                      if (_taxContext.eBarimtShine) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _onEbarimtPrintPressed(context),
+                            icon: const Icon(Icons.receipt_long_outlined),
+                            label: Text(
+                              _ebarimt != null
+                                  ? 'И-Баримт хэвлэх'
+                                  : 'И-Баримт сонгоод хэвлэх',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                       SizedBox(
                         width: double.infinity,
-                        child: _taxContext.eBarimtShine
-                            ? OutlinedButton.icon(
-                                onPressed: () => _onEbarimtPrintPressed(context),
-                                icon: const Icon(Icons.print_outlined),
-                                label: Text(
-                                  _ebarimt != null
-                                      ? 'И-Баримт хэвлэх'
-                                      : 'И-Баримт сонгоод хэвлэх',
-                                ),
-                              )
-                            : OutlinedButton.icon(
-                                onPressed: () => _printOnPaxDevice(context),
-                                icon: const Icon(Icons.print_outlined),
-                                label: const Text('Баримт хэвлэх'),
-                              ),
+                        child: OutlinedButton.icon(
+                          onPressed: () => _printOnPaxDevice(context),
+                          icon: const Icon(Icons.print_outlined),
+                          label: const Text('Баримт хэвлэх'),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       SizedBox(
@@ -1187,13 +1340,39 @@ class _EbarimtBuyerDialogState extends State<_EbarimtBuyerDialog> {
             const SizedBox(height: 12),
             TextField(
               controller: _reg,
-              enabled: !_loading,
+              autofocus: true,
+              // Урьд нь `enabled: !_loading` байсан тул ТТД шалгах хүсэлт
+              // явахад талбар идэвхгүй болж, фокус/гар алдагдаад бичсэн
+              // регистр харагдахаа больдог байв. Одоо талбар идэвхтэй хэвээр,
+              // ачаалалт нь дүрсээр л мэдэгдэнэ.
               textCapitalization: TextCapitalization.characters,
+              // Диалогийн текст загвар өвлөхгүйгээр ил өнгө өгнө.
+              style: TextStyle(
+                color: theme.colorScheme.onSurface,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.0,
+              ),
+              // Гар гарч ирэхэд талбар нь гарын ард дарагдахгүй байх зай.
+              scrollPadding: const EdgeInsets.only(bottom: 120),
+              keyboardType: _aan
+                  ? TextInputType.number
+                  : TextInputType.text,
               decoration: InputDecoration(
                 labelText: _aan
                     ? 'Регистр (7 орон)'
                     : 'Регистр (заавал биш)',
                 border: const OutlineInputBorder(),
+                suffixIcon: _loading
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : null,
               ),
               onChanged: (_) async {
                 final r = _reg.text.trim().toUpperCase();

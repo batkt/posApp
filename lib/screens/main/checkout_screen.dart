@@ -82,7 +82,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           sales.setGuilgeeniiDugaar(d);
         }
 
-        final std = PosPaymentCore.calculateStandardSaleTotals(sales.subtotal);
+        // Терминалаас [sales.total] (= хөнгөлсний дараах) дүнг авдаг тул
+        // гүйлгээг ч мөн тэр дүнгээр бүртгэнэ. Өмнө нь `sales.subtotal`
+        // (хөнгөлөхөөс өмнөх) дүнгээр хадгалж, `hungulsunDun`-г 0 гэж
+        // бичдэг байсан тул терминалын авсан дүн ба хадгалагдсан гүйлгээ
+        // зөрөөд, вэбийн баримтын жагсаалтад хөнгөлөлт огт харагддаггүй байв.
+        final khungulult = sales.effectiveDiscount;
+        final std = PosPaymentCore.calculateStandardSaleTotals(sales.total);
         final saveResp = await svc.submitGuilgeeniiTuukh(
           session: session,
           sales: sales,
@@ -92,7 +98,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           niitUne: std.total,
           tulsunDun: std.total,
           hariult: 0,
-          hungulsunDun: 0,
+          hungulsunDun: khungulult,
           noatiinDun: std.vat,
           noatguiDun: std.net,
           nhatiinDun: 0,
@@ -149,6 +155,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           items: completedSale.items
               .map((i) => CartItem(product: i.product, quantity: i.quantity))
               .toList(),
+          saleLines: buildReceiptLines(completedSale.items),
           total: completedSale.total,
           paymentMethod: _selectedPaymentMethod,
           orderNumber: completedSale.id,

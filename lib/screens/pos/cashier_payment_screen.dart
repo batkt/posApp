@@ -18,6 +18,7 @@ import '../../services/unipos_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/khariltsagch_promo_discount.dart';
 import '../../utils/mnt_amount_formatter.dart';
+import '../../utils/tender_amount_input.dart';
 import '../../widgets/qpay_invoice_dialog.dart';
 import '../../widgets/box_line_pieces_sheet.dart';
 import '../shared/receipt_screen.dart';
@@ -107,7 +108,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   /// (автомат, идэвхтэй бол) — эхнийх нь тодорхой байвал дараагийнхыг үл хэрэгсэнэ
   /// (вэб `niitDunNoat.hungulsunDun`).
   double _effectiveDiscountMnt(SalesModel sales) {
-    final sub = sales.subtotal;
+    final sub = sales.lineGrossBase;
     final payload = _checkoutKhariltsagchPayload();
     if (payload != null) {
       final d = KhariltsagchPromoDiscount.computeHungulsunDunTotal(
@@ -302,6 +303,13 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       sales.setGuilgeeniiDugaar(d);
     }
 
+    // Вэб `tulburTuluhModal.onFinish`-тэй ижил: урамшууллаар үнэгүй өгсөн
+    // барааны үнийг хөнгөлөлт дээр нэмнэ. Бэлэг мөр 0 үнээр бичигддэг тул
+    // үүнгүйгээр баримтын жагсаалтын "Хөнгөлөлт" багана урамшуулалтай
+    // борлуулалт дээр үргэлж 0 гардаг.
+    final hungulsunDun =
+        totals.cappedDiscount + sales.uramshuulaliinBelegniiDun;
+
     final saveResp = await svc.submitGuilgeeniiTuukh(
       session: session,
       sales: sales,
@@ -310,7 +318,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       niitUne: due,
       tulsunDun: tulsunDun,
       hariult: hariult,
-      hungulsunDun: totals.cappedDiscount,
+      hungulsunDun: hungulsunDun,
       noatiinDun: totals.vat,
       noatguiDun: totals.net,
       nhatiinDun: totals.nhhat,
@@ -433,7 +441,10 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     final due = totals.total;
     // Бэлэн: олгосон дүн + хариулт; карт/данс/зээл: нийт дүнээр, хариултгүй.
     final isCash = _kind == _PayKind.cash;
-    if (isCash && tender + 0.5 < due) {
+    // Тэвчээр нь [_TulburConfirmSheetState._tenderOk]-тэй ижил байх ёстой:
+    // бутархай дүнг бүтнээр нь оруулдаг болсон тул 0.5₮ дутуу авахыг
+    // чимээгүй зөвшөөрөхөө болино.
+    if (isCash && tender + 0.005 < due) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -530,6 +541,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           items: completed.items
               .map((i) => CartItem(product: i.product, quantity: i.quantity))
               .toList(),
+          saleLines: buildReceiptLines(completed.items),
           total: completed.total,
           paymentMethod: completed.paymentMethod,
           orderNumber: completed.id,
@@ -693,7 +705,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             }
           } else {
             final clampedManual =
-                _discountMnt.clamp(0.0, sales.subtotal).toDouble();
+                _discountMnt.clamp(0.0, sales.lineGrossBase).toDouble();
             if (clampedManual != _discountMnt) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (!mounted) return;
@@ -725,11 +737,18 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
 
               final summary = _SummaryPanel(
                 orderId: orderLabel,
-                subtotal: sales.subtotal,
+                subtotal: sales.lineGrossBase,
                 discount: totals.cappedDiscount,
                 vat: totals.vat,
                 nhhat: totals.nhhat,
                 total: totals.total,
+                // "Борлуулалтын НӨАТ" асаалттай үед мөрийн суурь /1.1 болдог
+                // (вэбтэй ижил) — зөрүүг ил гаргаж, Дүн − хасалтууд = Нийт
+                // дүн болгож тулгана.
+                excludedVat: ((sales.lineGrossBase - totals.cappedDiscount) -
+                        totals.total)
+                    .clamp(0.0, double.infinity)
+                    .toDouble(),
                 paymentKindLabel: _paymentKindLabelMn(_kind),
                 discountController: _discountInput,
                 discountFocus: _discountFocus,
@@ -747,9 +766,9 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                         })
                     : null,
                 onDiscountChanged: () =>
-                    _onDiscountTextChanged(sales.subtotal),
+                    _onDiscountTextChanged(sales.lineGrossBase),
                 onDiscountEditingComplete: () =>
-                    _formatDiscountFieldForDisplay(sales.subtotal),
+                    _formatDiscountFieldForDisplay(sales.lineGrossBase),
                 dorvonNegLabel: _dorvonNegActiveLabel(sales),
               );
 
@@ -870,6 +889,7 @@ class _SummaryPanel extends StatelessWidget {
     required this.vat,
     required this.nhhat,
     required this.total,
+    required this.excludedVat,
     required this.paymentKindLabel,
     required this.discountController,
     required this.discountFocus,
@@ -888,6 +908,12 @@ class _SummaryPanel extends StatelessWidget {
   final double vat;
   final double nhhat;
   final double total;
+
+  /// "Борлуулалтын НӨАТ" тохиргоо асаалттай үед мөрийн дүнгээс ХАСАГДСАН
+  /// НӨАТ. Энэ тохиргоотой үед [vat] нь 0 болдог тул үүнийг тусад нь
+  /// харуулахгүй бол "Дүн" ба "Нийт дүн" хоёрын зөрүү тайлбаргүй үлдэнэ.
+  final double excludedVat;
+
   final String paymentKindLabel;
   final TextEditingController discountController;
   final FocusNode discountFocus;
@@ -1102,6 +1128,8 @@ class _SummaryPanel extends StatelessWidget {
             ),
           ),
           if (vat > 0) _row(context, 'НӨАТ', _fmtMnt(vat)),
+          if (excludedVat > 0.009)
+            _row(context, 'НӨАТ (хасагдсан)', '−${_fmtMnt(excludedVat)}'),
           if (nhhat > 0) _row(context, 'НХАТ', _fmtMnt(nhhat)),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -2010,6 +2038,8 @@ class _TulburConfirmSheet extends StatefulWidget {
 }
 
 class _TulburConfirmSheetState extends State<_TulburConfirmSheet> {
+  /// Гараар бичсэн түүхий тоо — таслалтай ('.') байж болно.
+  /// Логик нь [TenderAmountInput]-д, энд зөвхөн төлөв.
   late String _digits;
 
   static const _sheetRadius = 28.0;
@@ -2017,16 +2047,19 @@ class _TulburConfirmSheetState extends State<_TulburConfirmSheet> {
   @override
   void initState() {
     super.initState();
-    final d = widget.due.ceil();
-    _digits = d <= 0 ? '' : d.toString();
+    // Төлөх дүнг БҮТНЭЭР нь (бутархайтай нь) урьдчилан бөглөнө. Өмнө нь
+    // `due.ceil()` хийдэг байсан тул 12,345.67₮ дээр 12,346 гарч, үлдсэн
+    // 0.33₮ нь "Хариулт" болж харагддаг байв.
+    _digits = TenderAmountInput.exactDigits(widget.due);
   }
 
-  double get _tender =>
-      (int.tryParse(_digits.isEmpty ? '0' : _digits) ?? 0).toDouble();
+  double get _tender => TenderAmountInput.value(_digits);
 
   double get _hariult => (_tender - widget.due).clamp(0.0, double.infinity);
 
-  bool get _tenderOk => _tender + 0.5 >= widget.due;
+  bool get _tenderOk => _tender + 0.005 >= widget.due;
+
+  String get _tenderDisplay => TenderAmountInput.display(_digits);
 
   void _tapKey(String key) {
     HapticFeedback.lightImpact();
@@ -2034,28 +2067,12 @@ class _TulburConfirmSheetState extends State<_TulburConfirmSheet> {
   }
 
   void _press(String key) {
-    setState(() {
-      switch (key) {
-        case '⌫':
-          if (_digits.isNotEmpty) {
-            _digits = _digits.substring(0, _digits.length - 1);
-          }
-          break;
-        case 'C':
-          _digits = '';
-          break;
-        default:
-          if (_digits.length < 12) _digits += key;
-      }
-    });
+    setState(() => _digits = TenderAmountInput.press(_digits, key));
   }
 
   void _addQuick(int add) {
     HapticFeedback.selectionClick();
-    setState(() {
-      final base = int.tryParse(_digits) ?? 0;
-      _digits = (base + add).toString();
-    });
+    setState(() => _digits = TenderAmountInput.addQuick(_digits, add));
   }
 
   Widget _dragHandle(BuildContext context) {
@@ -2235,15 +2252,40 @@ class _TulburConfirmSheetState extends State<_TulburConfirmSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          'Дүн бичих',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: cs.onSurfaceVariant,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
+                        Row(
+                          children: [
+                            const SizedBox(width: 32),
+                            Expanded(
+                              child: Text(
+                                'Дүн бичих',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: cs.onSurfaceVariant,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                            // Товчлуурын хүснэгт 4×3 болж 'C' товч гарсан тул
+                            // цэвэрлэх үйлдэл энд шилжив.
+                            SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: IconButton(
+                                tooltip: 'Цэвэрлэх',
+                                padding: EdgeInsets.zero,
+                                iconSize: 18,
+                                onPressed: _digits.isEmpty
+                                    ? null
+                                    : () => _tapKey('C'),
+                                icon: Icon(
+                                  Icons.backspace_outlined,
+                                  color: cs.error,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         AnimatedDefaultTextStyle(
                           duration: const Duration(milliseconds: 200),
@@ -2259,7 +2301,7 @@ class _TulburConfirmSheetState extends State<_TulburConfirmSheet> {
                           child: FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text(
-                              _fmtMnt(_tender),
+                              _tenderDisplay,
                               textAlign: TextAlign.center,
                               maxLines: 1,
                             ),
@@ -2443,67 +2485,41 @@ class _TulburConfirmSheetState extends State<_TulburConfirmSheet> {
     double keyAspectRatio = 1.35,
     double fontScale = 1,
   }) {
+    // Тооны машины стандарт 4×3 байрлал. Өмнө нь зүүн талын багана
+    // ['C','0','⌫'] байсан тул таслалын товч тавих зай байхгүй байв —
+    // ингэснээр бутархай дүн ГАРААР ОРУУЛАХ БОЛОМЖГҮЙ байсан.
     const keys = <List<String>>[
       ['1', '2', '3'],
       ['4', '5', '6'],
       ['7', '8', '9'],
+      ['.', '0', '⌫'],
     ];
     final hPad = EdgeInsets.symmetric(horizontal: keyGap);
-    final sideAspect = keyAspectRatio;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
       children: [
-        Expanded(
-          child: Padding(
-            padding: hPad,
-            child: Column(
+        for (final row in keys)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
               children: [
-                for (final k in ['C', '0', '⌫'])
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: _NumpadKey(
-                      label: k,
-                      onTap: () => _tapKey(k),
-                      tone: k == 'C'
-                          ? _NumpadKeyTone.danger
-                          : k == '⌫'
-                              ? _NumpadKeyTone.muted
-                              : _NumpadKeyTone.normal,
-                      aspectRatio: sideAspect,
-                      fontSize: 21 * fontScale,
+                for (final k in row)
+                  Expanded(
+                    child: Padding(
+                      padding: hPad,
+                      child: _NumpadKey(
+                        label: k,
+                        onTap: () => _tapKey(k),
+                        tone: k == '⌫'
+                            ? _NumpadKeyTone.muted
+                            : _NumpadKeyTone.normal,
+                        aspectRatio: keyAspectRatio,
+                        fontSize: 21 * fontScale,
+                      ),
                     ),
                   ),
               ],
             ),
           ),
-        ),
-        Expanded(
-          flex: 3,
-          child: Column(
-            children: [
-              for (final row in keys)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      for (final k in row)
-                        Expanded(
-                          child: Padding(
-                            padding: hPad,
-                            child: _NumpadKey(
-                              label: k,
-                              onTap: () => _tapKey(k),
-                              aspectRatio: keyAspectRatio,
-                              fontSize: 21 * fontScale,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
       ],
     );
   }

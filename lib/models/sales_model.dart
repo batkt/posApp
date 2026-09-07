@@ -26,6 +26,32 @@ class SaleItem {
   /// `quantity` хайрцаг × [Product.negKhairtsaganDahiShirhegiinToo].
   double? boxPiecesSold;
 
+  /// `POST /uramshuulalShalgay` буцаасан мөрийн бүтэн бичлэг. Сервер нь
+  /// урамшууллаа мөчлөг бүрт ДАХИН тооцдог тул өмнөх хариугаа (тэр дундаа
+  /// `dorvonNegGiftLine`, `dorvonNegOriginalShirkheg` зэрэг зөвхөн сервер
+  /// мэддэг талбаруудыг) хэвээр буцааж илгээх ёстой — эс тэгвээс бэлэг мөр
+  /// бүр дуудалт тутамд дахин үрждэг.
+  Map<String, dynamic>? serverRow;
+
+  /// Бэлэг мөрийн ЖИНХЭНЭ үнэ (сервер `undsenZarakhUne`). Бэлэг мөр 0 үнээр
+  /// бичигддэг тул хөнгөлөлтийн дүнг эндээс гаргана.
+  double? undsenZarakhUne;
+
+  /// Сервер тэмдэглэсэн "N-т 1 үнэгүй"-ийн бэлэг мөр эсэх.
+  bool dorvonNegGiftLine;
+
+  /// Урамшууллаар үнэгүй өгсөн мөр эсэх (бэлэг эсвэл "N-т 1 үнэгүй").
+  bool get isGiftLine =>
+      uramshuulaliinId != null && uramshuulaliinId!.trim().isNotEmpty;
+
+  /// Бэлгээр өгснөөр үүсэх хөнгөлөлт (вэб `uramshuulaliinBelegniiDun`).
+  double get giftDiscount {
+    if (!isGiftLine) return 0;
+    final unit = undsenZarakhUne ?? 0;
+    if (!unit.isFinite || unit <= 0) return 0;
+    return unit * effectivePieces;
+  }
+
   SaleItem({
     required this.product,
     required this.unitPrice,
@@ -34,6 +60,9 @@ class SaleItem {
     this.uramshuulaliinId,
     this.forceRetailPricing = false,
     this.boxPiecesSold,
+    this.serverRow,
+    this.undsenZarakhUne,
+    this.dorvonNegGiftLine = false,
   });
 
   double get _negPerBox {
@@ -76,6 +105,9 @@ class SaleItem {
     String? uramshuulaliinId,
     bool? forceRetailPricing,
     double? boxPiecesSold,
+    Map<String, dynamic>? serverRow,
+    double? undsenZarakhUne,
+    bool? dorvonNegGiftLine,
   }) {
     return SaleItem(
       product: product ?? this.product,
@@ -85,7 +117,48 @@ class SaleItem {
       uramshuulaliinId: uramshuulaliinId ?? this.uramshuulaliinId,
       forceRetailPricing: forceRetailPricing ?? this.forceRetailPricing,
       boxPiecesSold: boxPiecesSold ?? this.boxPiecesSold,
+      serverRow: serverRow ?? this.serverRow,
+      undsenZarakhUne: undsenZarakhUne ?? this.undsenZarakhUne,
+      dorvonNegGiftLine: dorvonNegGiftLine ?? this.dorvonNegGiftLine,
     );
+  }
+
+  /// `POST /uramshuulalShalgay` → `songogdsonEmnuud[]` мөр. Серверийн өмнөх
+  /// хариуг (`serverRow`) суурь болгож, зөвхөн кассчны өөрчилсөн зүйлсийг
+  /// (тоо, нэгж үнэ) дарж бичнэ — ингэснээр сервер зөвхөн өөрийн мэдэх
+  /// талбаруудаа буцааж уншина.
+  Map<String, dynamic> toUramshuulalRow({required String fallbackSalbariinId}) {
+    final row = <String, dynamic>{
+      ...(serverRow ??
+          product.toBaraaDocument(fallbackSalbariinId: fallbackSalbariinId)),
+    };
+    row['shirkheg'] = effectivePieces;
+    // `khamgiinKhyamdUnitPrice` салбарын `baraaHudaldahUne` тохиргооноос
+    // хамаарч `zarakhUne` эсвэл `niitUne`-г уншдаг — хоёуланг нь мөрийн
+    // бодит нэгж үнээр бичиж, аль ч тохиргоонд ижил үр дүн гаргана.
+    //
+    // Хайрцгийг задалж зарахад `shirkheg` нь ШИРХЭГ тул нэгж үнэ ч ширхэгийн
+    // үнэ байх ёстой: `shirkheg × niitUne == [total]` тэнцэл үргэлж хадгална,
+    // эс тэгвээс сервер урамшууллыг хайрцгийн үнээр бодож хэт өндөр
+    // хөнгөлөлт гаргана.
+    final perUnit = product.isBoxSaleUnit ? (unitPrice / _negPerBox) : unitPrice;
+    final unit = isGiftLine ? 0.0 : perUnit;
+    row['niitUne'] = unit;
+    row['zarakhUne'] = unit;
+    if (uramshuulaliinId != null && uramshuulaliinId!.trim().isNotEmpty) {
+      row['uramshuulaliinId'] = uramshuulaliinId!.trim();
+    } else {
+      row.remove('uramshuulaliinId');
+    }
+    if (dorvonNegGiftLine) {
+      row['dorvonNegGiftLine'] = true;
+    } else {
+      row.remove('dorvonNegGiftLine');
+    }
+    if (undsenZarakhUne != null) {
+      row['undsenZarakhUne'] = undsenZarakhUne;
+    }
+    return row;
   }
 }
 
@@ -240,9 +313,67 @@ class SalesModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Урамшууллыг сервер (`POST /uramshuulalShalgay`) тооцож байгаа эсэх.
+  /// Нэг удаа амжилттай тооцоолсны дараа асна — тэр үеэс эхлэн бэлэг мөрүүд
+  /// сагсанд 0 үнээр бодитоор орж ирдэг тул клиент талын
+  /// [DorvonNegUramshuulal] тооцоог ДАВХАР нэмэхгүй.
+  bool _uramshuulalServerDriven = false;
+  bool get uramshuulalServerDriven => _uramshuulalServerDriven;
+
+  /// Серверийн буцаасан "N-т 1 үнэгүй"-ийн тэнцвэр (`dorvonNegTie`).
+  Map<String, dynamic>? _serverDorvonNegTie;
+  Map<String, dynamic>? get serverDorvonNegTie => _serverDorvonNegTie;
+
+  /// Нэг урамшуулалд олон бэлэг байгаа тул кассчин сонгох ёстой (`songokhBelegnuud`).
+  List<Map<String, dynamic>> _songokhBelegnuud = const [];
+  List<Map<String, dynamic>> get songokhBelegnuud => _songokhBelegnuud;
+
+  /// Кассчны сонгосон бэлгүүд — дараагийн `uramshuulalShalgay`-д буцаана.
+  List<Map<String, dynamic>> _songogdsonBelegnuud = const [];
+  List<Map<String, dynamic>> get songogdsonBelegnuud => _songogdsonBelegnuud;
+
+  void setSongogdsonBelegnuud(List<Map<String, dynamic>> rows) {
+    _songogdsonBelegnuud = List.unmodifiable(rows);
+    notifyListeners();
+  }
+
+  /// Серверийн `dorvonNegTie`-г одоо байгаа тэнцвэрийн UI-д тааруулж
+  /// хөрвүүлнэ. `discount`/`freeUnitsById` нь ЗОРИУДААР хоосон: чөлөөлөлт нь
+  /// сагсанд 0 үнэтэй бэлэг мөр болж аль хэдийн орсон байдаг.
+  DorvonNegCalcResult get _serverDorvonNegCalcView {
+    final tie = _serverDorvonNegTie;
+    if (tie == null) return DorvonNegUramshuulal.empty;
+    if (tie['resolved'] == true) return DorvonNegUramshuulal.empty;
+    final raw = tie['candidates'];
+    if (raw is! List || raw.isEmpty) return DorvonNegUramshuulal.empty;
+    final candidates = <DorvonNegTieCandidate>[];
+    for (final e in raw) {
+      if (e is! Map) continue;
+      final units = _rowNum(e['availableUnits']).round();
+      if (units <= 0) continue;
+      candidates.add(
+        DorvonNegTieCandidate(
+          id: e['id']?.toString() ?? '',
+          name: (e['ner'] ?? e['code'] ?? '—').toString(),
+          price: _rowNum(e['price']),
+          availableUnits: units,
+        ),
+      );
+    }
+    if (candidates.isEmpty) return DorvonNegUramshuulal.empty;
+    return DorvonNegCalcResult(
+      tieCandidates: candidates,
+      tieSlotsNeeded: _rowNum(tie['slotsNeeded']).round(),
+    );
+  }
+
   /// Сагсны нэгжүүд болон идэвхтэй урамшуулалд тулгуурлан "хамгийн хямд N
   /// үнэгүй" тооцоог хийнэ (freeCount/discount/freeUnitsById/тэнцвэр).
+  ///
+  /// Сервер тооцож эхэлсэн бол ([uramshuulalServerDriven]) хоосон буцаана —
+  /// бэлэг мөр сагсанд аль хэдийн орсон тул давхар хөнгөлөлт үүсэхээс сэргийлнэ.
   DorvonNegCalcResult get dorvonNegCalc {
+    if (_uramshuulalServerDriven) return _serverDorvonNegCalcView;
     final promo = _dorvonNegPromo;
     if (promo == null) return DorvonNegUramshuulal.empty;
     final rawBuleg = promo['buleg'];
@@ -272,6 +403,112 @@ class SalesModel extends ChangeNotifier {
     if (_dorvonNegManualPicks.isNotEmpty && !dorvonNegCalc.hasTie) {
       _dorvonNegManualPicks = const {};
     }
+  }
+
+  /// `POST /uramshuulalShalgay`-д илгээх сагс (вэб `songogdsonEmnuud`).
+  List<Map<String, dynamic>> buildUramshuulalRows({
+    required String fallbackSalbariinId,
+  }) {
+    return _currentSale
+        .map((e) => e.toUramshuulalRow(fallbackSalbariinId: fallbackSalbariinId))
+        .toList();
+  }
+
+  static double _rowNum(dynamic v) {
+    if (v is num) return v.toDouble();
+    return double.tryParse('${v ?? ''}') ?? 0;
+  }
+
+  /// Серверийн эрх мэдэлтэй сагсаар [_currentSale]-г солино (вэб
+  /// `setSongogdsomEmnuud(data.songogdsonEmnuud)`).
+  ///
+  /// Зөвхөн клиент талд амьдардаг төлөв (жижиглэнгийн суурь үнэ, гараар
+  /// тогтоосон үнэ, хайрцаг задалсан ширхэг) хуучин мөрөөс хадгалагдана.
+  void applyUramshuulalResult({
+    required List<Map<String, dynamic>> songogdsonEmnuud,
+    List<Map<String, dynamic>> songokhBelegnuud = const [],
+    Map<String, dynamic>? dorvonNegTie,
+  }) {
+    final previousById = <String, SaleItem>{};
+    for (final line in _currentSale) {
+      previousById[line.product.id] = line;
+    }
+
+    final rebuilt = <SaleItem>[];
+    for (final row in songogdsonEmnuud) {
+      final product = Product.fromJson(row);
+      final qty = _rowNum(row['shirkheg']);
+      if (qty <= 0) continue;
+
+      final promoId = row['uramshuulaliinId']?.toString().trim();
+      final isGift = promoId != null && promoId.isNotEmpty;
+      final undsen = row.containsKey('undsenZarakhUne')
+          ? _rowNum(row['undsenZarakhUne'])
+          : null;
+      final unitPrice = isGift ? 0.0 : _rowNum(row['niitUne']);
+
+      final prior = previousById[product.id];
+      rebuilt.add(
+        SaleItem(
+          product: product,
+          quantity: qty.round() < 1 ? 1 : qty.round(),
+          unitPrice: unitPrice,
+          // Бэлэг мөрийн "суурь" үнэ нь жинхэнэ үнэ нь — ингэснээр
+          // [effectiveDiscount] бэлгийн дүнг хөнгөлөлт болгож тооцно.
+          retailUnitPrice: isGift
+              ? (undsen ?? 0)
+              : (prior?.retailUnitPrice ?? unitPrice),
+          uramshuulaliinId: isGift ? promoId : null,
+          forceRetailPricing: isGift ? false : (prior?.forceRetailPricing ?? false),
+          boxPiecesSold: isGift ? null : prior?.boxPiecesSold,
+          serverRow: row,
+          undsenZarakhUne: undsen,
+          dorvonNegGiftLine: row['dorvonNegGiftLine'] == true,
+        ),
+      );
+    }
+
+    _currentSale
+      ..clear()
+      ..addAll(rebuilt);
+    _songokhBelegnuud = List.unmodifiable(songokhBelegnuud);
+    _serverDorvonNegTie = dorvonNegTie;
+    _uramshuulalServerDriven = true;
+    // Серверийн тэнцвэр арилсан бол хуучин сонголтыг цэвэрлэнэ (вэбтэй ижил).
+    if (dorvonNegTie == null && _dorvonNegManualPicks.isNotEmpty) {
+      _dorvonNegManualPicks = const {};
+    }
+    notifyListeners();
+  }
+
+  /// Урамшууллаар үнэгүй өгсөн барааны нийт үнэ — вэб `tulburTuluhModal`-ын
+  /// `uramshuulaliinBelegniiDun`. Бэлэг мөр 0 үнээр бичигддэг тул үүнийг
+  /// гүйлгээний `hungulsunDun`-д нэмэхгүй бол баримтын жагсаалтын "Хөнгөлөлт"
+  /// багана урамшуулалтай борлуулалт дээр үргэлж 0 гарна.
+  double get uramshuulaliinBelegniiDun {
+    var sum = 0.0;
+    for (final item in _currentSale) {
+      sum += item.giftDiscount;
+    }
+    return sum;
+  }
+
+  /// Хөнгөлөлт хасахаас өмнөх суурь дүн — мөр бүрийн **бодит зарах** дүнгийн
+  /// нийлбэр (вэб `niitDunNoat`-ын `e.zarsanNiitUne` суурьтай ижил).
+  ///
+  /// [subtotal]-аас ялгаатай: тэр нь жижиглэнгийн `retailUnitPrice × quantity`
+  /// тул бөөний үнэ, гараар засварласан үнэ, хайрцаг задалсан ширхэг зэрэг
+  /// тохиолдолд илүү гарна. Кассын хөнгөлөлтийн дээд хязгаар болон дэлгэцэнд
+  /// харагдах "Дүн" хоёулаа ЭНЭ дүнг ашиглах ёстой — эс тэгвээс харагдах
+  /// суурь ба тооцоонд орох суурь зөрж, хөнгөлөлт давхар хасагдсан мэт
+  /// харагдана.
+  double get lineGrossBase {
+    var sum = 0.0;
+    for (final item in _currentSale) {
+      final t = item.total;
+      if (t.isFinite && t > 0) sum += t;
+    }
+    return sum;
   }
 
   /// 📊 Gross subtotal before discounts (retail unit price × quantity)
@@ -523,6 +760,12 @@ class SalesModel extends ChangeNotifier {
     _guilgeeniiDugaar = null;
     _selectedCustomer = null;
     _dorvonNegManualPicks = const {};
+    // Урамшууллын серверийн төлөв нь тухайн сагсных — шинэ захиалга дээр
+    // хуучин бэлэг/тэнцвэр үлдэхгүй.
+    _uramshuulalServerDriven = false;
+    _serverDorvonNegTie = null;
+    _songokhBelegnuud = const [];
+    _songogdsonBelegnuud = const [];
     notifyListeners();
   }
 

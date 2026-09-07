@@ -12,6 +12,15 @@ const _kPrefY = 'chat_fab_y';
 const _kBtnSize = 58.0;
 const _kTrashZoneH = 88.0;
 
+/// Товчийг доод захаас хэр зайд барих вэ.
+///
+/// Энэ нь [_kTrashZoneH]-тэй ХАТУУ холбоотой: товчны төв
+/// (`_kBtnSize / 2`) хогийн савны бүсэд орж чадахгүй бол устгах үйлдэл
+/// хэзээ ч ажиллахгүй. Өмнө нь 80 байсан тул хамгийн доод цэгт ч төв нь
+/// хогийн бүсээс 21px дээр зогсож, "чирж устгах" боломжгүй байв.
+/// Шаардлага: `_kBottomReserve <= _kTrashZoneH - _kBtnSize / 2` (= 59).
+const _kBottomReserve = 40.0;
+
 /// Global notifier so the Settings panel can toggle the FAB visibility without
 /// routing to the MainScreen.  Initial value is [true]; overwritten once
 /// SharedPreferences are loaded.
@@ -127,7 +136,7 @@ class _ChatFabState extends State<ChatFab> with SingleTickerProviderStateMixin {
 
   Offset _clamp(Offset p, Size screen) => Offset(
         p.dx.clamp(0.0, screen.width - _kBtnSize),
-        p.dy.clamp(0.0, screen.height - _kBtnSize - 80),
+        p.dy.clamp(0.0, screen.height - _kBtnSize - _kBottomReserve),
       );
 
   bool _hitTrash(Offset p, Size screen) =>

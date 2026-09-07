@@ -24,35 +24,18 @@ class MongolianDateFormatter {
     'Ням',
   ];
 
-  static String formatDate(DateTime date) {
-    final local = date.toLocal();
-    final day = local.day;
-    final month = mongolianMonths[local.month - 1];
-    final year = local.year;
-    final weekday = mongolianWeekdays[local.weekday - 1];
+  /// Бүх огноо `YYYY-MM-DD` тоон хэлбэртэй (жиш. `2026-09-07`).
+  ///
+  /// Өмнө нь "7 9-р сар, 2026 (Даваа)" / "2026 оны 9-р сарын 7" гэх мэт
+  /// үгэн хэлбэрүүд зэрэгцэн ашиглагдаж, дэлгэц бүр өөр өөр харагддаг байв.
+  static String formatDate(DateTime date) => formatDateYmdCompact(date);
 
-    return '$day $month, $year ($weekday)';
-  }
+  static String formatShortDate(DateTime date) => formatDateYmdCompact(date);
 
-  static String formatShortDate(DateTime date) {
-    final local = date.toLocal();
-    final day = local.day;
-    final month = mongolianMonths[local.month - 1];
-    final year = local.year;
+  static String formatDateYmdWords(DateTime date) =>
+      formatDateYmdCompact(date);
 
-    return '$day $month $year';
-  }
-
-  /// Албан ёсны уншигдахуйц: **2026 оны 4-р сарын 5** (цонх, товч, хугацааны сонголт).
-  static String formatDateYmdWords(DateTime date) {
-    final local = date.toLocal();
-    final y = local.year;
-    final m = mongolianMonths[local.month - 1];
-    final d = local.day;
-    return '$y оны $mын $d';
-  }
-
-  /// Эхлэл — төгсгөл (мөр бүрт монгол сарын нэрээр).
+  /// Эхлэл — төгсгөл.
   static String formatDateRangeLine(DateTime start, DateTime end) {
     return '${formatDateYmdWords(start)} — ${formatDateYmdWords(end)}';
   }
@@ -71,11 +54,11 @@ class MongolianDateFormatter {
     return '${formatDateYmdCompact(start)} — ${formatDateYmdCompact(end)}';
   }
 
-  /// Section title for sales history (weekday + calendar date in Mongolian).
+  /// Section title for sales history — `2026-09-07 (Даваа)`.
   static String formatSalesHistorySectionDate(DateTime date) {
     final local = date.toLocal();
     final weekday = mongolianWeekdays[local.weekday - 1];
-    return '$weekday · ${formatShortDate(local)}';
+    return '${formatDateYmdCompact(local)} ($weekday)';
   }
 
   /// Wall-clock time in the device locale; [seconds] for transaction lists.
@@ -94,16 +77,11 @@ class MongolianDateFormatter {
     return '${formatDate(date)} ${formatTime(date)}';
   }
 
-  /// Receipt / thermal: `2026/04/21       13:59:59` (no weekday — avoids "Мягмар" etc.).
+  /// Receipt / thermal: `2026-09-07       13:59:59` (no weekday).
   static String formatReceiptNumericDateTime(DateTime date) {
     final local = date.toLocal();
-    final y = local.year.toString().padLeft(4, '0');
-    final mo = local.month.toString().padLeft(2, '0');
-    final d = local.day.toString().padLeft(2, '0');
-    final h = local.hour.toString().padLeft(2, '0');
-    final mi = local.minute.toString().padLeft(2, '0');
-    final s = local.second.toString().padLeft(2, '0');
-    return '$y/$mo/$d       $h:$mi:$s';
+    return '${formatDateYmdCompact(local)}       '
+        '${formatTime(local, seconds: true)}';
   }
 
   static String formatRelativeDate(DateTime date) {

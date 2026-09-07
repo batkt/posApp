@@ -416,6 +416,7 @@ class _KioskTerminalPaySignalListenerState
                 items: completed.items
                     .map((i) => CartItem(product: i.product, quantity: i.quantity))
                     .toList(),
+                saleLines: buildReceiptLines(completed.items),
                 total: completed.total,
                 paymentMethod: completed.paymentMethod,
                 orderNumber: completed.id,
