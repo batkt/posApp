@@ -271,6 +271,11 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
   String _businessTurul = 'Худалдан авагч';
   bool _submitting = false;
 
+  // Харилцагчийн хөнгөлөлт (вэбийн `khunglukh*` талбарууд).
+  bool _khunglukhEsekh = false;
+  String _khunglukhTurul = Customer.discountTypeAmount;
+  final _khunglukhUtga = TextEditingController();
+
   @override
   void dispose() {
     _ovog.dispose();
@@ -279,6 +284,7 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
     _register.dispose();
     _mail.dispose();
     _khayag.dispose();
+    _khunglukhUtga.dispose();
     super.dispose();
   }
 
@@ -303,6 +309,16 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
       register: _register.text.trim().isEmpty ? null : _register.text.trim(),
       mail: _mail.text.trim().isEmpty ? null : _mail.text.trim(),
       khayag: _khayag.text.trim().isEmpty ? null : _khayag.text.trim(),
+      khunglukhEsekh: _khunglukhEsekh,
+      khunglukhTurul: _khunglukhTurul,
+      khunglukhDun: _khunglukhEsekh &&
+              _khunglukhTurul == Customer.discountTypeAmount
+          ? _parseKhunglult(_khunglukhUtga.text)
+          : 0,
+      khunglukhKhuvi: _khunglukhEsekh &&
+              _khunglukhTurul == Customer.discountTypePercent
+          ? _parseKhunglult(_khunglukhUtga.text)
+          : 0,
     );
     if (!mounted) return;
     setState(() => _submitting = false);
@@ -313,6 +329,11 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
       _register.clear();
       _mail.clear();
       _khayag.clear();
+      _khunglukhUtga.clear();
+      setState(() {
+        _khunglukhEsekh = false;
+        _khunglukhTurul = Customer.discountTypeAmount;
+      });
       showAppSnackBar(context, 'Амжилттай бүртгэгдлээ',
           variant: AppSnackVariant.success);
       if (context.mounted && Navigator.of(context).canPop()) {
@@ -558,6 +579,16 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
                             border: const OutlineInputBorder(),
                           ),
                         ),
+                        const SizedBox(height: 16),
+                        _KhunglultEditor(
+                          enabled: _khunglukhEsekh,
+                          type: _khunglukhTurul,
+                          controller: _khunglukhUtga,
+                          onEnabledChanged: (v) =>
+                              setState(() => _khunglukhEsekh = v),
+                          onTypeChanged: (v) =>
+                              setState(() => _khunglukhTurul = v),
+                        ),
                         const SizedBox(height: 20),
                         FilledButton.icon(
                           onPressed:
@@ -582,6 +613,212 @@ class _CustomerRegisterSheetState extends State<_CustomerRegisterSheet> {
           );
         },
       ),
+    );
+  }
+}
+
+/// "1,500" / "1 500.5" мэтийг тоо болгоно (сөрөг ба NaN-ыг 0 болгоно).
+double _parseKhunglult(String raw) {
+  final cleaned = raw.replaceAll(RegExp(r'[^0-9.]'), '');
+  final v = double.tryParse(cleaned) ?? 0;
+  return v.isFinite && v > 0 ? v : 0;
+}
+
+/// Харилцагчийн хөнгөлөлт тохируулах хэсэг — вэбийн харилцагчийн маягтын
+/// `khunglukhEsekh` / `khunglukhTurul` / `khunglukhDun` / `khunglukhKhuvi`
+/// талбаруудтай яг ижил. Бүртгэх хуудас болон засах цонх хоёулаа үүнийг
+/// ашиглана.
+class _KhunglultEditor extends StatelessWidget {
+  const _KhunglultEditor({
+    required this.enabled,
+    required this.type,
+    required this.controller,
+    required this.onEnabledChanged,
+    required this.onTypeChanged,
+  });
+
+  final bool enabled;
+  final String type;
+  final TextEditingController controller;
+  final ValueChanged<bool> onEnabledChanged;
+  final ValueChanged<String> onTypeChanged;
+
+  bool get _isPercent => type == Customer.discountTypePercent;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: enabled,
+            onChanged: onEnabledChanged,
+            title: Text(
+              'Хөнгөлөлттэй эсэх',
+              style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text(
+              'Асаавал касст энэ харилцагчийг сонгоход хөнгөлөлт автоматаар бодогдоно',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ),
+          if (enabled) ...[
+            const SizedBox(height: 4),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: Customer.discountTypeAmount,
+                  icon: Icon(Icons.payments_outlined, size: 18),
+                  label: Text('Мөнгөн дүн'),
+                ),
+                ButtonSegment(
+                  value: Customer.discountTypePercent,
+                  icon: Icon(Icons.percent_rounded, size: 18),
+                  label: Text('Хувь'),
+                ),
+              ],
+              selected: {type},
+              onSelectionChanged: (v) => onTypeChanged(v.first),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: controller,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+              ],
+              decoration: InputDecoration(
+                labelText: _isPercent ? 'Хөнгөлөх хувь' : 'Хөнгөлөх дүн',
+                suffixText: _isPercent ? '%' : '₮',
+                filled: true,
+                border: const OutlineInputBorder(),
+              ),
+              validator: (v) {
+                if (!enabled) return null;
+                final n = _parseKhunglult(v ?? '');
+                if (n <= 0) {
+                  return _isPercent
+                      ? 'Хөнгөлөх хувь оруулна уу'
+                      : 'Хөнгөлөх дүн оруулна уу';
+                }
+                if (_isPercent && n > 100) {
+                  return 'Хувь 100-аас их байж болохгүй';
+                }
+                return null;
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Байгаа харилцагчийн хөнгөлөлтийг засах цонх · `PUT /khariltsagch/<id>`.
+class _CustomerDiscountDialog extends StatefulWidget {
+  const _CustomerDiscountDialog({required this.customer});
+
+  final Customer customer;
+
+  @override
+  State<_CustomerDiscountDialog> createState() =>
+      _CustomerDiscountDialogState();
+}
+
+class _CustomerDiscountDialogState extends State<_CustomerDiscountDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late bool _enabled = widget.customer.discountEnabled;
+  late String _type = widget.customer.discountType;
+  late final TextEditingController _utga = TextEditingController(
+    text: _initialValue(),
+  );
+  bool _saving = false;
+
+  String _initialValue() {
+    final c = widget.customer;
+    final v = c.discountType == Customer.discountTypePercent
+        ? c.discountPercent
+        : c.discountAmount;
+    if (v <= 0) return '';
+    return v == v.roundToDouble()
+        ? v.toStringAsFixed(0)
+        : v.toStringAsFixed(2);
+  }
+
+  @override
+  void dispose() {
+    _utga.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    final n = _parseKhunglult(_utga.text);
+    final msg = await context.read<CustomerModel>().updateCustomerDiscount(
+          khariltsagchiinId: widget.customer.id,
+          enabled: _enabled,
+          type: _type,
+          amount: _type == Customer.discountTypeAmount ? n : 0,
+          percent: _type == Customer.discountTypePercent ? n : 0,
+        );
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (msg == null) {
+      // Мэдэгдлийг цонх хаагдахААС ӨМНӨ гаргана — pop хийсний дараа энэ
+      // `context` идэвхгүй болсон байх тул overlay олдохгүй.
+      showAppSnackBar(context, 'Хөнгөлөлт хадгалагдлаа',
+          variant: AppSnackVariant.success);
+      Navigator.of(context).pop();
+    } else {
+      showAppSnackBar(context, msg, variant: AppSnackVariant.error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Харилцагчийн хөнгөлөлт'),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: _KhunglultEditor(
+            enabled: _enabled,
+            type: _type,
+            controller: _utga,
+            onEnabledChanged: (v) => setState(() => _enabled = v),
+            onTypeChanged: (v) => setState(() => _type = v),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Болих'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Хадгалах'),
+        ),
+      ],
     );
   }
 }
@@ -653,11 +890,15 @@ class _CustomerCard extends StatelessWidget {
                               color: colorScheme.onSurfaceVariant,
                             ),
                             const SizedBox(width: 4),
-                            Text(
-                              customer.phone,
-                              style: textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w500,
+                            Flexible(
+                              child: Text(
+                                customer.phone,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ],
@@ -680,24 +921,32 @@ class _CustomerCard extends StatelessWidget {
                 color: colorScheme.outlineVariant.withValues(alpha: 0.5),
               ),
               const SizedBox(height: 10),
+              // Хоёр тэмдэглэгээ мөрийн өргөнийг ХУВААНА. Урьд нь чөлөөт
+              // өргөнтэй байсан тул урт дүн ("12,345,678.90 ₮") эсвэл олон
+              // захиалгатай харилцагч дээр нарийн дэлгэц дээр мөр халиад
+              // шар/хар зураастай алдаа гардаг байв.
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _StatBadge(
-                    icon: Icons.shopping_bag_outlined,
-                    label: 'Захиалга',
-                    value: '${customer.totalPurchases} удаа',
-                    colorScheme: colorScheme,
-                    textTheme: textTheme,
+                  Expanded(
+                    child: _StatBadge(
+                      icon: Icons.shopping_bag_outlined,
+                      label: 'Захиалга',
+                      value: '${customer.totalPurchases} удаа',
+                      colorScheme: colorScheme,
+                      textTheme: textTheme,
+                    ),
                   ),
-                  _StatBadge(
-                    icon: Icons.payments_outlined,
-                    label: 'Нийт зарцуулсан',
-                    value: MntAmountFormatter.formatTugrikSpaced(
-                        customer.totalSpent),
-                    colorScheme: colorScheme,
-                    textTheme: textTheme,
-                    isHighlight: true,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _StatBadge(
+                      icon: Icons.payments_outlined,
+                      label: 'Нийт зарцуулсан',
+                      value: MntAmountFormatter.formatTugrikSpaced(
+                          customer.totalSpent),
+                      colorScheme: colorScheme,
+                      textTheme: textTheme,
+                      isHighlight: true,
+                    ),
                   ),
                 ],
               ),
@@ -796,27 +1045,34 @@ class _StatBadge extends StatelessWidget {
                 isHighlight ? colorScheme.primary : colorScheme.onSurfaceVariant,
           ),
           const SizedBox(width: 6),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontSize: 10,
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 10,
+                  ),
                 ),
-              ),
-              Text(
-                value,
-                style: textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color:
-                      isHighlight ? colorScheme.primary : colorScheme.onSurface,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: isHighlight
+                        ? colorScheme.primary
+                        : colorScheme.onSurface,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -948,6 +1204,37 @@ class CustomerDetailsSheet extends StatelessWidget {
                         'Үлдэгдэл: ${MntAmountFormatter.formatTugrik(customer.currentCredit ?? 0)}',
                   ),
                 ],
+                const SizedBox(height: 24),
+
+                // Хөнгөлөлт
+                _SectionTitle(title: 'Хөнгөлөлт'),
+                const SizedBox(height: 12),
+                _InfoRow(
+                  icon: Icons.local_offer_outlined,
+                  label: customer.discountEnabled
+                      ? (customer.discountType == Customer.discountTypePercent
+                          ? 'Хөнгөлөх хувь'
+                          : 'Хөнгөлөх дүн')
+                      : 'Хөнгөлөлттэй эсэх',
+                  value: customer.discountEnabled
+                      ? customer.discountLabel
+                      : 'Үгүй',
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (_) => ChangeNotifierProvider<CustomerModel>.value(
+                      value: context.read<CustomerModel>(),
+                      child: _CustomerDiscountDialog(customer: customer),
+                    ),
+                  ),
+                  icon: const Icon(Icons.discount_outlined),
+                  label: const Text('Хөнгөлөлт тохируулах'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                ),
                 const SizedBox(height: 24),
 
                 // Actions

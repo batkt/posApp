@@ -240,6 +240,24 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.error),
         ),
+        // `focusedErrorBorder` / `disabledBorder` заагаагүй байсан тул алдаатай
+        // талбар дээр дарах эсвэл талбарыг идэвхгүй болгоход Flutter-ийн
+        // анхдагч хүрээ (4px радиустай) руу үсэрч, бусад талбартайгаа зөрдөг
+        // байв — бүх цонхонд илэрдэг оролтын дизайн эвдрэл.
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.error, width: 2),
+        ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: AppColors.outlineLight.withValues(alpha: 0.5),
+          ),
+        ),
+        // Монгол хэл дээрх шалгуурын мессеж нэг мөрөнд багтдаггүй тул
+        // таслагдаж, хэрэглэгч алдаагаа уншиж чаддаггүй байв.
+        errorMaxLines: 3,
+        helperMaxLines: 2,
         labelStyle: GoogleFonts.inter(
           fontSize: 14,
           color: AppColors.onSurfaceVariantLight,
@@ -478,6 +496,24 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.errorDark),
         ),
+        // `focusedErrorBorder` / `disabledBorder` заагаагүй байсан тул алдаатай
+        // талбар дээр дарах эсвэл талбарыг идэвхгүй болгоход Flutter-ийн
+        // анхдагч хүрээ (4px радиустай) руу үсэрч, бусад талбартайгаа зөрдөг
+        // байв — бүх цонхонд илэрдэг оролтын дизайн эвдрэл.
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.errorDark, width: 2),
+        ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: AppColors.outlineDark.withValues(alpha: 0.5),
+          ),
+        ),
+        // Монгол хэл дээрх шалгуурын мессеж нэг мөрөнд багтдаггүй тул
+        // таслагдаж, хэрэглэгч алдаагаа уншиж чаддаггүй байв.
+        errorMaxLines: 3,
+        helperMaxLines: 2,
         labelStyle: GoogleFonts.inter(
           fontSize: 14,
           color: AppColors.onSurfaceVariantDark,

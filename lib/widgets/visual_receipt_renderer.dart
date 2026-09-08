@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../data/payment_display_config.dart';
 import '../services/printer_service.dart';
 import '../utils/mnt_amount_formatter.dart';
 import '../utils/thermal_receipt_image.dart';
@@ -71,11 +72,10 @@ class VisualReceiptRenderer {
     final noatguiVal = totalVal - noatVal;
 
     final payMethod = (data['paymentMethod'] ?? 'cash').toString().toLowerCase();
-    final payMethodLabel = payMethod == 'card'
-        ? 'Картаар'
-        : payMethod == 'qpay'
-            ? 'QPay'
-            : 'Бэлэн мөнгө';
+    // Энд урьд нь зөвхөн card/qpay-г таньдаг байсан тул "account", "credit",
+    // "mobile" БҮГД "Бэлэн мөнгө" гэж ХЭВЛЭГДЭЖ байв (дэлгэц дээрх баримт нь
+    // зөв "Дансаар" гэж харуулдаг байхад). Нэг эх сурвалж руу залгав.
+    final payMethodLabel = PaymentDisplayConfig.receiptLabelMn(payMethod);
 
     final lottery = (data['lottery'] ?? data['lotteryNo'] ?? '').toString().trim();
     final billId = (data['billId'] ?? data['ddtd'] ?? '').toString().trim();

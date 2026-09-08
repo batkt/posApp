@@ -708,6 +708,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                 vat: totals.vat,
                 nhhat: totals.nhhat,
                 total: totals.total,
+                totalBeforeDiscount: _cashierTotals(sales, 0).total,
                 // "Борлуулалтын НӨАТ" асаалттай үед мөрийн суурь /1.1 болдог
                 // (вэбтэй ижил) — зөрүүг ил гаргаж, Дүн − хасалтууд = Нийт
                 // дүн болгож тулгана.
@@ -859,6 +860,7 @@ class _SummaryPanel extends StatelessWidget {
     required this.vat,
     required this.nhhat,
     required this.total,
+    required this.totalBeforeDiscount,
     required this.excludedVat,
     required this.paymentKindLabel,
     required this.discountController,
@@ -883,6 +885,15 @@ class _SummaryPanel extends StatelessWidget {
   /// НӨАТ. Энэ тохиргоотой үед [vat] нь 0 болдог тул үүнийг тусад нь
   /// харуулахгүй бол "Дүн" ба "Нийт дүн" хоёрын зөрүү тайлбаргүй үлдэнэ.
   final double excludedVat;
+
+  /// Хөнгөлөлт оруулахААС ӨМНӨХ бодит нийт дүн — хөнгөлөлт 0 үед яг ижил
+  /// томьёогоор дахин бодсон утга.
+  ///
+  /// `total + discount` гэж НЭМЖ БОДОЖ БОЛОХГҮЙ: "Борлуулалтын НӨАТ"
+  /// асаалттай үед мөрийн дүн `/1.1` болдог тул хөнгөлөлтийн НӨАТ-ын хувь
+  /// (хөнгөлөлт/11) давхар нэмэгдээд, зурлагатай "хуучин үнэ" нь хөнгөлөлтгүй
+  /// үеийн бодит дүнгээс зөрдөг байв (11,600₮ дээр 10,636.36 vs 10,545.45).
+  final double totalBeforeDiscount;
 
   final String paymentKindLabel;
   final TextEditingController discountController;
@@ -1123,7 +1134,7 @@ class _SummaryPanel extends StatelessWidget {
                   children: [
                     if (discount > 0.009)
                       Text(
-                        _fmtMnt(total + discount),
+                        _fmtMnt(totalBeforeDiscount),
                         style: TextStyle(
                           color: cs.onSurfaceVariant,
                           fontSize: 12,

@@ -2182,11 +2182,12 @@ class _ProductCard extends StatelessWidget {
                     ),
                   if (inCart && onRemoveOneFromSale != null)
                     Positioned(
-                      left: 6,
-                      bottom: 6,
+                      left: 0,
+                      bottom: 0,
                       child: _ImageStepperButton(
                         icon: Icons.remove_rounded,
                         tooltip: 'Нэгээр хасах',
+                        negative: true,
                         onTap: onRemoveOneFromSale,
                       ),
                     ),
@@ -2194,8 +2195,8 @@ class _ProductCard extends StatelessWidget {
                   // харагдана — хайрцаг дээр дарж нэмэхийг хассан тул
                   // бараа нэмэх цорын ганц зам энэ.
                   Positioned(
-                    right: 6,
-                    bottom: 6,
+                    right: 0,
+                    bottom: 0,
                     child: _ImageStepperButton(
                       icon: Icons.add_rounded,
                       tooltip: 'Нэгээр нэмэх',
@@ -2355,26 +2356,60 @@ class _ImageStepperButton extends StatelessWidget {
     required this.icon,
     required this.onTap,
     required this.tooltip,
+    this.negative = false,
   });
 
   final IconData icon;
   final VoidCallback? onTap;
   final String tooltip;
 
+  /// "Хасах" товч уу. Нэмэх/хасах хоёрыг ӨНГӨӨР нь ялгаж, санамсаргүй буруу
+  /// товч дарахаас сэргийлнэ.
+  final bool negative;
+
+  /// Хүрэх талбайн хэмжээ. Урьд нь дүрс 20px + дотор зай 6px = 32px байсан нь
+  /// Material-ийн доод хэмжээ (48dp)-ээс хамаагүй бага, бас зурган дээр
+  /// хагас тунгалаг хар дэвсгэртэй байсан тул "бараа нэмээд буцаад хасахад
+  /// хүндрэлтэй" байв.
+  static const double _hitSize = 46;
+  static const double _visualSize = 34;
+
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bg = negative ? cs.error : cs.primary;
+    final fg = negative ? cs.onError : cs.onPrimary;
+
     return Tooltip(
       message: tooltip,
-      child: Material(
-        color: Colors.black.withValues(alpha: 0.55),
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: Icon(icon, size: 20, color: Colors.white),
+      child: SizedBox(
+        width: _hitSize,
+        height: _hitSize,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            customBorder: const CircleBorder(),
+            child: Center(
+              child: Container(
+                width: _visualSize,
+                height: _visualSize,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: bg,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Icon(icon, size: 20, color: fg),
+              ),
+            ),
           ),
         ),
       ),

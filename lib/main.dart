@@ -113,6 +113,27 @@ class POSApp extends StatelessWidget {
               Locale('mn'),
             ],
             home: const AuthWrapper(),
+            // Системийн "фонтын хэмжээ" тохиргоог хамгийн ихдээ 1.15 болгож
+            // хязгаарлана.
+            //
+            // POS-ийн дэлгэцүүд тогтмол өндөртэй товч, оролтын талбар,
+            // dropdown, шүүлтүүрийн мөр дээр суурилдаг. Андройд төхөөрөмжийн
+            // хандалтын тохиргоонд фонтыг 1.3–2.0 дахин томруулсан үед тэдгээр
+            // мөр текстээ багтааж чадахгүй халиад бүх цонхны дизайн эвдэрдэг
+            // байв. Энэ бол цорын ганц газарт тавьсан ЕРӨНХИЙ хязгаарлалт —
+            // дэлгэц бүрийг тусад нь засах шаардлагагүй.
+            builder: (context, child) {
+              final mq = MediaQuery.of(context);
+              return MediaQuery(
+                data: mq.copyWith(
+                  textScaler: mq.textScaler.clamp(
+                    minScaleFactor: 1.0,
+                    maxScaleFactor: 1.15,
+                  ),
+                ),
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
           );
         },
       ),

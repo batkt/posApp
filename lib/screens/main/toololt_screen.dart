@@ -2150,10 +2150,14 @@ class _ToolsonTooFieldState extends State<_ToolsonTooField> {
   late final TextEditingController _ctrl;
   late final FocusNode _focus;
 
+  /// Сүүлд СЕРВЕР рүү илгээгдсэн утга. Фокус алдахад давхар илгээхээс сэргийлнэ.
+  String _lastSubmitted = '';
+
   @override
   void initState() {
     super.initState();
     _ctrl = TextEditingController(text: _ToolsonTooField.compact(widget.value));
+    _lastSubmitted = _ctrl.text.trim();
     _focus = FocusNode()..addListener(_onFocusChanged);
   }
 
@@ -2163,7 +2167,17 @@ class _ToolsonTooFieldState extends State<_ToolsonTooField> {
         baseOffset: 0,
         extentOffset: _ctrl.text.length,
       );
+      return;
     }
+    // Урьд нь ЗӨВХӨН гарын "done" товч (`onSubmitted`) хадгалдаг байв. Тоог
+    // бичээд гараа хураах, дараагийн мөр рүү шилжих, буцах товч дарах зэрэг
+    // тохиолдолд бичсэн тоо дэлгэц дээр харагдсаар байгаад СЕРВЕР РҮҮ ОГТ
+    // ЯВАХГҮЙ — тооллого дуусахад тэр мөр "тоологдоогүй" хэвээр үлдэж, веб
+    // дээр зөрүүгүй харагддаг байсны шалтгаан.
+    final v = _ctrl.text.trim();
+    if (v == _lastSubmitted) return;
+    _lastSubmitted = v;
+    widget.onSubmit(v);
   }
 
   @override
@@ -2195,7 +2209,10 @@ class _ToolsonTooFieldState extends State<_ToolsonTooField> {
         ),
         border: const OutlineInputBorder(),
       ),
-      onSubmitted: (v) => widget.onSubmit(v),
+      onSubmitted: (v) {
+        _lastSubmitted = v.trim();
+        widget.onSubmit(v);
+      },
     );
   }
 }

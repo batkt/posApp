@@ -72,6 +72,10 @@ class KhariltsagchService {
     String? register,
     String? mail,
     String? khayag,
+    bool khunglukhEsekh = false,
+    String khunglukhTurul = 'Мөнгөн дүн',
+    double khunglukhDun = 0,
+    double khunglukhKhuvi = 0,
   }) async {
     final body = <String, dynamic>{
       'baiguullagiinId': baiguullagiinId,
@@ -80,10 +84,10 @@ class KhariltsagchService {
       'khariltsagchiinTurul': khariltsagchiinTurul,
       'ner': ner.trim(),
       'utas': utas.map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
-      'khunglukhEsekh': false,
-      'khunglukhTurul': 'Мөнгөн дүн',
-      'khunglukhDun': 0,
-      'khunglukhKhuvi': 0,
+      'khunglukhEsekh': khunglukhEsekh,
+      'khunglukhTurul': khunglukhTurul,
+      'khunglukhDun': khunglukhDun,
+      'khunglukhKhuvi': khunglukhKhuvi,
       'tsonkhniiTokhirgoo': {'posSystem': true},
     };
     final o = ovog?.trim();
@@ -110,6 +114,52 @@ class KhariltsagchService {
       }
       return KhariltsagchRegisterResult.fail(
         response.message ?? 'Бүртгэл амжилтгүй',
+      );
+    } on ApiException catch (e) {
+      return KhariltsagchRegisterResult.fail(e.message);
+    } catch (e) {
+      return KhariltsagchRegisterResult.fail(e.toString());
+    }
+  }
+
+  /// Байгаа харилцагчийн хөнгөлөлтийг шинэчилнэ · `PUT /khariltsagch/<id>`.
+  ///
+  /// Вэбийн харилцагчийн маягттай ижил 4 талбарыг л илгээнэ — бусад талбарыг
+  /// хөндөхгүй (сервер `findByIdAndUpdate`-ээр зөвхөн ирсэн түлхүүрийг
+  /// шинэчилдэг).
+  Future<KhariltsagchRegisterResult> updateKhunglult({
+    required String khariltsagchiinId,
+    required bool khunglukhEsekh,
+    required String khunglukhTurul,
+    required double khunglukhDun,
+    required double khunglukhKhuvi,
+  }) async {
+    final id = khariltsagchiinId.trim();
+    if (id.isEmpty) {
+      return KhariltsagchRegisterResult.fail('Харилцагчийн ID олдсонгүй');
+    }
+    try {
+      final response = await _api.put<dynamic>(
+        '/khariltsagch/$id',
+        body: {
+          'khunglukhEsekh': khunglukhEsekh,
+          'khunglukhTurul': khunglukhTurul,
+          // Идэвхгүй болгосон бол утгыг нь 0 болгож цэвэрлэнэ — эс тэгвээс
+          // кассын дэлгэц дээр "Хөнгөлөлттэй эсэх: Үгүй" гэж байхад хуучин
+          // дүн үлдэж, дараа нь дахин асаахад санамсаргүй хэрэглэгдэнэ.
+          'khunglukhDun': khunglukhEsekh ? khunglukhDun : 0,
+          'khunglukhKhuvi': khunglukhEsekh ? khunglukhKhuvi : 0,
+        },
+        parser: (d) => d,
+      );
+      final data = response.data;
+      final ok = response.success &&
+          (data == null ||
+              data.toString().isEmpty ||
+              data.toString().contains('Amjilttai'));
+      if (ok) return KhariltsagchRegisterResult.ok();
+      return KhariltsagchRegisterResult.fail(
+        response.message ?? 'Хөнгөлөлт хадгалахад алдаа',
       );
     } on ApiException catch (e) {
       return KhariltsagchRegisterResult.fail(e.message);

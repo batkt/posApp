@@ -97,6 +97,28 @@ abstract final class PaymentDisplayConfig {
         return 'Бусад';
     }
   }
+
+  /// Хэвлэх баримт дээрх төлбөрийн хэлбэр.
+  ///
+  /// [labelMn]-ээс ялгаатай нь танигдаагүй/хоосон id үед "Бусад" биш
+  /// "Бэлэн мөнгө" гэж бичнэ — хэвлэгдсэн баримт дээр хоосон утга гарахаас
+  /// сэргийлж, хуучин зан төлөвийг хадгална.
+  static String receiptLabelMn(String id) {
+    switch (id) {
+      case PosPaymentCore.methodCard:
+        return 'Карт';
+      case PosPaymentCore.methodQpay:
+        return 'QPay';
+      case PosPaymentCore.methodAccount:
+        return 'Дансаар';
+      case PosPaymentCore.methodCredit:
+        return 'Зээл';
+      case PosPaymentCore.methodMobile:
+        return 'Гар утас';
+      default:
+        return 'Бэлэн мөнгө';
+    }
+  }
 }
 
 class PaymentDisplayMethodOption {

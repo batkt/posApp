@@ -22,6 +22,21 @@ class Customer {
   final int totalPurchases;
   final double totalSpent;
 
+  /// Вэбийн `khariltsagch.khunglukhEsekh` — хөнгөлөлт идэвхтэй эсэх.
+  final bool discountEnabled;
+
+  /// Вэбийн `khariltsagch.khunglukhTurul` — `Хувь` эсвэл `Мөнгөн дүн`.
+  final String discountType;
+
+  /// Вэбийн `khariltsagch.khunglukhDun` (`Мөнгөн дүн` төрөлд).
+  final double discountAmount;
+
+  /// Вэбийн `khariltsagch.khunglukhKhuvi` (`Хувь` төрөлд).
+  final double discountPercent;
+
+  static const String discountTypeAmount = 'Мөнгөн дүн';
+  static const String discountTypePercent = 'Хувь';
+
   const Customer({
     required this.id,
     required this.name,
@@ -35,6 +50,10 @@ class Customer {
     this.lastPurchase,
     this.totalPurchases = 0,
     this.totalSpent = 0.0,
+    this.discountEnabled = false,
+    this.discountType = discountTypeAmount,
+    this.discountAmount = 0.0,
+    this.discountPercent = 0.0,
   });
 
   Customer copyWith({
@@ -50,6 +69,10 @@ class Customer {
     DateTime? lastPurchase,
     int? totalPurchases,
     double? totalSpent,
+    bool? discountEnabled,
+    String? discountType,
+    double? discountAmount,
+    double? discountPercent,
   }) {
     return Customer(
       id: id ?? this.id,
@@ -64,7 +87,24 @@ class Customer {
       lastPurchase: lastPurchase ?? this.lastPurchase,
       totalPurchases: totalPurchases ?? this.totalPurchases,
       totalSpent: totalSpent ?? this.totalSpent,
+      discountEnabled: discountEnabled ?? this.discountEnabled,
+      discountType: discountType ?? this.discountType,
+      discountAmount: discountAmount ?? this.discountAmount,
+      discountPercent: discountPercent ?? this.discountPercent,
     );
+  }
+
+  /// Хөнгөлөлтийг хүн уншихаар бичсэн тэмдэглэгээ ("15%" / "5,000₮" / "—").
+  String get discountLabel {
+    if (!discountEnabled) return '—';
+    if (discountType == discountTypePercent) {
+      final p = discountPercent;
+      final txt = p == p.roundToDouble()
+          ? p.toStringAsFixed(0)
+          : p.toStringAsFixed(2);
+      return '$txt%';
+    }
+    return '${discountAmount.toStringAsFixed(0)}₮';
   }
 
   String get typeLabel {
@@ -140,6 +180,8 @@ class Customer {
         (m['avlagaUldegdel'] as num?)?.toDouble() ??
         0.0;
 
+    final khunglukhTurul = m['khunglukhTurul']?.toString().trim();
+
     return Customer(
       id: id.isNotEmpty ? id : 'unknown',
       name: displayName,
@@ -150,6 +192,12 @@ class Customer {
       createdAt: createdAt,
       totalPurchases: purchases,
       totalSpent: spent,
+      discountEnabled: m['khunglukhEsekh'] == true,
+      discountType: khunglukhTurul == discountTypePercent
+          ? discountTypePercent
+          : discountTypeAmount,
+      discountAmount: (m['khunglukhDun'] as num?)?.toDouble() ?? 0.0,
+      discountPercent: (m['khunglukhKhuvi'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }
@@ -212,14 +260,17 @@ class CustomerModel extends ChangeNotifier {
       final list = result.rows.map(Customer.fromKhariltsagch).toList();
 
       try {
+        // ⚠️ Урьд нь `/khariltsagchaarKHudaldanAvalt`-ыг дууддаг байв. Тэр нь
+        // НИЙЛҮҮЛЭГЧЭЭС авсан худалдан авалтын (orlogo) тайлан бөгөөд
+        // `tooShirkheg` нь захиалгын тоо биш ширхэгийн нийлбэр. Түүнээс гадна
+        // `salbariinId`-г МӨРӨӨР (String) илгээдэг байсныг сервер `$in`-д
+        // хийдэг тул Mongo алдаа өгч, дуудалт бүтэн ЧИМЭЭГҮЙ уначихдаг байсан
+        // (`catch (_) {}`) — иймд "Захиалга" үргэлж 0 харагдана.
         final salesStatsRes = await posApiService.post<List<dynamic>>(
-          '/khariltsagchaarKHudaldanAvalt',
+          '/khariltsagchiinBorluulaltiinTovchoo',
           body: {
             'baiguullagiinId': session.baiguullagiinId,
-            'salbariinId': session.salbariinId,
-            'ekhlekhOgnoo': DateTime(2020, 1, 1).toIso8601String(),
-            'duusakhOgnoo':
-                DateTime.now().add(const Duration(days: 1)).toIso8601String(),
+            'salbariinId': [session.salbariinId],
           },
           parser: (d) => d is List ? d : [],
         );
@@ -228,8 +279,7 @@ class CustomerModel extends ChangeNotifier {
           final statsMap = <String, Map<String, dynamic>>{};
           for (final item in salesStatsRes.data!) {
             if (item is Map) {
-              final kid = item['_id']?['khariltsagchiinId']?.toString() ??
-                  item['khariltsagchiinId']?.toString();
+              final kid = item['_id']?.toString();
               if (kid != null && kid.isNotEmpty) {
                 statsMap[kid] = Map<String, dynamic>.from(item);
               }
@@ -242,9 +292,10 @@ class CustomerModel extends ChangeNotifier {
               final stat = statsMap[c.id];
               if (stat != null) {
                 final cnt =
-                    (stat['tooShirkheg'] as num?)?.toInt() ?? c.totalPurchases;
+                    (stat['guilgeeniiToo'] as num?)?.toInt() ??
+                        c.totalPurchases;
                 final amt =
-                    (stat['niitZarakhUne'] as num?)?.toDouble() ?? c.totalSpent;
+                    (stat['niitDun'] as num?)?.toDouble() ?? c.totalSpent;
                 list[i] = c.copyWith(
                   totalPurchases: cnt,
                   totalSpent: amt,
@@ -280,6 +331,10 @@ class CustomerModel extends ChangeNotifier {
     String? register,
     String? mail,
     String? khayag,
+    bool khunglukhEsekh = false,
+    String khunglukhTurul = Customer.discountTypeAmount,
+    double khunglukhDun = 0,
+    double khunglukhKhuvi = 0,
   }) async {
     final session = _session;
     if (session == null) {
@@ -296,12 +351,49 @@ class CustomerModel extends ChangeNotifier {
       register: register,
       mail: mail,
       khayag: khayag,
+      khunglukhEsekh: khunglukhEsekh,
+      khunglukhTurul: khunglukhTurul,
+      khunglukhDun: khunglukhDun,
+      khunglukhKhuvi: khunglukhKhuvi,
     );
     if (res.success) {
       await refresh();
       return null;
     }
     return res.error ?? 'Бүртгэл амжилтгүй';
+  }
+
+  /// Байгаа харилцагчийн хөнгөлөлтийг өөрчилнө. Алдаагүй бол `null` буцаана.
+  Future<String?> updateCustomerDiscount({
+    required String khariltsagchiinId,
+    required bool enabled,
+    required String type,
+    required double amount,
+    required double percent,
+  }) async {
+    final res = await _service.updateKhunglult(
+      khariltsagchiinId: khariltsagchiinId,
+      khunglukhEsekh: enabled,
+      khunglukhTurul: type,
+      khunglukhDun: amount,
+      khunglukhKhuvi: percent,
+    );
+    if (!res.success) return res.error ?? 'Хөнгөлөлт хадгалахад алдаа';
+
+    // Сервер рүү амжилттай хадгалагдсан тул жагсаалтыг шууд шинэчилнэ —
+    // бүтэн `refresh()` хийхээс өмнө хэрэглэгч өөрчлөлтөө шууд хардаг.
+    final i = _customers.indexWhere((c) => c.id == khariltsagchiinId);
+    if (i >= 0) {
+      _customers[i] = _customers[i].copyWith(
+        discountEnabled: enabled,
+        discountType: type,
+        discountAmount: enabled ? amount : 0,
+        discountPercent: enabled ? percent : 0,
+      );
+      notifyListeners();
+    }
+    await refresh();
+    return null;
   }
 
   void addCustomer(Customer customer) {
