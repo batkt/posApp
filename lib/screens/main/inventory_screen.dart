@@ -9,6 +9,7 @@ import '../../widgets/barcode_scan_sheet.dart';
 import 'baraa_add_screen.dart';
 import 'baraa_detail_screen.dart';
 import 'low_stock_baraa_screen.dart';
+import '../../utils/app_snackbar.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key, this.showAppBar = true});
@@ -205,7 +206,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   );
                 }
 
-                return ListView.builder(
+                return RefreshIndicator(
+                  // Гараар шинэчлэх — сокет тасарсан үед ч серверийн
+                  // үлдэгдлийг шууд татна.
+                  onRefresh: () => inventory.refreshInventory(force: true),
+                  child: ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: items.length,
                   itemBuilder: (context, index) {
@@ -223,6 +229,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       onDelete: () => _showDeleteConfirmation(context, item),
                     );
                   },
+                  ),
                 );
               },
             ),
@@ -249,6 +256,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   void _showDeleteConfirmation(BuildContext context, InventoryItem item) {
+    // Диалог хаагдсаны дараа мэдэгдэл харуулахад диалогийн context нь
+    // ашиглагдахгүй тул дэлгэцийн context-ийг тусад нь барина.
+    final pageContext = context;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -264,25 +274,18 @@ class _InventoryScreenState extends State<InventoryScreen> {
             onPressed: () async {
               final model = context.read<InventoryModel>();
               final nav = Navigator.of(context);
-              final scaffold = ScaffoldMessenger.of(context);
-              
+
               final result = await model.deleteProduct(item.product.id);
               nav.pop();
-              
+
+              if (!pageContext.mounted) return;
               if (result.success) {
-                scaffold.showSnackBar(
-                  const SnackBar(
-                    content: Text('Амжилттай устгагдлаа'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
+                showAppSnackBar(pageContext, 'Амжилттай устгагдлаа',
+                    variant: AppSnackVariant.success);
               } else {
-                scaffold.showSnackBar(
-                  SnackBar(
-                    content: Text(result.error ?? 'Устгах үед алдаа гарлаа'),
-                    backgroundColor: AppColors.error,
-                  ),
-                );
+                showAppSnackBar(
+                    pageContext, result.error ?? 'Устгах үед алдаа гарлаа',
+                    variant: AppSnackVariant.error);
               }
             },
             style: FilledButton.styleFrom(

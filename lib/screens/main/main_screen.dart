@@ -17,6 +17,7 @@ import 'pos_settings_hub_screen.dart';
 import 'tailan_screen.dart';
 import 'support_chat_page.dart';
 import '../../widgets/chat_fab.dart';
+import '../../widgets/kiosk_drawer.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key, this.initialSection});
@@ -417,6 +418,77 @@ class _MainScreenState extends State<MainScreen> {
                 ],
               ),
             ),
+
+            // Салбар солих — админ болон олон салбарт эрхтэй хэрэглэгч
+            // үндсэн цэснээсээ шууд салбараа сольж чадах ёстой (өмнө нь
+            // зөвхөн киоскийн цэсэн дээр байсан).
+            if (auth.canSwitchBranch || auth.branchSwitchOptions.length > 1)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      auth.ensureBranchOptionsLoaded();
+                      showBranchSwitchSheet(context, auth);
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: colorScheme.primary.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.storefront_rounded,
+                            size: 20,
+                            color: colorScheme.primary,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Салбар солих',
+                                  style: textTheme.labelSmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                                Text(
+                                  auth.activeSalbariinLabel.isEmpty
+                                      ? 'Салбар сонгох'
+                                      : auth.activeSalbariinLabel,
+                                  style: textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: colorScheme.primary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.unfold_more_rounded,
+                            size: 18,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
 
             const SizedBox(height: 8),
 

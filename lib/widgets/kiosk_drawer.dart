@@ -242,14 +242,7 @@ class KioskDrawer extends StatelessWidget {
                 }
               }
 
-              ScaffoldMessenger.of(ctx).showSnackBar(
-                SnackBar(
-                  content: Text(finalMessage),
-                  backgroundColor:
-                      res.success ? AppColors.success : AppColors.error,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              showAppSnackBar(ctx, finalMessage);
 
               final debugBody = PrinterService.formatEposHealthCheckDebugText(res);
               await showDialog<void>(
@@ -289,11 +282,7 @@ class KioskDrawer extends StatelessWidget {
                       onPressed: () async {
                         await PosNativeDebugLog.copySessionToClipboard();
                         if (dCtx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            const SnackBar(
-                              content: Text('Session log copied to clipboard'),
-                            ),
-                          );
+                          showAppSnackBar(ctx, 'Session log copied to clipboard');
                         }
                       },
                       child: const Text('Copy session log'),
@@ -358,11 +347,7 @@ class KioskDrawer extends StatelessWidget {
                       await Clipboard.setData(ClipboardData(text: body));
                       if (dCtx.mounted) Navigator.pop(dCtx);
                       if (ctx.mounted) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          SnackBar(
-                            content: Text(l10n.tr('routing_debug_copied')),
-                          ),
-                        );
+                        showAppSnackBar(ctx, l10n.tr('routing_debug_copied'));
                       }
                     },
                     child: const Text('Copy'),
@@ -415,14 +400,7 @@ class KioskDrawer extends StatelessWidget {
             if (ctx.mounted) {
               ScaffoldMessenger.of(ctx).hideCurrentSnackBar();
 
-              ScaffoldMessenger.of(ctx).showSnackBar(
-                SnackBar(
-                  content: Text(res.message),
-                  backgroundColor:
-                      res.success ? AppColors.success : AppColors.error,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              showAppSnackBar(ctx, res.message);
 
               final debugBody =
                   PrinterService.formatPaxTestPrintDebugText(res);
@@ -623,7 +601,7 @@ class KioskDrawer extends StatelessWidget {
                   child: InkWell(
                     onTap: () {
                       auth.ensureBranchOptionsLoaded();
-                      _showBranchSwitchSheet(context, auth);
+                      showBranchSwitchSheet(context, auth);
                     },
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
@@ -1010,7 +988,10 @@ void kioskDrawerLeavePosForPage(
   }
 }
 
-void _showBranchSwitchSheet(BuildContext context, AuthModel auth) {
+/// Салбар солих доод хуудас. `main_screen.dart`-ийн үндсэн цэс ч үүнийг
+/// дуудна — админ болон олон салбартай хэрэглэгч аль ч цэснээс салбараа
+/// солих боломжтой байх ёстой.
+void showBranchSwitchSheet(BuildContext context, AuthModel auth) {
   auth.ensureBranchOptionsLoaded();
   final currentId = auth.posSession?.salbariinId;
   final colorScheme = Theme.of(context).colorScheme;

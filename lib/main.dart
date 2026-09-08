@@ -62,10 +62,14 @@ class POSApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LocaleModel()),
         ChangeNotifierProvider.value(value: authModel),
         ChangeNotifierProvider(create: (_) => SalesModel()),
-        ChangeNotifierProxyProvider<AuthModel, InventoryModel>(
+        ChangeNotifierProxyProvider2<AuthModel, SalesModel, InventoryModel>(
           create: (_) => InventoryModel(),
-          update: (_, auth, previous) {
+          update: (_, auth, sales, previous) {
             final model = previous ?? InventoryModel();
+            // Серверээс үлдэгдлээ дахин ачаалах бүрд сагсанд аль хэдийн
+            // авсан барааг дахин хасна — эс тэгвээс шинэчлэлт нь сагсны
+            // барьцааг арчиж, нэг барааг хоёр удаа зарах боломж үүснэ.
+            model.reservedQtyResolver = () => sales.reservedQtyByProductId;
             model.syncSession(auth.posSession);
             return model;
           },

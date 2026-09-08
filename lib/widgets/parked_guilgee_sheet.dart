@@ -197,6 +197,9 @@ class _ParkedGuilgeeSheetShellState extends State<_ParkedGuilgeeSheetShell> {
     final inventory = sheetContext.read<InventoryModel>();
     for (final line in lines) {
       if (line.quantity > 0) {
+        // Хүлээлгэсэн гүйлгээг сэргээж байна — бараа нь аль хэдийн
+        // сагсанд орсон тул үлдэгдлээс бүтнээр нь хасна (хасах утга руу
+        // орсон ч болно: сагсаа буцаахад яг эргэж нэмэгдэнэ).
         inventory.deductStock(line.product.id, line.quantity);
       }
     }

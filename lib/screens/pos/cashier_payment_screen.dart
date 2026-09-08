@@ -22,6 +22,7 @@ import '../../utils/tender_amount_input.dart';
 import '../../widgets/qpay_invoice_dialog.dart';
 import '../../widgets/box_line_pieces_sheet.dart';
 import '../shared/receipt_screen.dart';
+import '../../utils/app_snackbar.dart';
 
 /// Default cashier terminal: UniPOS card (kiosk and mobile staff).
 enum CashierTerminalPaymentMode {
@@ -326,6 +327,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       khariltsagch: _checkoutKhariltsagchPayload(),
       zeelKhariltsagchiinId: zeelKhariltsagchiinId,
       webTaxContext: _taxCtx,
+      baraaNUATModalOpen: _taxCtx.baraaNUATModalOpen,
       cashierDiscountMnt: totals.cappedDiscount,
     );
 
@@ -405,23 +407,11 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       await _finalizeApiSale(sales, tender, totals, zeelKhariltsagchiinId: null);
     } on PosTransactionException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(posPaymentErrorUserMessage(e)),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showAppSnackBar(context, posPaymentErrorUserMessage(e), variant: AppSnackVariant.error);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(posPaymentErrorUserMessage(e)),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showAppSnackBar(context, posPaymentErrorUserMessage(e), variant: AppSnackVariant.error);
       }
     } finally {
       _submitInFlight = false;
@@ -446,14 +436,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     // чимээгүй зөвшөөрөхөө болино.
     if (isCash && tender + 0.005 < due) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Олгосон дүн (${_fmtMnt(tender)}) нийт дүнгээс (${_fmtMnt(due)}) багасан байна'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showAppSnackBar(context, 'Олгосон дүн (${_fmtMnt(tender)}) нийт дүнгээс (${_fmtMnt(due)}) багасан байна', variant: AppSnackVariant.error);
       }
       return;
     }
@@ -494,23 +477,11 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       }
     } on PosTransactionException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(posPaymentErrorUserMessage(e)),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showAppSnackBar(context, posPaymentErrorUserMessage(e), variant: AppSnackVariant.error);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(posPaymentErrorUserMessage(e)),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showAppSnackBar(context, posPaymentErrorUserMessage(e), variant: AppSnackVariant.error);
       }
     } finally {
       _submitInFlight = false;
@@ -579,12 +550,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       if (!mounted) return;
       final session = context.read<AuthModel>().posSession;
       if (session == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('POS сесс олдсонгүй'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showAppSnackBar(context, 'POS сесс олдсонгүй');
         return;
       }
       final id = await showModalBottomSheet<String>(
@@ -781,6 +747,10 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                 onCancel: () => Navigator.pop(context),
                 onPay: _busy ? null : () => _startPayFlow(sales, totals),
                 busy: _busy,
+                taxCtx: _taxCtx,
+                onNuatSwitch: (v) => setState(
+                  () => _taxCtx = _taxCtx.copyWith(baraaNUATModalOpen: v),
+                ),
               );
 
               if (wide) {
@@ -1258,6 +1228,8 @@ class _PaymentPanel extends StatelessWidget {
     required this.onCancel,
     required this.onPay,
     required this.busy,
+    required this.taxCtx,
+    required this.onNuatSwitch,
   });
 
   final _PayKind kind;
@@ -1268,6 +1240,10 @@ class _PaymentPanel extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback? onPay;
   final bool busy;
+
+  /// Вэбийн `salbar.tokhirgoo` татварын тугнууд + "НӨАТ ашиглах эсэх" төлөв.
+  final PosWebTaxContext taxCtx;
+  final ValueChanged<bool> onNuatSwitch;
 
   @override
   Widget build(BuildContext context) {
@@ -1383,6 +1359,44 @@ class _PaymentPanel extends StatelessWidget {
                 ),
               ],
             ),
+          // Вэбийн `tulburTuluhModal`-тай ижил "НӨАТ ашиглах эсэх" унтраалга —
+          // зөвхөн `eBarimtShine && borluulaltNUAT` салбарт харагдана. Өмнө нь
+          // апп нь энэ сонголтгүй, үргэлж НӨАТ-гүй горимоор бодож байсан тул
+          // И-Баримт автоматаар хасагдаж байв.
+          if (taxCtx.showNuatSwitch) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: cs.outlineVariant),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.receipt_long_rounded, size: 20, color: cs.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'НӨАТ ашиглах эсэх',
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Switch(
+                    value: taxCtx.baraaNUATModalOpen,
+                    onChanged: onNuatSwitch,
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           Text(
             'Төлөх дүн (сагснаас)',

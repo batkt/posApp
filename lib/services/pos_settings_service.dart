@@ -233,8 +233,36 @@ class PosSettingsService {
       borluulaltNUAT: borl,
       eBarimtShine: shine,
       isModalOpenTulbur: true,
-      baraaNUATModalOpen: false,
+      // Вэбийн `useState(borluulaltNUAT)`-тай ижил: НӨАТ анхнаасаа
+      // АСААЛТТАЙ, кассчин өөрөө унтраавал л дүнгээс хасагдана.
+      baraaNUATModalOpen: borl,
     );
+  }
+
+  /// POST `/ebarimtMedeelelAvya` — И-Баримтын POS API `rest/info`.
+  ///
+  /// Бүртгэлтэй ТТД, салбар, дүүрэг/хорооны мэдээллийг буцаана. Холболт
+  /// байхгүй үед сервер хоосон буцаадаг тул `null` гэж үзнэ.
+  Future<Map<String, dynamic>?> ebarimtMedeelelAvya({
+    required String baiguullagiinId,
+    required String salbariinId,
+  }) async {
+    try {
+      final r = await _api.post<dynamic>(
+        '/ebarimtMedeelelAvya',
+        body: {
+          'baiguullagiinId': baiguullagiinId,
+          'salbariinId': salbariinId,
+        },
+        parser: (data) => data,
+      );
+      if (!r.success) return null;
+      final d = r.data;
+      if (d is Map) return Map<String, dynamic>.from(d);
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Web `useDans` — query uses `barilgiinId` (legacy spelling).

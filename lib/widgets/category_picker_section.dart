@@ -41,7 +41,22 @@ class CategoryPickerSection extends StatefulWidget {
 }
 
 class _CategoryPickerSectionState extends State<CategoryPickerSection> {
-  bool _expanded = false;
+  /// Ангиллын жагсаалтыг ХАЙЛТТАЙ доод хуудсаар сонгуулна. Өмнө нь
+  /// [DropdownButtonFormField] байсан тул ангилал олон үед нээгдмэгц бүтэн
+  /// дэлгэцийг дүүргэдэг, хайх ч боломжгүй байв.
+  Future<void> _pickCategory() async {
+    if (widget.categoryList.isEmpty) return;
+    final picked = await showModalBottomSheet<Category>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _CategoryPickSheet(
+        categories: widget.categoryList,
+        current: widget.angilal.text.trim(),
+      ),
+    );
+    if (picked != null) widget.onSelectCategory(picked);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +70,7 @@ class _CategoryPickerSectionState extends State<CategoryPickerSection> {
       children: [
         InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => setState(() => _expanded = !_expanded),
+          onTap: widget.loadingCategories ? null : _pickCategory,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
@@ -107,102 +122,207 @@ class _CategoryPickerSectionState extends State<CategoryPickerSection> {
                     ],
                   ),
                 ),
-                Icon(
-                  hasCurrent
-                      ? Icons.check_circle_rounded
-                      : (_expanded
-                          ? Icons.keyboard_arrow_up_rounded
-                          : Icons.keyboard_arrow_down_rounded),
-                  color: hasCurrent
-                      ? const Color(0xFF4CAF50)
-                      : colorScheme.primary,
-                ),
+                if (widget.loadingCategories)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  Icon(
+                    hasCurrent
+                        ? Icons.check_circle_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    color: hasCurrent
+                        ? const Color(0xFF4CAF50)
+                        : colorScheme.primary,
+                  ),
               ],
             ),
           ),
         ),
-        if (_expanded) ...[
+        if (widget.categoryList.isEmpty && !widget.loadingCategories)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Салбарт одоогоор бүртгэгдсэн ангилал байхгүй байна',
+              style:
+                  tt.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+            ),
+          ),
+        if (widget.selectedCategory != null &&
+            widget.selectedCategory!.subcategoryNames.isNotEmpty) ...[
           const SizedBox(height: 10),
-          if (widget.categoryList.isNotEmpty)
-            DropdownButtonFormField<Category>(
-              isExpanded: true,
-              initialValue: widget.categoryList.any((c) => c.angilal == current)
-                  ? widget.categoryList.firstWhere((c) => c.angilal == current)
-                  : widget.selectedCategory,
-              decoration: InputDecoration(
-                labelText: 'Ангилал сонгох',
-                border: const OutlineInputBorder(),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
-                ),
-                prefixIcon: const Icon(
-                  Icons.check_circle_rounded,
-                  color: Color(0xFF4CAF50),
-                ),
-                suffixIcon: widget.loadingCategories
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: Padding(
-                          padding: EdgeInsets.all(12),
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : null,
-              ),
-              items: widget.categoryList
-                  .map(
-                    (cat) => DropdownMenuItem<Category>(
-                      value: cat,
-                      child: Text(cat.angilal, overflow: TextOverflow.ellipsis),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (cat) {
-                widget.onSelectCategory(cat);
-                setState(() => _expanded = false);
-              },
-            )
-          else if (!widget.loadingCategories)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text(
-                'Салбарт одоогоор бүртгэгдсэн ангилал байхгүй байна',
-                style:
-                    tt.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
-              ),
+          Text(
+            'Дэд ангилал сонгох:',
+            style: tt.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurfaceVariant,
             ),
-          if (widget.selectedCategory != null &&
-              widget.selectedCategory!.subcategoryNames.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Дэд ангилал сонгох:',
-              style: tt.labelMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: widget.selectedCategory!.subcategoryNames.map((sub) {
-                final isSelected = widget.selectedSubcategory == sub ||
-                    widget.bogino.text.trim() == sub;
-                return FilterChip(
-                  selected: isSelected,
-                  label: Text(sub, style: const TextStyle(fontSize: 12)),
-                  onSelected: (selected) =>
-                      widget.onSelectSubcategory(selected ? sub : null),
-                  selectedColor: colorScheme.primaryContainer,
-                  checkmarkColor: colorScheme.primary,
-                );
-              }).toList(),
-            ),
-          ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: widget.selectedCategory!.subcategoryNames.map((sub) {
+              final isSelected = widget.selectedSubcategory == sub ||
+                  widget.bogino.text.trim() == sub;
+              return FilterChip(
+                selected: isSelected,
+                label: Text(sub, style: const TextStyle(fontSize: 12)),
+                onSelected: (selected) =>
+                    widget.onSelectSubcategory(selected ? sub : null),
+                selectedColor: colorScheme.primaryContainer,
+                checkmarkColor: colorScheme.primary,
+              );
+            }).toList(),
+          ),
         ],
       ],
+    );
+  }
+}
+
+/// Ангиллын хайлттай сонголтын доод хуудас — дэлгэцийн 70%-иас хэтрэхгүй.
+class _CategoryPickSheet extends StatefulWidget {
+  const _CategoryPickSheet({required this.categories, required this.current});
+
+  final List<Category> categories;
+  final String current;
+
+  @override
+  State<_CategoryPickSheet> createState() => _CategoryPickSheetState();
+}
+
+class _CategoryPickSheetState extends State<_CategoryPickSheet> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final q = _query.trim().toLowerCase();
+    final list = q.isEmpty
+        ? widget.categories
+        : widget.categories
+            .where((c) => c.angilal.toLowerCase().contains(q))
+            .toList();
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Ангилал сонгох',
+                      style: tt.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  Text(
+                    '${list.length}',
+                    style: tt.labelMedium
+                        ?.copyWith(color: colorScheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                controller: _searchCtrl,
+                autofocus: false,
+                textInputAction: TextInputAction.search,
+                onChanged: (v) => setState(() => _query = v),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Ангилал хайх...',
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() => _query = '');
+                          },
+                        ),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Flexible(
+              child: list.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'Олдсонгүй',
+                        style: tt.bodyMedium
+                            ?.copyWith(color: colorScheme.onSurfaceVariant),
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.only(bottom: 12),
+                      itemCount: list.length,
+                      separatorBuilder: (_, __) => Divider(
+                        height: 1,
+                        color: colorScheme.outlineVariant
+                            .withValues(alpha: 0.4),
+                      ),
+                      itemBuilder: (_, i) {
+                        final cat = list[i];
+                        final selected = cat.angilal == widget.current;
+                        return ListTile(
+                          dense: true,
+                          selected: selected,
+                          title: Text(
+                            cat.angilal,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: cat.subcategoryNames.isEmpty
+                              ? null
+                              : Text(
+                                  cat.subcategoryNames.join(', '),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: tt.labelSmall,
+                                ),
+                          trailing: selected
+                              ? const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: Color(0xFF4CAF50),
+                                  size: 20,
+                                )
+                              : null,
+                          onTap: () => Navigator.pop(context, cat),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

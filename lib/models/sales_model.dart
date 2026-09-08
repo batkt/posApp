@@ -158,7 +158,31 @@ class SaleItem {
     if (undsenZarakhUne != null) {
       row['undsenZarakhUne'] = undsenZarakhUne;
     }
+
+    // `dorvonNegOriginalShirkheg` нь ЗӨВХӨН серверийн сүүлд буцаасан тоонд
+    // хүчинтэй "хуваалтын өмнөх нийт" тэмдэглэгээ. Сервер (`/uramshuulalShalgay`)
+    // энэ талбар байвал `shirkheg`-ийг ТҮҮГЭЭР ДАРЖ БИЧДЭГ:
+    //
+    //     if (hadPriorSplit) mur.shirkheg = mur.dorvonNegOriginalShirkheg;
+    //
+    // Тиймээс кассчин тоог өөрчилсний дараа ч хуучин тэмдэглэгээ хамт явбал
+    // сервер шинэ тоог хаяад хуучин утгаараа дахин хуваадаг — сагс тухайн
+    // барааны хувьд `buleg − chuluulekhToo` дээр (жиш. 3-т 1 үнэгүй дээр 2)
+    // ГЯЛЖ ЗОГСДОГ, "+" хэдэн ч удаа дарсан нэмэгдэхгүй болдог байв.
+    //
+    // Мөрийн одоогийн тоо нь серверийн сүүлд өгсөн тоотой ТААРАХГҮЙ бол
+    // тэмдэглэгээ хуучирсан гэсэн үг тул хаяна.
+    final serverShirkheg = _numOrNull(serverRow?['shirkheg']);
+    if (serverShirkheg == null || serverShirkheg != effectivePieces) {
+      row.remove('dorvonNegOriginalShirkheg');
+    }
     return row;
+  }
+
+  static double? _numOrNull(dynamic v) {
+    if (v is num) return v.toDouble();
+    if (v == null) return null;
+    return double.tryParse(v.toString());
   }
 }
 
@@ -271,17 +295,62 @@ class SalesModel extends ChangeNotifier {
   int get uniqueSaleItems {
     final keys = <String>{};
     for (final item in _currentSale) {
-      keys.add(_distinctProductKey(item.product));
+      keys.add(productLineKey(item.product));
     }
     return keys.length;
   }
 
-  static String _distinctProductKey(Product p) {
+  /// Сагсны мөрүүдийг БАРААГААР нь бүлэглэх түлхүүр — серверийн `lineKey`-тэй
+  /// ижил (`code__barCode__salbariinId`).
+  ///
+  /// `_id`-гээр бүлэглэж БОЛОХГҮЙ: "N-т 1 үнэгүй"-ийн бэлэг мөр нь эх мөртэй
+  /// ижил бараа боловч серверээс `<id>_gift_<promoId>` гэсэн өөр `_id`-тэй
+  /// ирдэг. Ингэснээр нэг бараа хоёр мөр болж хуваагдахад "2 төрөл" гэж
+  /// тоологдож, тоо ширхэг нь зөвхөн эхний мөрөөр харагддаг байв.
+  static String productLineKey(Product p) {
+    final code = (p.code ?? '').toString().trim();
+    if (code.isNotEmpty) {
+      final bar = (p.barCode ?? '').toString().trim();
+      final sal = (p.salbariinId ?? '').toString().trim();
+      return 'code:$code|$bar|$sal';
+    }
     final id = p.id.trim();
     if (id.isNotEmpty) return 'id:$id';
-    final c = (p.code ?? '').toString().trim();
-    final s = (p.salbariinId ?? '').toString().trim();
-    return 'code:$c|$s';
+    return 'ner:${p.name}';
+  }
+
+  /// Тухайн бараанаас сагсанд НИЙТ хэдэн ширхэг байгаа — урамшуулалаар
+  /// үнэгүй болсон (0 үнэтэй) бэлэг мөрийг нь ОРУУЛААД.
+  ///
+  /// Барааны хайрцган дээрх "×N" тэмдэг үүнийг ашиглана: эс тэгвээс сервер
+  /// мөрийг хуваасны дараа зөвхөн төлбөртэй хэсэг нь харагдаж, "+" дарахад
+  /// тоо нь урагш-хойш үсэрч байгаа мэт харагдана.
+  int qtyForProduct(Product p) {
+    final key = productLineKey(p);
+    var sum = 0;
+    for (final line in _currentSale) {
+      if (productLineKey(line.product) == key) sum += line.quantity;
+    }
+    return sum;
+  }
+
+  /// Сагсанд аль хэдийн "барьцаалсан" тоо ширхэг, `product.id`-гээр.
+  ///
+  /// [InventoryModel] нь серверээс үлдэгдлээ дахин ачаалах бүрд ҮҮНИЙГ
+  /// дахин хасна. Эс тэгвээс сагстай байх үед ирсэн шинэчлэлт барьцааг
+  /// арчиж, үлдэгдэл нь сагстайгаа салдаг (нэг л барааг хоёр удаа зарах
+  /// боломж үүснэ).
+  ///
+  /// Бэлэг мөр нь үлдэгдлээс хасагдаагүй тул энд ОРОХГҮЙ.
+  Map<String, int> get reservedQtyByProductId {
+    final out = <String, int>{};
+    for (final line in _currentSale) {
+      if (line.isGiftLine) continue;
+      final id = line.product.id.trim();
+      if (id.isEmpty) continue;
+      out[id] = (out[id] ?? 0) + line.quantity;
+    }
+    return out;
   }
 
   PosWebTaxContext? _webTaxContext;
@@ -692,21 +761,47 @@ class SalesModel extends ChangeNotifier {
     }
   }
 
-  void decrementSaleQuantity(String productId) {
-    final index = _currentSale.indexWhere((item) => item.product.id == productId);
-    if (index >= 0) {
-      if (_currentSale[index].quantity > 1) {
-        final line = _currentSale[index];
-        line.boxPiecesSold = null;
-        line.quantity--;
-        _reapplyWholesaleForIndex(index);
-        _pruneStaleDorvonNegPicks();
-        notifyListeners();
-      } else {
-        removeFromSale(productId);
+  /// Нэг ширхэг хасна. Үнэхээр хассан бол `true`.
+  ///
+  /// Буцаах утга нь ЧУХАЛ: дуудагч нь агуулахын үлдэгдлийг зөвхөн амжилттай
+  /// хассан үед л буцааж нэмэх ёстой. Өмнө нь `_id`-гээр л хайдаг байсан тул
+  /// урамшууллын дараа тухайн бараанаас зөвхөн бэлэг мөр
+  /// (`<id>_gift_<promoId>`) үлдвэл юу ч хасагдалгүй чимээгүй өнгөрч, харин
+  /// дуудагч нь үлдэгдлийг нэмсээр байдаг тул "−" дарах тусам ҮЛДЭГДЭЛ
+  /// ӨСДӨГ байв.
+  bool decrementSaleQuantity(Product product) {
+    var index = _currentSale.indexWhere((e) => e.product.id == product.id);
+    if (index < 0) {
+      // Бэлэг мөр болж хуваагдсан байж болно — түлхүүрийг БАРААНААС нь
+      // гаргана (мөрийн `_id` нь `<id>_gift_<promoId>` болж өөрчлөгддөг тул
+      // сагснаас `_id`-гээр хайж олохгүй). Эхлээд ТӨЛБӨРТЭЙ мөрийг, эс
+      // бөгөөс бэлэг мөрийг нь хасна.
+      final key = productLineKey(product);
+      index = _currentSale.indexWhere(
+        (e) => productLineKey(e.product) == key && !e.isGiftLine,
+      );
+      if (index < 0) {
+        index =
+            _currentSale.indexWhere((e) => productLineKey(e.product) == key);
       }
     }
+    if (index < 0) return false;
+
+    final line = _currentSale[index];
+    if (line.quantity > 1) {
+      line.boxPiecesSold = null;
+      line.quantity--;
+      _reapplyWholesaleForIndex(index);
+      _pruneStaleDorvonNegPicks();
+      notifyListeners();
+    } else {
+      _currentSale.removeAt(index);
+      _pruneStaleDorvonNegPicks();
+      notifyListeners();
+    }
+    return true;
   }
+
 
   /// Хайрцагтай мөр: задлах ширхэг (вэб `khemjikhNegjUurchlukh`). [pieces] нь агуулах дахь
   /// нийт ширхэгийн хязгаарт байх ёстой.
@@ -730,6 +825,7 @@ class SalesModel extends ChangeNotifier {
       if (oldQty > newQty) {
         inventory.restock(productId, oldQty - newQty);
       } else {
+        // Хайрцгийн ширхэг нь үлдэгдлээр аль хэдийн хязгаарлагдсан.
         inventory.deductStock(productId, newQty - oldQty);
       }
     }

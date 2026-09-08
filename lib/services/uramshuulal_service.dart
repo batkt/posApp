@@ -121,6 +121,60 @@ class UramshuulalService {
     }
   }
 
+  /// `POST /uramshuulalKhugtsaaSungyaa` — идэвхтэй урамшууллын хугацааг
+  /// сунгана (сунгалтын түүхэд бичигдэнэ).
+  Future<bool> khugatsaaSungya({
+    required String id,
+    required DateTime ekhlekhOgnoo,
+    required DateTime duusakhOgnoo,
+  }) async {
+    try {
+      final r = await _api.post<dynamic>(
+        '/uramshuulalKhugtsaaSungyaa',
+        body: {
+          'id': id,
+          'ekhlekhOgnoo': ekhlekhOgnoo.toIso8601String(),
+          'duusakhOgnoo': duusakhOgnoo.toIso8601String(),
+          'ekhlekhTsag': ekhlekhOgnoo.toIso8601String(),
+          'duusakhTsag': duusakhOgnoo.toIso8601String(),
+        },
+        parser: (d) => d,
+      );
+      return r.success;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// `DELETE /uramshuulalUstgaya/:id` — урамшууллыг устгаад холбогдох
+  /// барааны тэмдэглэгээг нь сэргээнэ.
+  Future<bool> ustga(String id) async {
+    try {
+      final r = await _api.delete<dynamic>(
+        '/uramshuulalUstgaya/$id',
+        parser: (d) => d,
+      );
+      return r.success;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Урамшууллын төрлийн ХҮНИЙ уншиж болох нэр. Өмнө нь жагсаалтад
+  /// `specific` гэсэн түүхий утга шууд гарч байв.
+  static String turulLabel(String? raw) {
+    switch ((raw ?? '').trim()) {
+      case 'khamgiinKhyamd':
+        return 'Хамгийн хямдыг үнэгүй (N-т M)';
+      case 'specific':
+        return 'Тодорхой бараа (нөхцөл → бэлэг)';
+      case '':
+        return 'Тодорхойгүй';
+      default:
+        return raw!;
+    }
+  }
+
   bool _isActiveNow(Map<String, dynamic> row, DateTime now) {
     final startD = DateTime.tryParse(row['ekhlekhOgnoo']?.toString() ?? '');
     final endD = DateTime.tryParse(row['duusakhOgnoo']?.toString() ?? '');

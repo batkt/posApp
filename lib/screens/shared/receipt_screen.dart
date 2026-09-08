@@ -21,6 +21,7 @@ import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../utils/thermal_receipt_image.dart';
 import '../../widgets/print_receipt_to_pos_button.dart';
+import '../../utils/app_snackbar.dart';
 
 /// Breakdown for thermal slip when cashier used хөнгөлөлт / НХАТ (И-Баримт not loaded yet).
 class CashierSlipTotals {
@@ -130,6 +131,15 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   /// Matches typical grey counter behind a narrow thermal slip.
   static const Color _receiptPageBg = Color(0xFFBDBDBD);
   static const double _thermalPaperWidth = 380;
+
+  /// Дулааны баримтын үсгийн ерөнхий коэффициент.
+  ///
+  /// Терминалын хэвлэгч хэт УРТ зургийг таслан хэвлэдэг тул баримт "дутуу"
+  /// гарч байв. Бүх үсгийн хэмжээг нэг цэгээс жижигрүүлж, цаасны урт
+  /// богиносгоно.
+  static const double _thermalFontScale = 0.82;
+
+  static double _tf(double size) => size * _thermalFontScale;
 
   PosWebTaxContext _taxContext = PosWebTaxContext.paymentDefault;
   String _merchantSalbarName = '';
@@ -311,7 +321,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     textAlign: TextAlign.center,
     style: TextStyle(
       color: Colors.black,
-      fontSize: 9,
+      fontSize: 7.5,
       height: 1.0,
     ),
   );
@@ -346,11 +356,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
         dbRefNo: dbRefNo.isNotEmpty ? dbRefNo : widget.orderNumber,
       );
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.message),
-          ),
-        );
+        showAppSnackBar(context, result.message);
       }
       final lower = result.message.toLowerCase();
       if (!result.success &&
@@ -360,20 +366,12 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
               lower.contains('neptune sdk not found'))) {
         await _printViaSystemDialog();
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Терминал хэвлэгч байхгүй тул системийн хэвлэх цонх нээгдлээ'),
-          ),
-        );
+        showAppSnackBar(context, 'Терминал хэвлэгч байхгүй тул системийн хэвлэх цонх нээгдлээ');
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Терминал хэвлэх алдаа: $e'),
-          ),
-        );
+        showAppSnackBar(context, 'Терминал хэвлэх алдаа: $e',
+            variant: AppSnackVariant.error);
       }
     }
   }
@@ -417,14 +415,8 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     // шалтгааныг хэлээд энгийн баримтыг нь хэвлүүлнэ.
     if (id.isEmpty) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Гүйлгээ сервер дээр бүртгэгдээгүй тул И-Баримт авах боломжгүй — '
-            'энгийн баримт хэвлэлээ',
-          ),
-        ),
-      );
+      showAppSnackBar(context, 'Гүйлгээ сервер дээр бүртгэгдээгүй тул И-Баримт авах боломжгүй — '
+            'энгийн баримт хэвлэлээ');
       await _printOnPaxDevice(context);
       return;
     }
@@ -511,10 +503,13 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final ebarimtCompanyNer = _companyNameFromEbarimt(e);
     final khungulE = _ebarimtKhungulukh(e);
     final auth = context.read<AuthModel>();
-    final orgName = (ebarimtCompanyNer.isNotEmpty
-            ? ebarimtCompanyNer
-            : auth.merchantDisplayName)
-        .trim();
+    // Баримтын толгойд ЗАРСАН дэлгүүрийн нэр байх ёстой. Өмнө нь
+    // [_companyNameFromEbarimt] (`customerName`/`buyerName` г.м — ХУДАЛДАН
+    // АВАГЧИЙН нэр) давуу эрхтэй байсан тул ААН-д зарсан баримт дээр
+    // дэлгүүрийн нэрний оронд худалдан авагчийн нэр гарч байв.
+    final orgName = auth.merchantDisplayName.trim().isNotEmpty
+        ? auth.merchantDisplayName.trim()
+        : ebarimtCompanyNer.trim();
     final salbarName = (_merchantSalbarName.isNotEmpty
             ? _merchantSalbarName
             : auth.activeSalbariinLabel)
@@ -566,7 +561,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
               color: Colors.black,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.6,
-              fontSize: 16,
+              fontSize: _tf(16),
             ),
           ),
         ),
@@ -578,7 +573,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             style: textTheme.labelMedium?.copyWith(
               color: Colors.black,
               fontWeight: FontWeight.w500,
-              fontSize: 13,
+              fontSize: _tf(13),
             ),
           ),
         ],
@@ -590,7 +585,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             style: textTheme.labelMedium?.copyWith(
               color: Colors.black,
               fontWeight: FontWeight.w500,
-              fontSize: 13,
+              fontSize: _tf(13),
             ),
           ),
         ],
@@ -601,7 +596,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           style: textTheme.labelLarge?.copyWith(
             color: Colors.black,
             fontWeight: FontWeight.w600,
-            fontSize: 14,
+            fontSize: _tf(14),
           ),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
@@ -612,7 +607,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           textAlign: TextAlign.start,
           style: textTheme.bodySmall?.copyWith(
             color: Colors.black,
-            fontSize: 13,
+            fontSize: _tf(13),
             fontFeatures: const [
               ui.FontFeature.tabularFigures(),
             ],
@@ -626,7 +621,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             style: textTheme.labelSmall?.copyWith(
               color: Colors.black,
               fontWeight: FontWeight.w600,
-              fontSize: 12,
+              fontSize: _tf(12),
               fontFeatures: const [
                 ui.FontFeature.tabularFigures(),
               ],
@@ -641,7 +636,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             style: textTheme.labelSmall?.copyWith(
               color: Colors.black,
               fontWeight: FontWeight.w500,
-              fontSize: 12,
+              fontSize: _tf(12),
               fontFeatures: const [
                 ui.FontFeature.tabularFigures(),
               ],
@@ -656,7 +651,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             style: textTheme.labelSmall?.copyWith(
               color: Colors.black,
               fontWeight: FontWeight.w500,
-              fontSize: 12,
+              fontSize: _tf(12),
             ),
           ),
         ],
@@ -668,7 +663,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             style: textTheme.labelSmall?.copyWith(
               color: Colors.black,
               fontWeight: FontWeight.w500,
-              fontSize: 12,
+              fontSize: _tf(12),
             ),
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
@@ -687,7 +682,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                   style: textTheme.labelSmall?.copyWith(
                     color: Colors.black,
                     fontWeight: FontWeight.w600,
-                    fontSize: 12,
+                    fontSize: _tf(12),
                   ),
                 ),
               ),
@@ -704,7 +699,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                     style: textTheme.labelSmall?.copyWith(
                       color: Colors.black,
                       fontWeight: FontWeight.w600,
-                      fontSize: 12,
+                      fontSize: _tf(12),
                       height: 1.0,
                     ),
                   ),
@@ -718,7 +713,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                   style: textTheme.labelSmall?.copyWith(
                     color: Colors.black,
                     fontWeight: FontWeight.w600,
-                    fontSize: 12,
+                    fontSize: _tf(12),
                   ),
                 ),
               ),
@@ -730,7 +725,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                   style: textTheme.labelSmall?.copyWith(
                     color: Colors.black,
                     fontWeight: FontWeight.w600,
-                    fontSize: 12,
+                    fontSize: _tf(12),
                   ),
                 ),
               ),
@@ -750,7 +745,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                         style: textTheme.bodySmall?.copyWith(
                           color: Colors.black,
                           fontWeight: FontWeight.w500,
-                          fontSize: 13,
+                          fontSize: _tf(13),
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -766,7 +761,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                           style: textTheme.bodySmall?.copyWith(
                             color: Colors.black,
                             fontWeight: FontWeight.w500,
-                            fontSize: 13,
+                            fontSize: _tf(13),
                             height: line.quantityLabel.contains('\n') ? 1.05 : null,
                             fontFeatures: const [
                               ui.FontFeature.tabularFigures(),
@@ -787,7 +782,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                           style: textTheme.bodySmall?.copyWith(
                             color: Colors.black,
                             fontWeight: FontWeight.w500,
-                            fontSize: 13,
+                            fontSize: _tf(13),
                             fontFeatures: const [
                               ui.FontFeature.tabularFigures(),
                             ],
@@ -807,7 +802,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                           style: textTheme.bodySmall?.copyWith(
                             color: Colors.black,
                             fontWeight: FontWeight.w700,
-                            fontSize: 13,
+                            fontSize: _tf(13),
                             fontFeatures: const [
                               ui.FontFeature.tabularFigures(),
                             ],
@@ -826,7 +821,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
               '+${receiptLines.length - 8} бараа...',
               style: textTheme.labelSmall?.copyWith(
                 color: Colors.black,
-                fontSize: 12,
+                fontSize: _tf(12),
               ),
             ),
           ),
@@ -840,7 +835,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                 style: textTheme.bodyMedium?.copyWith(
                   color: Colors.black,
                   fontWeight: FontWeight.w600,
-                  fontSize: 17,
+                  fontSize: _tf(17),
                 ),
               ),
               const Spacer(),
@@ -849,7 +844,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                 style: textTheme.bodyMedium?.copyWith(
                   color: Colors.black,
                   fontWeight: FontWeight.w600,
-                  fontSize: 17,
+                  fontSize: _tf(17),
                 ),
               ),
             ],
@@ -863,27 +858,27 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           label: 'Нийт дүн',
           value: _fmtMntPlain(thermalNiitDun),
           topPad: 6,
-          fontSize: 15,
+          fontSize: _tf(15),
         ),
         if (thermalKhungulult > 0.009)
           _thermalPaymentMoneyRow(
             textTheme,
             label: 'Хөнгөлөлт',
             value: '−${_fmtMnt(thermalKhungulult)}',
-            fontSize: 14,
+            fontSize: _tf(14),
           ),
         if (e != null && thermalVat > 0) ...[
           _thermalPaymentMoneyRow(
             textTheme,
             label: 'НӨАТ-гүй дүн',
             value: _fmtMnt(thermalNoatgui),
-            fontSize: 14,
+            fontSize: _tf(14),
           ),
           _thermalPaymentMoneyRow(
             textTheme,
             label: 'НӨАТ',
             value: _fmtMnt(thermalVat),
-            fontSize: 14,
+            fontSize: _tf(14),
           ),
         ],
         if (thermalCt > 0)
@@ -891,13 +886,13 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             textTheme,
             label: 'НХАТ',
             value: _fmtMnt(thermalCt),
-            fontSize: 14,
+            fontSize: _tf(14),
           ),
         _thermalPaymentMoneyRow(
           textTheme,
           label: 'Төлөх дүн',
           value: _fmtMnt(thermalTulukh),
-          fontSize: 16,
+          fontSize: _tf(16),
           lw: FontWeight.w600,
           vw: FontWeight.w700,
           topPad: 4,
@@ -907,7 +902,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             textTheme,
             label: 'И-Баримт дүн',
             value: _fmtMnt(thermalIb),
-            fontSize: 16,
+            fontSize: _tf(16),
             lw: FontWeight.w600,
             vw: FontWeight.w700,
           ),
@@ -924,7 +919,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                 style: textTheme.bodySmall?.copyWith(
                   color: Colors.black,
                   fontWeight: FontWeight.w600,
-                  fontSize: 15,
+                  fontSize: _tf(15),
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -960,7 +955,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                   style: textTheme.labelMedium?.copyWith(
                     color: Colors.black,
                     fontWeight: FontWeight.w500,
-                    fontSize: 14,
+                    fontSize: _tf(14),
                   ),
                 ),
               ],
@@ -968,7 +963,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                 'Баярлалаа',
                 style: textTheme.bodySmall?.copyWith(
                   color: Colors.black,
-                  fontSize: 14,
+                  fontSize: _tf(14),
                 ),
               ),
             ],
@@ -1046,7 +1041,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                         child: Container(
                           width: _thermalPaperWidth,
                           color: Colors.white,
-                          padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+                          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
                           child: _thermalReceiptInner(textTheme, cashierName),
                         ),
                       ),
@@ -1212,11 +1207,7 @@ class _EbarimtBuyerDialogState extends State<_EbarimtBuyerDialog> {
     if (_aan) {
       if (reg.length != 7) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('ААН байгууллагын регистр (7 орон) оруулна уу'),
-            ),
-          );
+          showAppSnackBar(context, 'ААН байгууллагын регистр (7 орон) оруулна уу');
         }
         return;
       }
@@ -1232,9 +1223,7 @@ class _EbarimtBuyerDialogState extends State<_EbarimtBuyerDialog> {
       if (!mounted) return;
       setState(() => _loading = false);
       if (result == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('И-Баримт авахад алдаа гарлаа')),
-        );
+        showAppSnackBar(context, 'И-Баримт авахад алдаа гарлаа');
         return;
       }
       Map<String, dynamic>? lookup = _tatvarInfo;
@@ -1258,9 +1247,7 @@ class _EbarimtBuyerDialogState extends State<_EbarimtBuyerDialog> {
       if (!mounted) return;
       setState(() => _loading = false);
       if (result == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('И-Баримт авахад алдаа гарлаа')),
-        );
+        showAppSnackBar(context, 'И-Баримт авахад алдаа гарлаа');
         return;
       }
       Navigator.of(context).pop(result);
@@ -1294,9 +1281,7 @@ class _EbarimtBuyerDialogState extends State<_EbarimtBuyerDialog> {
     if (!mounted) return;
     setState(() => _loading = false);
     if (result == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('И-Баримт авахад алдаа гарлаа')),
-      );
+      showAppSnackBar(context, 'И-Баримт авахад алдаа гарлаа');
       return;
     }
     Navigator.of(context).pop(

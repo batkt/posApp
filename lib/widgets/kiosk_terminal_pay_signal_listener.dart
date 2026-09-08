@@ -20,6 +20,7 @@ import '../services/terminal_tulbur_signal_service.dart';
 import '../services/unipos_service.dart';
 import '../utils/mnt_amount_formatter.dart';
 import '../utils/pos_native_debug_log.dart';
+import '../utils/app_snackbar.dart';
 
 /// Listens for mobile-initiated card payment requests (`terminalTulburKhuseelt`)
 /// and automatically opens UniPOS card payment terminal on this POS device.
@@ -155,8 +156,6 @@ class _KioskTerminalPaySignalListenerState
     );
     debugPrint('>>> [KioskTerminalPaySignalListener] EXECUTING CARD PAY REQUEST: ${item.id} (${item.amountMnt}₮) from ${item.initiatorNer}');
 
-    final messenger = ScaffoldMessenger.of(context);
-
     // Protect active UniPOS transaction from watchdog disruption for 2 minutes
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -189,14 +188,10 @@ class _KioskTerminalPaySignalListenerState
 
       if (mounted && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
         try {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                'Картын төлбөрийн хүсэлт (${MntAmountFormatter.formatTugrik(item.amountMnt)}) — ПОС нээж байна...',
-              ),
-              duration: const Duration(seconds: 2),
-              backgroundColor: Colors.blue.shade800,
-            ),
+          showAppSnackBar(
+            context,
+            'Картын төлбөрийн хүсэлт (${MntAmountFormatter.formatTugrik(item.amountMnt)}) — ПОС нээж байна...',
+            duration: const Duration(seconds: 2),
           );
         } catch (_) {}
       }
@@ -436,12 +431,11 @@ class _KioskTerminalPaySignalListenerState
       } catch (_) {}
 
       if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: const Text('Картын гүйлгээ цуцлагдлаа/алдаа гарлаа'),
-            backgroundColor: Colors.orange.shade800,
-            duration: const Duration(seconds: 3),
-          ),
+        showAppSnackBar(
+          context,
+          'Картын гүйлгээ цуцлагдлаа/алдаа гарлаа',
+          variant: AppSnackVariant.warning,
+          duration: const Duration(seconds: 3),
         );
       }
     } finally {

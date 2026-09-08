@@ -13,6 +13,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/barcode_scan_sheet.dart';
 import '../../widgets/category_picker_section.dart';
+import '../../utils/app_snackbar.dart';
 
 /// One row of web `Form.List` / `aguulakh.buuniiUneJagsaalt` (`buuniiToo`, `buuniiUne`).
 class _BuuniiTierCtrls {
@@ -178,33 +179,25 @@ class _BaraaAddScreenState extends State<BaraaAddScreen> {
     AppLocalizations l10n,
   ) {
     if (tiers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('baraa_buunii_empty'))),
-      );
+      showAppSnackBar(context, l10n.tr('baraa_buunii_empty'));
       return false;
     }
     for (var i = 0; i < tiers.length; i++) {
       final t = tiers[i]['buuniiToo'] as int;
       final u = (tiers[i]['buuniiUne'] as num).toDouble();
       if (retail <= u) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.tr('baraa_buunii_retail_gt'))),
-        );
+        showAppSnackBar(context, l10n.tr('baraa_buunii_retail_gt'));
         return false;
       }
       if (i > 0) {
         final pt = tiers[i - 1]['buuniiToo'] as int;
         final pu = (tiers[i - 1]['buuniiUne'] as num).toDouble();
         if (pt >= t) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.tr('baraa_buunii_too_ascend'))),
-          );
+          showAppSnackBar(context, l10n.tr('baraa_buunii_too_ascend'));
           return false;
         }
         if (pu <= u) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.tr('baraa_buunii_une_descend'))),
-          );
+          showAppSnackBar(context, l10n.tr('baraa_buunii_une_descend'));
           return false;
         }
       }
@@ -269,9 +262,7 @@ class _BaraaAddScreenState extends State<BaraaAddScreen> {
     final negK = _parseIntLoose(_negKhairtsag.text);
 
     if (_shirkheglekhEsekh && negK < 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('baraa_pcs_per_box_required'))),
-      );
+      showAppSnackBar(context, l10n.tr('baraa_pcs_per_box_required'));
       return;
     }
 
@@ -322,12 +313,7 @@ class _BaraaAddScreenState extends State<BaraaAddScreen> {
     setState(() => _saving = false);
 
     if (!r.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(r.error ?? l10n.tr('staff_admin_save_failed')),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      showAppSnackBar(context, r.error ?? l10n.tr('staff_admin_save_failed'), variant: AppSnackVariant.error);
       return;
     }
 
@@ -335,12 +321,7 @@ class _BaraaAddScreenState extends State<BaraaAddScreen> {
     if (!mounted) return;
     Navigator.pop(context);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.tr('baraa_saved')),
-        backgroundColor: AppColors.success,
-      ),
-    );
+    showAppSnackBar(context, l10n.tr('baraa_saved'), variant: AppSnackVariant.success);
   }
 
   @override
@@ -423,7 +404,15 @@ class _BaraaAddScreenState extends State<BaraaAddScreen> {
         behavior: HitTestBehavior.opaque,
         onTap: () => FocusScope.of(context).unfocus(),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          // Гар нээлттэй үед доод талын "Хадгалах" товч халхлагдаж байсан —
+          // жагсаалтыг доош чирэхэд гар хаагдана.
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.fromLTRB(
+            20,
+            16,
+            20,
+            32 + MediaQuery.of(context).viewInsets.bottom * 0.15,
+          ),
           child: _EditForm(
             l10n: l10n,
             formKey: _formKey,
@@ -743,6 +732,7 @@ class _EditForm extends StatelessWidget {
           const SizedBox(height: 14),
 
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: ner,
             decoration: InputDecoration(
               labelText: l10n.tr('baraa_name'),
@@ -757,6 +747,7 @@ class _EditForm extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: bogino,
             decoration: InputDecoration(
               labelText: l10n.tr('baraa_bogino'),
@@ -765,6 +756,7 @@ class _EditForm extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: code,
             decoration: InputDecoration(
               labelText: l10n.tr('baraa_code'),
@@ -783,6 +775,7 @@ class _EditForm extends StatelessWidget {
 
           // --- Barcode Section with Scanner Button & BBNS lookup ---
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: barCode,
             onChanged: (v) {
               if (v.trim().length >= 8) {
@@ -877,6 +870,7 @@ class _EditForm extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: khemjikh,
             decoration: InputDecoration(
               labelText: l10n.tr('baraa_khemjikh'),
@@ -885,6 +879,7 @@ class _EditForm extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: niitUne,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [MntThousandsInputFormatter()],
@@ -895,6 +890,7 @@ class _EditForm extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: urtugUne,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [MntThousandsInputFormatter()],
@@ -905,6 +901,7 @@ class _EditForm extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: uldegdel,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
@@ -934,6 +931,7 @@ class _EditForm extends StatelessWidget {
           if (shirkheg) ...[
             const SizedBox(height: 4),
             TextFormField(
+              onTapOutside: (_) => FocusScope.of(context).unfocus(),
               controller: negKhairtsag,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
@@ -985,6 +983,7 @@ class _EditForm extends StatelessWidget {
                   children: [
                     Expanded(
                       child: TextFormField(
+                        onTapOutside: (_) => FocusScope.of(context).unfocus(),
                         controller: c.too,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
@@ -996,6 +995,7 @@ class _EditForm extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: TextFormField(
+                        onTapOutside: (_) => FocusScope.of(context).unfocus(),
                         controller: c.une,
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),

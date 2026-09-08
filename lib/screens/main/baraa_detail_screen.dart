@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -18,6 +19,7 @@ import '../../widgets/authenticated_image.dart';
 import '../../widgets/barcode_scan_sheet.dart';
 import '../../widgets/category_picker_section.dart';
 import '../../widgets/niimbot_printer_dialog.dart';
+import '../../utils/app_snackbar.dart';
 
 /// One row of web `Form.List` / `aguulakh.buuniiUneJagsaalt` (`buuniiToo`, `buuniiUne`).
 class _BuuniiTierCtrls {
@@ -252,33 +254,25 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
     AppLocalizations l10n,
   ) {
     if (tiers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('baraa_buunii_empty'))),
-      );
+      showAppSnackBar(context, l10n.tr('baraa_buunii_empty'));
       return false;
     }
     for (var i = 0; i < tiers.length; i++) {
       final t = tiers[i]['buuniiToo'] as int;
       final u = (tiers[i]['buuniiUne'] as num).toDouble();
       if (retail <= u) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.tr('baraa_buunii_retail_gt'))),
-        );
+        showAppSnackBar(context, l10n.tr('baraa_buunii_retail_gt'));
         return false;
       }
       if (i > 0) {
         final pt = tiers[i - 1]['buuniiToo'] as int;
         final pu = (tiers[i - 1]['buuniiUne'] as num).toDouble();
         if (pt >= t) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.tr('baraa_buunii_too_ascend'))),
-          );
+          showAppSnackBar(context, l10n.tr('baraa_buunii_too_ascend'));
           return false;
         }
         if (pu <= u) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.tr('baraa_buunii_une_descend'))),
-          );
+          showAppSnackBar(context, l10n.tr('baraa_buunii_une_descend'));
           return false;
         }
       }
@@ -328,20 +322,29 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
   Future<void> _onSave() async {
     if (!_formKey.currentState!.validate()) return;
     final p = _item.product;
-    if (p.baiguullagiinId == null || p.salbariinId == null || p.id.isEmpty) {
+    final l10n = AppLocalizations.of(context);
+
+    // Байгууллага/салбарын id нь барааны мөр дээр ирээгүй байж болно
+    // (жишээ нь хайлтын хариунд). Өмнө нь энэ тохиолдолд "Хадгалах" нь
+    // ЧИМЭЭГҮЙ буцдаг тул бараа огт заслагдахгүй байв — одоо нэвтэрсэн
+    // сешнээс нөхөж авна.
+    final session = context.read<AuthModel>().posSession;
+    final orgId = p.baiguullagiinId ?? session?.baiguullagiinId;
+    final branchId = p.salbariinId ?? session?.salbariinId;
+    if (orgId == null || orgId.isEmpty || branchId == null ||
+        branchId.isEmpty || p.id.isEmpty) {
+      showAppSnackBar(context, 'Барааны салбарын мэдээлэл дутуу тул хадгалж '
+              'чадсангүй. Дахин нэвтэрч оролдоно уу.', variant: AppSnackVariant.error);
       return;
     }
 
-    final l10n = AppLocalizations.of(context);
     final niit = _parseDoubleLoose(_niitUne.text);
     final urtug = _parseDoubleLoose(_urtugUne.text);
     final ul = _parseIntLoose(_uldegdel.text);
     final negK = _parseIntLoose(_negKhairtsag.text);
 
     if (_shirkheglekhEsekh && negK < 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('baraa_pcs_per_box_required'))),
-      );
+      showAppSnackBar(context, l10n.tr('baraa_pcs_per_box_required'));
       return;
     }
 
@@ -359,15 +362,17 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
     }
 
     final body = <String, dynamic>{
-      'baiguullagiinId': p.baiguullagiinId,
-      'salbariinId': p.salbariinId,
+      'baiguullagiinId': orgId,
+      'salbariinId': branchId,
       'ner': _ner.text.trim(),
-      'boginoNer': _bogino.text.trim().isEmpty ? null : _bogino.text.trim(),
-      'code': _code.text.trim().isEmpty ? null : _code.text.trim(),
-      'barCode': _barCode.text.trim().isEmpty ? null : _barCode.text.trim(),
-      'khemjikhNegj':
-          _khemjikh.text.trim().isEmpty ? null : _khemjikh.text.trim(),
-      'angilal': _angilal.text.trim().isEmpty ? null : _angilal.text.trim(),
+      // Хоосолсон талбарыг `null` болговол доорх [Map.removeWhere] нь
+      // өгөгдлөөс нь бүрмөсөн хаядаг тул сервер дээр ХУУЧИН утга үлддэг —
+      // "засч болохгүй байна" гэдгийн нэг шалтгаан. Хоосон мөрөөр илгээнэ.
+      'boginoNer': _bogino.text.trim(),
+      'code': _code.text.trim(),
+      'barCode': _barCode.text.trim(),
+      'khemjikhNegj': _khemjikh.text.trim(),
+      'angilal': _angilal.text.trim(),
       'niitUne': niit,
       'urtugUne': urtug,
       'uldegdel': ul,
@@ -393,12 +398,7 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
     setState(() => _saving = false);
 
     if (!r.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(r.error ?? l10n.tr('staff_admin_save_failed')),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      showAppSnackBar(context, r.error ?? l10n.tr('staff_admin_save_failed'), variant: AppSnackVariant.error);
       return;
     }
 
@@ -418,12 +418,7 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
       setState(() => _editing = false);
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.tr('baraa_saved')),
-        backgroundColor: AppColors.success,
-      ),
-    );
+    showAppSnackBar(context, l10n.tr('baraa_saved'), variant: AppSnackVariant.success);
   }
 
   @override
@@ -673,6 +668,9 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
                       niitUne: _niitUne,
                       urtugUne: _urtugUne,
                       uldegdel: _uldegdel,
+                      // Зөвхөн хөдөлгөөнгүй (0 үлдэгдэлтэй) бараанд.
+                      uldegdelZasakhBolomjtoi: _item.currentStock <= 0 &&
+                          (_item.product.uldegdel ?? 0) <= 0,
                       negKhairtsag: _negKhairtsag,
                       buuniiTiers: _buuniiTiers,
                       idevkhtei: _idevkhteiEsekh,
@@ -1006,6 +1004,7 @@ class _EditForm extends StatelessWidget {
     required this.niitUne,
     required this.urtugUne,
     required this.uldegdel,
+    this.uldegdelZasakhBolomjtoi = false,
     required this.negKhairtsag,
     required this.buuniiTiers,
     required this.idevkhtei,
@@ -1046,6 +1045,10 @@ class _EditForm extends StatelessWidget {
   final TextEditingController niitUne;
   final TextEditingController urtugUne;
   final TextEditingController uldegdel;
+
+  /// Үлдэгдэл нь 0 (хөдөлгөөнгүй) бараанд үлдэгдлийг гараар засахыг
+  /// зөвшөөрнө — эхний үлдэгдлээ оруулах цорын ганц зам.
+  final bool uldegdelZasakhBolomjtoi;
   final TextEditingController negKhairtsag;
   final List<_BuuniiTierCtrls> buuniiTiers;
   final bool idevkhtei;
@@ -1222,6 +1225,7 @@ class _EditForm extends StatelessWidget {
           const SizedBox(height: 14),
 
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: ner,
             decoration: InputDecoration(
               labelText: l10n.tr('baraa_name'),
@@ -1236,6 +1240,7 @@ class _EditForm extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: bogino,
             decoration: InputDecoration(
               labelText: l10n.tr('baraa_bogino'),
@@ -1244,6 +1249,7 @@ class _EditForm extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: code,
             readOnly: true,
             decoration: InputDecoration(
@@ -1259,6 +1265,7 @@ class _EditForm extends StatelessWidget {
 
           // --- Barcode Section with Scanner Button & BBNS lookup ---
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: barCode,
             onChanged: (v) {
               if (v.trim().length >= 8) {
@@ -1352,6 +1359,7 @@ class _EditForm extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: khemjikh,
             decoration: InputDecoration(
               labelText: l10n.tr('baraa_khemjikh'),
@@ -1360,6 +1368,7 @@ class _EditForm extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: niitUne,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [MntThousandsInputFormatter()],
@@ -1370,6 +1379,7 @@ class _EditForm extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: urtugUne,
             readOnly: true,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -1385,16 +1395,30 @@ class _EditForm extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           TextFormField(
+            onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: uldegdel,
-            readOnly: true,
+            readOnly: !uldegdelZasakhBolomjtoi,
             keyboardType: TextInputType.number,
+            inputFormatters: uldegdelZasakhBolomjtoi
+                ? [FilteringTextInputFormatter.digitsOnly]
+                : null,
             decoration: InputDecoration(
               labelText: l10n.tr('baraa_uldegdel'),
               border: const OutlineInputBorder(),
-              filled: true,
-              fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-              suffixIcon: const Icon(Icons.lock_outline, size: 20, color: Colors.grey),
-              helperText: 'Бараа засах үед үлдэгдэл засах боломжгүй',
+              filled: !uldegdelZasakhBolomjtoi,
+              fillColor: uldegdelZasakhBolomjtoi
+                  ? null
+                  : colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.4),
+              suffixIcon: uldegdelZasakhBolomjtoi
+                  ? null
+                  : const Icon(Icons.lock_outline,
+                      size: 20, color: Colors.grey),
+              helperText: uldegdelZasakhBolomjtoi
+                  ? 'Үлдэгдэл 0 тул эхний үлдэгдлээ энд оруулж болно'
+                  : 'Үлдэгдэлтэй бараанд үлдэгдэл засах боломжгүй — '
+                      'орлого/зарлагаар өөрчилнө',
+              helperMaxLines: 2,
             ),
           ),
           const SizedBox(height: 8),
@@ -1419,6 +1443,7 @@ class _EditForm extends StatelessWidget {
           if (shirkheg) ...[
             const SizedBox(height: 4),
             TextFormField(
+              onTapOutside: (_) => FocusScope.of(context).unfocus(),
               controller: negKhairtsag,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
@@ -1470,6 +1495,7 @@ class _EditForm extends StatelessWidget {
                   children: [
                     Expanded(
                       child: TextFormField(
+                        onTapOutside: (_) => FocusScope.of(context).unfocus(),
                         controller: c.too,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
@@ -1481,6 +1507,7 @@ class _EditForm extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: TextFormField(
+                        onTapOutside: (_) => FocusScope.of(context).unfocus(),
                         controller: c.une,
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),

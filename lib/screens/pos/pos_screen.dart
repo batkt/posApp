@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
 import '../../models/sales_model.dart';
+import '../../models/cart_model.dart';
 import '../../models/inventory_model.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
@@ -24,14 +25,12 @@ import '../../services/pos_settings_service.dart';
 import '../../services/uramshuulal_service.dart';
 import '../../payment/pos_payment_core.dart';
 import '../../utils/clean_barcode.dart';
+import '../../utils/app_snackbar.dart';
 
 /// How many of this product are in the current sale (0 = not in cart).
-int _saleQtyForProduct(SalesModel sales, String productId) {
-  for (final line in sales.currentSaleItems) {
-    if (line.product.id == productId) return line.quantity;
-  }
-  return 0;
-}
+/// Урамшууллын бэлэг мөрийг нь оруулж НИЙЛБЭРЛЭНЭ — [SalesModel.qtyForProduct].
+int _saleQtyForProduct(SalesModel sales, Product product) =>
+    sales.qtyForProduct(product);
 
 class POSScreen extends StatefulWidget {
   const POSScreen({
@@ -294,9 +293,7 @@ class _POSScreenState extends State<POSScreen> {
     final l10n = AppLocalizations.of(context);
     if (!auth.canSubmitPosSales) return;
     if (sales.isSaleEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('pos_park_empty_cart'))),
-      );
+      showAppSnackBar(context, l10n.tr('pos_park_empty_cart'));
       return;
     }
     final session = auth.posSession!;
@@ -381,24 +378,16 @@ class _POSScreenState extends State<POSScreen> {
       if (!context.mounted) return;
       _clearSaleAndRestock(context, sales);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.tr('pos_park_success'))),
-        );
+        showAppSnackBar(context, l10n.tr('pos_park_success'));
       }
     } catch (e) {
       if (context.mounted) {
         Navigator.of(context, rootNavigator: true).pop();
       }
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              e is PosTransactionException
+        showAppSnackBar(context, e is PosTransactionException
                   ? posPaymentErrorUserMessage(e)
-                  : l10n.tr('pos_park_failed'),
-            ),
-          ),
-        );
+                  : l10n.tr('pos_park_failed'));
       }
     }
   }
@@ -427,9 +416,7 @@ class _POSScreenState extends State<POSScreen> {
     final l10n = AppLocalizations.of(context);
     final p = item.product;
     if (p.buuniiUneEsekh != true || p.buuniiUneJagsaalt.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('pos_sale_no_bulk'))),
-      );
+      showAppSnackBar(context, l10n.tr('pos_sale_no_bulk'));
       return;
     }
     final tiers = List<Map<String, dynamic>>.from(p.buuniiUneJagsaalt)
@@ -586,6 +573,8 @@ class _POSScreenState extends State<POSScreen> {
     // Capture both models before the async gap.
     final inventory = context.read<InventoryModel>();
     final sales = context.read<SalesModel>();
+    // Сканнер нээхийн өмнө хайлтын гарыг хаана.
+    FocusScope.of(context).unfocus();
 
     final batch = await showBarcodeQuickScanSheet(
       context,
@@ -597,10 +586,16 @@ class _POSScreenState extends State<POSScreen> {
 
     // Commit the whole batch to the cart + deduct local shelf stock.
     for (final entry in batch) {
-      final qty = entry.quantity.clamp(1, entry.item.currentStock);
+      // Үлдэгдэл нь хасах утгатай байж болно (илүү зарсан) — clamp-ийн
+      // дээд хязгаар доод хязгаараасаа бага бол ArgumentError шиднэ.
+      final qty = entry.quantity.clamp(
+        1,
+        entry.item.currentStock < 1 ? 1 : entry.item.currentStock,
+      );
       for (var i = 0; i < qty; i++) {
+        // Үлдэгдэл дуусвал зогсоно — сагс болон үлдэгдэл салахгүй.
+        if (!inventory.deductStock(entry.item.product.id, 1)) break;
         sales.addToSale(entry.item.product);
-        inventory.deductStock(entry.item.product.id, 1);
       }
     }
 
@@ -623,12 +618,7 @@ class _POSScreenState extends State<POSScreen> {
     final auth = context.read<AuthModel>();
     if (!auth.canSubmitPosSales) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.tr('terminal_signal_failed')),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showAppSnackBar(context, l10n.tr('terminal_signal_failed'));
       }
       return;
     }
@@ -641,31 +631,14 @@ class _POSScreenState extends State<POSScreen> {
             '${sales.uniqueSaleItems} төрөл · ${sales.salePieceCountApprox} ширхэг',
       );
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.tr('terminal_signal_sent')),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showAppSnackBar(context, l10n.tr('terminal_signal_sent'));
     } on TerminalTulburSignalException catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showAppSnackBar(context, e.message, variant: AppSnackVariant.error);
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${l10n.tr('terminal_signal_failed')}: $e'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showAppSnackBar(context, '${l10n.tr('terminal_signal_failed')}: $e', variant: AppSnackVariant.error);
       }
     }
   }
@@ -1164,6 +1137,9 @@ class _POSScreenState extends State<POSScreen> {
           TextField(
             controller: _searchController,
             onChanged: (value) => setState(() {}),
+            textInputAction: TextInputAction.search,
+            // "Хайх" дарахад гар хаагдана — жагсаалт аль хэдийн шүүгдсэн.
+            onSubmitted: (_) => FocusScope.of(context).unfocus(),
             decoration: InputDecoration(
               hintText: 'Бүтээгдэхүүн хайх...',
               prefixIcon:
@@ -1307,7 +1283,7 @@ class _POSScreenState extends State<POSScreen> {
         // sale is cleared; only then sort true out-of-stock to the bottom.
         bool gridShelfSortActive(InventoryItem i) {
           if (!i.product.isAvailable) return false;
-          final inThisSale = _saleQtyForProduct(sales, i.product.id);
+          final inThisSale = _saleQtyForProduct(sales, i.product);
           return i.currentStock > 0 || inThisSale > 0;
         }
 
@@ -1320,7 +1296,11 @@ class _POSScreenState extends State<POSScreen> {
           final aa = gridShelfSortActive(a);
           final ab = gridShelfSortActive(b);
           if (aa != ab) return aa ? -1 : 1;
-          if (!aa) return stamp(b).compareTo(stamp(a));
+          // Хамгийн СҮҮЛД бүртгэсэн бараа эхэнд — өмнө нь нэрээр цагаан
+          // толгойн дарааллаар эрэмбэлдэг тул шинэ бараа доогуур булагдаж,
+          // кассчин олдоггүй байв.
+          final byStamp = stamp(b).compareTo(stamp(a));
+          if (byStamp != 0) return byStamp;
           return a.product.name.compareTo(b.product.name);
         });
 
@@ -1347,7 +1327,11 @@ class _POSScreenState extends State<POSScreen> {
           );
         }
 
-        return GridView.builder(
+        return RefreshIndicator(
+          // Үлдэгдлийг ГАРААР шинэчлэх зам — сокет тасарсан үед ч кассчин
+          // тооллого/вебийн хөдөлгөөнийг шууд татаж чадна.
+          onRefresh: () => inventory.refreshInventory(force: true),
+          child: GridView.builder(
           padding: context.responsivePadding,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossCount,
@@ -1362,35 +1346,44 @@ class _POSScreenState extends State<POSScreen> {
           itemCount: products.length,
           itemBuilder: (context, index) {
             final item = products[index];
-            final inSale = _saleQtyForProduct(sales, item.product.id);
+            final inSale = _saleQtyForProduct(sales, item.product);
             return _ProductCard(
               key: ValueKey(item.product.id),
               item: item,
               inSaleQuantity: inSale,
               onTap: (item.currentStock > 0 || inSale > 0)
                   ? () {
-                      if (item.currentStock > 0) {
+                      // Бараа сонгосны дараа хайлтын гар хаагдана.
+                      FocusScope.of(context).unfocus();
+                      // Үлдэгдлийг ХАСАЖ чадсан үед л сагсанд нэмнэ —
+                      // ингэснээр сагс ба үлдэгдэл хэзээ ч салахгүй.
+                      // [InventoryModel.deductStock] нь үлдэгдлээс илүү
+                      // зарахыг хориглодоггүй (хасах утга руу орно), учир
+                      // нь "+"-г спамдах үед хориглох нь улаан мэдэгдлээр
+                      // дүүргэдэг байв. Зөвхөн бараа нь агуулахын
+                      // жагсаалтад огт байхгүй үед л амжилтгүй болно.
+                      if (inventory.deductStock(item.product.id, 1)) {
                         sales.addToSale(item.product);
-                        inventory.deductStock(item.product.id, 1);
+                        return;
                       }
-                      // Shelf is 0 but line still in cart: no reorder/jump; long-press to remove.
+                      showAppSnackBar(context, 'Барааны үлдэгдэл олдсонгүй', variant: AppSnackVariant.error);
                     }
                   : () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Бүтээгдэхүүн дууссан'),
-                          backgroundColor: AppColors.error,
-                        ),
-                      );
+                      FocusScope.of(context).unfocus();
+                      showAppSnackBar(context, 'Бүтээгдэхүүн дууссан', variant: AppSnackVariant.error);
                     },
               onRemoveOneFromSale: inSale > 0
                   ? () {
-                      inventory.restock(item.product.id, 1);
-                      sales.decrementSaleQuantity(item.product.id);
+                      // Үлдэгдлийг ЗӨВХӨН үнэхээр хассан үед буцаана — эс
+                      // тэгвээс хасагдаагүй ч үлдэгдэл нэмэгдсээр байна.
+                      if (sales.decrementSaleQuantity(item.product)) {
+                        inventory.restock(item.product.id, 1);
+                      }
                     }
                   : null,
             );
           },
+          ),
         );
       },
     );
@@ -1432,26 +1425,20 @@ class _POSScreenState extends State<POSScreen> {
           : null,
       onIncrement: () {
         final inventory = context.read<InventoryModel>();
-        final inv = inventory.getInventoryItem(item.product.id);
-        if (inv == null || inv.currentStock <= 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                item.product.isBoxSaleUnit
-                    ? 'Хайрцагийн үлдэгдэл хүрэлцэхгүй байна'
-                    : 'Үлдэгдэл хүрэлцэхгүй байна',
-              ),
-            ),
-          );
+        // Үлдэгдлийг хасаж чадсан тохиолдолд Л сагсны тоог нэмнэ.
+        // Үлдэгдэл хүрэлцэхгүй бол хориглохгүй — хасах утга руу ороод
+        // "−" дарахад яг эргэж нэмэгдэнэ (сагстайгаа салахгүй).
+        if (!inventory.deductStock(item.product.id, 1)) {
+          showAppSnackBar(context, 'Барааны үлдэгдэл олдсонгүй');
           return;
         }
-        inventory.deductStock(item.product.id, 1);
         sales.incrementSaleQuantity(item.product.id);
       },
       onDecrement: () {
         final inventory = context.read<InventoryModel>();
-        inventory.restock(item.product.id, 1);
-        sales.decrementSaleQuantity(item.product.id);
+        if (sales.decrementSaleQuantity(item.product)) {
+          inventory.restock(item.product.id, 1);
+        }
       },
       onRemove: () {
         final inventory = context.read<InventoryModel>();
@@ -2092,15 +2079,10 @@ class _ProductCard extends StatelessWidget {
         side: BorderSide(color: borderColor, width: borderWidth),
       ),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: (item.isOutOfStock && !inCart) ? null : onTap,
-        onLongPress: (inCart && onRemoveOneFromSale != null)
-            ? onRemoveOneFromSale
-            : null,
-        splashFactory: NoSplash.splashFactory,
-        splashColor: Colors.transparent,
-        highlightColor: colorScheme.primary.withValues(alpha: 0.06),
-        child: Column(
+      // Тоо ширхэгийг ЗӨВХӨН зураг дээрх +/− товчоор өөрчилнө. Урьд нь
+      // хайрцаг дээр дарахад нэмэгдэж, удаан дарахад хасагддаг байсан тул
+      // санамсаргүй хүрэхэд тоо өөрчлөгддөг байв.
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
@@ -2202,24 +2184,24 @@ class _ProductCard extends StatelessWidget {
                     Positioned(
                       left: 6,
                       bottom: 6,
-                      child: Material(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        shape: const CircleBorder(),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          onTap: onRemoveOneFromSale,
-                          customBorder: const CircleBorder(),
-                          child: Padding(
-                            padding: const EdgeInsets.all(6),
-                            child: Icon(
-                              Icons.remove_rounded,
-                              size: 20,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
+                      child: _ImageStepperButton(
+                        icon: Icons.remove_rounded,
+                        tooltip: 'Нэгээр хасах',
+                        onTap: onRemoveOneFromSale,
                       ),
                     ),
+                  // "+" нь сагсанд байгаа эсэхээс үл хамааран ҮРГЭЛЖ
+                  // харагдана — хайрцаг дээр дарж нэмэхийг хассан тул
+                  // бараа нэмэх цорын ганц зам энэ.
+                  Positioned(
+                    right: 6,
+                    bottom: 6,
+                    child: _ImageStepperButton(
+                      icon: Icons.add_rounded,
+                      tooltip: 'Нэгээр нэмэх',
+                      onTap: onTap,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2362,6 +2344,38 @@ class _ProductCard extends StatelessWidget {
               ),
             ),
           ],
+      ),
+    );
+  }
+}
+
+/// Барааны зураг дээрх дугуй +/− товч (сагсан дахь мөрийн тоологч).
+class _ImageStepperButton extends StatelessWidget {
+  const _ImageStepperButton({
+    required this.icon,
+    required this.onTap,
+    required this.tooltip,
+  });
+
+  final IconData icon;
+  final VoidCallback? onTap;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.55),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Icon(icon, size: 20, color: Colors.white),
+          ),
         ),
       ),
     );

@@ -884,38 +884,16 @@ class _ActiveCountCard extends StatelessWidget {
                                       ),
                                       Expanded(
                                         flex: m.countFlex,
-                                        child: TextFormField(
+                                        child: _ToolsonTooField(
                                           key: ValueKey(
                                             '${line.code}_${line.toolsonToo}',
                                           ),
-                                          scrollPadding: const EdgeInsets.only(bottom: 220),
-                                          initialValue:
-                                              MntAmountFormatter.format(
-                                            line.toolsonToo,
-                                          ),
-                                          style: textTheme.bodySmall,
-                                          keyboardType: const TextInputType
-                                              .numberWithOptions(
-                                            decimal: true,
-                                          ),
-                                          inputFormatters: [
-                                            FilteringTextInputFormatter.allow(
-                                              RegExp(r'[0-9.,]'),
-                                            ),
-                                          ],
-                                          textAlign: TextAlign.center,
-                                          decoration: InputDecoration(
-                                            isDense: true,
-                                            contentPadding:
-                                                EdgeInsets.symmetric(
-                                              horizontal: fieldHPad,
-                                              vertical: fieldVPad,
-                                            ),
-                                            border: const OutlineInputBorder(),
-                                          ),
-                                          onFieldSubmitted: (v) {
-                                            onSubmitLineFor(line, v);
-                                          },
+                                          value: line.toolsonToo,
+                                          textStyle: textTheme.bodySmall,
+                                          hPad: fieldHPad,
+                                          vPad: fieldVPad,
+                                          onSubmit: (v) =>
+                                              onSubmitLineFor(line, v),
                                         ),
                                       ),
                                     ],
@@ -2127,6 +2105,97 @@ class _ToololtMultiScanSheetState
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Тооллогын "Тоолсон" баганын тоо оруулах талбар.
+///
+/// Хоёр зүйлийг зассан:
+///  * Утгыг `25.00` биш `25` гэж НЯГТ харуулна — өмнө нь кассчин тоо бүр дээр
+///    ".00"-г гараар устгаж байж бичдэг байв.
+///  * Талбар руу орох бүрд бүх текстийг СОНГОНО — эхний товчлуур дарахад
+///    хуучин утга солигдоно, ард нь наалддаггүй.
+class _ToolsonTooField extends StatefulWidget {
+  const _ToolsonTooField({
+    super.key,
+    required this.value,
+    required this.onSubmit,
+    required this.hPad,
+    required this.vPad,
+    this.textStyle,
+  });
+
+  final double value;
+  final Future<void> Function(String) onSubmit;
+  final double hPad;
+  final double vPad;
+  final TextStyle? textStyle;
+
+  /// `25.00` → `25`, `25.50` → `25.5`.
+  static String compact(double v) {
+    if (!v.isFinite) return '0';
+    if (v == v.truncateToDouble()) return v.toInt().toString();
+    return v
+        .toStringAsFixed(2)
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
+  }
+
+  @override
+  State<_ToolsonTooField> createState() => _ToolsonTooFieldState();
+}
+
+class _ToolsonTooFieldState extends State<_ToolsonTooField> {
+  late final TextEditingController _ctrl;
+  late final FocusNode _focus;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: _ToolsonTooField.compact(widget.value));
+    _focus = FocusNode()..addListener(_onFocusChanged);
+  }
+
+  void _onFocusChanged() {
+    if (_focus.hasFocus) {
+      _ctrl.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _ctrl.text.length,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(_onFocusChanged);
+    _focus.dispose();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _ctrl,
+      focusNode: _focus,
+      scrollPadding: const EdgeInsets.only(bottom: 220),
+      style: widget.textStyle,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+      ],
+      textAlign: TextAlign.center,
+      textInputAction: TextInputAction.done,
+      decoration: InputDecoration(
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: widget.hPad,
+          vertical: widget.vPad,
+        ),
+        border: const OutlineInputBorder(),
+      ),
+      onSubmitted: (v) => widget.onSubmit(v),
     );
   }
 }

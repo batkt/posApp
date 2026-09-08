@@ -6,6 +6,7 @@ import '../../services/printer_service.dart';
 import '../../widgets/niimbot_printer_dialog.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mongolian_date_formatter.dart';
+import '../../utils/app_snackbar.dart';
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -39,9 +40,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           phone: _phoneController.text,
         );
     setState(() => _isEditing = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Профайл шинэчлэгдлээ')),
-    );
+    showAppSnackBar(context, 'Профайл шинэчлэгдлээ');
   }
 
   Future<void> _logout() async {
@@ -74,12 +73,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _runTestPrint() async {
     final result = await PrinterService.testPrint();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(result.message),
-        backgroundColor: result.success ? null : AppColors.error,
-      ),
-    );
+    showAppSnackBar(context, result.message);
   }
 
   @override
@@ -371,18 +365,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           FilledButton(
             onPressed: () {
               if (newPassController.text != confirmPassController.text) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Нууц үг таарахгүй байна'),
-                    backgroundColor: AppColors.error,
-                  ),
-                );
+                showAppSnackBar(context, 'Нууц үг таарахгүй байна', variant: AppSnackVariant.error);
                 return;
               }
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Нууц үг амжилттай солигдлоо')),
-              );
+              showAppSnackBar(context, 'Нууц үг амжилттай солигдлоо');
             },
             child: const Text('Солих'),
           ),

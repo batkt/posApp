@@ -278,13 +278,17 @@ class AppLocalizations {
       'pos_settings_notify_title': 'Notifications',
       'pos_settings_notify_hint':
           'SMS keys, email SMTP, and phone lists are configured on the web app (Мэдэгдэл).',
-      'pos_settings_ebarimt_head': 'E-Invoice (this branch)',
-      'pos_settings_ebarimt_shine': 'New e-invoice',
-      'pos_settings_ebarimt_borluulalt_nuat': 'Sales VAT',
-      'pos_settings_ebarimt_nuat_pay': 'Pay VAT',
-      'pos_settings_ebarimt_auto_tax': 'Send tax automatically',
+      'pos_settings_ebarimt_head': 'E-Invoice — this branch',
+      'pos_settings_ebarimt_shine': 'Use e-invoice 3.0',
+      'pos_settings_ebarimt_borluulalt_nuat': 'Charge VAT on sales',
+      'pos_settings_ebarimt_nuat_pay': 'VAT-registered organisation',
+      'pos_settings_ebarimt_auto_tax':
+          'Send receipts to the tax system automatically',
       'pos_settings_ebarimt_tin': 'Merchant TIN',
       'pos_settings_ebarimt_district': 'District code',
+      'pos_settings_ebarimt_locked_hint':
+          'These come from the e-invoice registration and cannot be edited here.',
+      'pos_settings_ebarimt_registered': 'Registered information',
       'pos_settings_ebarimt_required':
           'Enter TIN and district when e-invoice is on.',
       'pos_settings_dans_head': 'Accounts',
@@ -874,13 +878,17 @@ class AppLocalizations {
       'pos_settings_notify_title': 'Мэдэгдэл',
       'pos_settings_notify_hint':
           'СМС түлхүүр, и-мэйл SMTP, утасны жагсаалтыг вэб дээр тохируулна (Мэдэгдэл).',
-      'pos_settings_ebarimt_head': 'И-Баримт (энэ салбар)',
-      'pos_settings_ebarimt_shine': 'Шинэ и-баримт',
-      'pos_settings_ebarimt_borluulalt_nuat': 'Борлуулалтын НӨАТ',
-      'pos_settings_ebarimt_nuat_pay': 'НӨАТ төлөх',
-      'pos_settings_ebarimt_auto_tax': 'Татварыг автоматаар илгээх',
-      'pos_settings_ebarimt_tin': 'Merchant TIN',
+      'pos_settings_ebarimt_head': 'И-Баримт — энэ салбарын тохиргоо',
+      'pos_settings_ebarimt_shine': 'И-Баримт 3.0 ашиглах',
+      'pos_settings_ebarimt_borluulalt_nuat': 'Борлуулалтад НӨАТ бодох',
+      'pos_settings_ebarimt_nuat_pay': 'НӨАТ төлөгч байгууллага мөн эсэх',
+      'pos_settings_ebarimt_auto_tax':
+          'Баримтыг татварын системд автоматаар илгээх',
+      'pos_settings_ebarimt_tin': 'ТТД — татвар төлөгчийн дугаар',
       'pos_settings_ebarimt_district': 'Дүүрэг/хорооны код',
+      'pos_settings_ebarimt_locked_hint':
+          'Эдгээр нь И-Баримтын бүртгэлээс ирдэг тул энд засагдахгүй.',
+      'pos_settings_ebarimt_registered': 'Бүртгэлтэй мэдээлэл',
       'pos_settings_ebarimt_required':
           'И-баримт асаалттай үед TIN болон код оруулна уу.',
       'pos_settings_dans_head': 'Данс',

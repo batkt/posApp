@@ -18,8 +18,24 @@ class PosWebTaxContext {
   /// Web payment step: `isModalOpenTulbur === true`.
   final bool isModalOpenTulbur;
 
-  /// Web SKU VAT modal — mobile POS keeps `false` (same as paying on web register).
+  /// Вэбийн "НӨАТ ашиглах эсэх" унтраалга
+  /// (`pages/khyanalt/posSystem/index.js` → `baraaNUATModalOpen`).
+  ///
+  /// Вэб дээр эхний утга нь `borluulaltNUAT` — өөрөөр хэлбэл НӨАТ АСААЛТТАЙ
+  /// бөгөөд кассчин унтраасан үед л мөрийн дүнг 1.1-д хуваадаг. Апп нь үүнийг
+  /// үргэлж `false` барьдаг байсан тул И-Баримт өөрөө автоматаар хасагдаж
+  /// байв.
   final bool baraaNUATModalOpen;
+
+  PosWebTaxContext copyWith({bool? baraaNUATModalOpen}) => PosWebTaxContext(
+        borluulaltNUAT: borluulaltNUAT,
+        eBarimtShine: eBarimtShine,
+        isModalOpenTulbur: isModalOpenTulbur,
+        baraaNUATModalOpen: baraaNUATModalOpen ?? this.baraaNUATModalOpen,
+      );
+
+  /// Вэб дээрх шиг унтраалга ХАРАГДАХ эсэх.
+  bool get showNuatSwitch => eBarimtShine && borluulaltNUAT;
 
   /// Until settings load — typical e-barимт POS (per-product НӨАТ flags respected).
   static const PosWebTaxContext paymentDefault = PosWebTaxContext(

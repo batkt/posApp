@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import 'cart_model.dart';
 import '../services/product_service.dart';
@@ -70,9 +70,88 @@ class InventoryModel extends ChangeNotifier {
   StreamSubscription<void>? _uldegdelSub;
   String? _socketBranchKey;
 
+  /// Давтамжит "аюулгүйн" шинэчлэлт. Socket.IO нь ЦОРЫН ГАНЦ шинэчлэх зам
+  /// байсан тул холболт тасарсан/хаагдсан үед (терминал NAT, proxy, эсвэл
+  /// `/api/socket.io` зам блоклогдсон) үлдэгдэл нь бүхэл сешний турш
+  /// хөлдөж, тооллого/вебийн хөдөлгөөн/буцаалт/зарлага огт тусдаггүй байв.
+  Timer? _pollTimer;
+
+  /// Апп нүүр рүү эргэж ирэхэд шинэчлэх ажиглагч.
+  _InventoryLifecycleObserver? _lifecycleObserver;
+
+  /// Хамгийн сүүлд серверээс ачаалсан мөч — хэт ойрхон давтахаас сэргийлнэ.
+  DateTime? _lastLoadedAt;
+
+  /// Сагсанд барьцаалсан тоог буцаах эх сурвалж ([SalesModel]).
+  ///
+  /// Серверээс дахин ачаалсны ДАРАА эдгээрийг хасна — эс тэгвээс сагстай
+  /// байхад ирсэн шинэчлэлт нь барьцааг арчина.
+  Map<String, int> Function()? reservedQtyResolver;
+
+  /// Давтамжит шинэчлэлтийн зай.
+  static const Duration pollInterval = Duration(seconds: 90);
+
+  /// Хоёр ачаалалтын хоорондох хамгийн бага зай.
+  static const Duration _minReloadGap = Duration(seconds: 5);
+
   InventoryModel({
     ProductService? productService,
   }) : _productService = productService ?? ProductService();
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    _uldegdelSub?.cancel();
+    _detachLifecycle();
+    super.dispose();
+  }
+
+  void _onAppResumed() {
+    unawaited(refreshInventory());
+  }
+
+  /// Ажиглагчийг ЗӨВХӨН идэвхтэй сешнтэй үед бүртгэнэ. Конструктор дотор
+  /// хийвэл `WidgetsBinding` эхлээгүй орчинд (unit тест) шидэж унана.
+  void _attachLifecycle() {
+    if (_lifecycleObserver != null) return;
+    final obs = _InventoryLifecycleObserver(_onAppResumed);
+    _lifecycleObserver = obs;
+    WidgetsBinding.instance.addObserver(obs);
+  }
+
+  void _detachLifecycle() {
+    final obs = _lifecycleObserver;
+    if (obs == null) return;
+    _lifecycleObserver = null;
+    WidgetsBinding.instance.removeObserver(obs);
+  }
+
+  void _restartPolling(bool active) {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    if (!active) {
+      _detachLifecycle();
+      return;
+    }
+    _attachLifecycle();
+    _pollTimer = Timer.periodic(pollInterval, (_) {
+      unawaited(refreshInventory());
+    });
+  }
+
+  /// Сагсны барьцааг серверийн үлдэгдэл дээр дахин тусгана.
+  void _applyReservations() {
+    final reserved = reservedQtyResolver?.call();
+    if (reserved == null || reserved.isEmpty) return;
+    for (final e in reserved.entries) {
+      if (e.value <= 0) continue;
+      final i = _inventory.indexWhere((x) => x.product.id == e.key);
+      if (i < 0) continue;
+      _inventory[i] = _inventory[i].copyWith(
+        currentStock: _inventory[i].currentStock - e.value,
+      );
+    }
+  }
 
   /// Called from [ChangeNotifierProxyProvider] when [PosSession] changes after login.
   void syncSession(PosSession? session) {
@@ -95,6 +174,9 @@ class InventoryModel extends ChangeNotifier {
           unawaited(_loadInventoryFromAPI());
         });
       }
+      // Сокет нь ганцаараа найдвартай биш тул давтамжит шинэчлэлтийг
+      // салбар солигдох бүрд дахин тохируулна.
+      _restartPolling(branchKey != null);
     }
 
     if (org == _baiguullagiinId && branch == _salbariinId) {
@@ -146,6 +228,9 @@ class InventoryModel extends ChangeNotifier {
               costPrice: product.urtugUne,
               lastRestocked: product.createdAt,
             )));
+        // Сагсанд аль хэдийн авсан барааг серверийн үлдэгдлээс дахин хасна.
+        _applyReservations();
+        _lastLoadedAt = DateTime.now();
         _error = null;
       } else {
         _inventory.clear();
@@ -160,7 +245,18 @@ class InventoryModel extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshInventory() async {
+  /// Гараар / давтамжаар / апп сэргэхэд дуудагдана.
+  ///
+  /// [force] нь хэрэглэгчийн шууд үйлдэл (доош чирэх г.м) — хугацааны
+  /// хязгаарлалтыг үл харгалзана.
+  Future<void> refreshInventory({bool force = false}) async {
+    if (_isLoading) return;
+    if (!force) {
+      final last = _lastLoadedAt;
+      if (last != null && DateTime.now().difference(last) < _minReloadGap) {
+        return;
+      }
+    }
     await _loadInventoryFromAPI();
   }
 
@@ -168,10 +264,23 @@ class InventoryModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
+  /// Хамгийн СҮҮЛД бүртгэсэн бараа эхэнд.
+  ///
+  /// Сервер `/aguulakh`-г `createdAt: -1`-ээр буцаадаг ч хуудас хуудсаар нь
+  /// нийлүүлдэг тул энд тодорхой эрэмбэлж баталгаажуулна.
+  static int _newestFirstKey(InventoryItem i) =>
+      (i.product.createdAt ?? i.product.updatedAt ?? i.lastRestocked)
+          ?.millisecondsSinceEpoch ??
+      0;
+
+  static void _sortNewestFirst(List<InventoryItem> list) {
+    list.sort((a, b) => _newestFirstKey(b).compareTo(_newestFirstKey(a)));
+  }
+
   List<InventoryItem> get filteredInventory {
     final showAll =
         _selectedCategory == 'Бүгд' || _selectedCategory == 'All';
-    return _inventory.where((item) {
+    final list = _inventory.where((item) {
       final p = item.product;
       final matchesCategory = showAll ||
           p.category == _selectedCategory ||
@@ -192,6 +301,8 @@ class InventoryModel extends ChangeNotifier {
               true;
       return matchesCategory && matchesSearch;
     }).toList();
+    _sortNewestFirst(list);
+    return list;
   }
 
   List<InventoryItem> get lowStockItems {
@@ -368,14 +479,27 @@ class InventoryModel extends ChangeNotifier {
     }
   }
 
-  void deductStock(String productId, int amount) {
+  /// Үлдэгдлээс [amount]-ыг хасна. Бараа олдвол `true`.
+  ///
+  /// Энэ нь [restock]-ийн ЯГ эсрэг үйлдэл байх ЁСТОЙ: хасалт нь 0 дээр
+  /// таслагдвал (нэмэлт нь дээд хязгааргүй тул) "+"-г үлдэгдлээс илүү
+  /// дараад "−" дарах бүрд үлдэгдэл нь анхныхаасаа өсдөг байв. Тиймээс
+  /// үлдэгдэл ХАСАХ утга руу орохыг зөвшөөрнө — кассчинд "хэдээр илүү
+  /// зарсныг" шууд харуулах бөгөөд сагс ба үлдэгдэл хэзээ ч салахгүй:
+  ///
+  ///     үлдэгдэл + сагсан дахь тоо == анхны үлдэгдэл
+  ///
+  /// Үлдэгдэлгүй барааг сагсанд огт оруулахгүй байх шийдвэрийг дуудагч
+  /// (дэлгэц) гаргана — энд хориглодоггүй.
+  bool deductStock(String productId, int amount) {
+    if (amount <= 0) return true;
     final index = _inventory.indexWhere((item) => item.product.id == productId);
-    if (index >= 0) {
-      final newStock =
-          (_inventory[index].currentStock - amount).clamp(0, 999999);
-      _inventory[index] = _inventory[index].copyWith(currentStock: newStock);
-      notifyListeners();
-    }
+    if (index < 0) return false;
+    _inventory[index] = _inventory[index].copyWith(
+      currentStock: _inventory[index].currentStock - amount,
+    );
+    notifyListeners();
+    return true;
   }
 
   void updateProduct(Product updatedProduct) {
@@ -402,5 +526,18 @@ class InventoryModel extends ChangeNotifier {
     } catch (_) {
       return null;
     }
+  }
+}
+
+
+/// Апп нүүр рүү эргэж ирэхэд үлдэгдлийг шинэчлэх ажиглагч.
+class _InventoryLifecycleObserver with WidgetsBindingObserver {
+  _InventoryLifecycleObserver(this.onResumed);
+
+  final VoidCallback onResumed;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) onResumed();
   }
 }

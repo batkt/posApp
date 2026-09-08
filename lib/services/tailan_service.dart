@@ -111,6 +111,11 @@ class TailanService {
         'order': const {'createdAt': -1},
       };
 
+  /// `POST /uramshuulliinTovchooTailanAvya`.
+  ///
+  /// `order` нь `$group`-оос ӨМНӨ ажилладаг тул `_id.ner`-ээр эрэмбэлэх нь
+  /// утгагүй (тэр талбар тэр үед үүсээгүй) — серверийн анхны `{ognoo: -1}`-ийг
+  /// хэвээр үлдээнэ.
   Map<String, dynamic> uramshuulalTovchooBody({
     required String baiguullagiinId,
     required String salbariinId,
@@ -121,7 +126,6 @@ class TailanService {
         ..._dates(ekhlekh, duusakh),
         'baiguullagiinId': baiguullagiinId,
         'salbariinId': salbariinId,
-        'order': const {'_id.ner': 1},
       };
 
   Map<String, dynamic> uramshuulalDelgerenguiBody({

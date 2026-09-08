@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +16,7 @@ import '../../models/category_model.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../widgets/chat_fab.dart';
 import 'support_chat_page.dart';
+import '../../utils/app_snackbar.dart';
 
 /// Web parity: `pages/khyanalt/tokhirgoo` — profile + org/branch settings.
 
@@ -96,6 +99,27 @@ enum PosSettingsSection {
 
 class _PosSettingsHubScreenState extends State<PosSettingsHubScreen> {
   PosSettingsSection _section = PosSettingsSection.personal;
+
+  /// Хэвтээ цэсний товч бүрийн түлхүүр. Сонгосон товч дэлгэцээс гарчихсан
+  /// байвал аль хэсэгт байгаагаа мэдэхгүй болдог тул сонгох бүрд харагдах
+  /// байрлал руу нь гүйлгэнэ.
+  final Map<PosSettingsSection, GlobalKey> _chipKeys = {
+    for (final s in PosSettingsSection.values) s: GlobalKey(),
+  };
+
+  void _selectSection(PosSettingsSection s) {
+    setState(() => _section = s);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _chipKeys[s]?.currentContext;
+      if (ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        alignment: 0.5,
+      );
+    });
+  }
   Map<String, dynamic>? _baiguullaga;
   bool _loading = true;
   String? _error;
@@ -204,8 +228,7 @@ class _PosSettingsHubScreenState extends State<PosSettingsHubScreen> {
                                                 label: posSettingsSectionLabel(
                                                     l10n, s),
                                                 selected: _section == s,
-                                                onTap: () => setState(
-                                                    () => _section = s),
+                                                onTap: () => _selectSection(s),
                                               ),
                                           ],
                                         ),
@@ -236,11 +259,13 @@ class _PosSettingsHubScreenState extends State<PosSettingsHubScreen> {
                                           Builder(builder: (context) {
                                             final isSelected = _section == s;
                                             return Padding(
+                                              key: _chipKeys[s],
                                               padding:
                                                   const EdgeInsets.only(right: 6),
                                               child: FilterChip(
                                                 showCheckmark: false,
                                                 selected: isSelected,
+                                                elevation: isSelected ? 3 : 0,
                                                 label: Text(
                                                   posSettingsSectionLabel(
                                                       l10n, s),
@@ -277,9 +302,8 @@ class _PosSettingsHubScreenState extends State<PosSettingsHubScreen> {
                                                   borderRadius:
                                                       BorderRadius.circular(20),
                                                 ),
-                                                onSelected: (_) => setState(
-                                                  () => _section = s,
-                                                ),
+                                                onSelected: (_) =>
+                                                    _selectSection(s),
                                               ),
                                             );
                                           }),
@@ -365,7 +389,7 @@ String posSettingsSectionLabel(AppLocalizations l10n, PosSettingsSection s) {
     case PosSettingsSection.personal:
       return l10n.tr('pos_settings_nav_personal');
     case PosSettingsSection.baraa:
-      return 'Бараа, бонус & хаалт';
+      return 'Бусад тохиргоо';
     case PosSettingsSection.categories:
       return l10n.tr('pos_settings_nav_categories');
     case PosSettingsSection.notifications:
@@ -591,9 +615,7 @@ class _PersonalSettingsPanelState extends State<_PersonalSettingsPanel> {
     final pw = _nuutsUg.text.trim();
     final pw2 = _nuutsUgDavtan.text.trim();
     if (pw.isNotEmpty && pw != pw2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.l10n.tr('pos_settings_pw_mismatch'))),
-      );
+      showAppSnackBar(context, widget.l10n.tr('pos_settings_pw_mismatch'));
       return;
     }
     final id = widget.pos.ajiltan['_id']?.toString() ?? widget.pos.ajiltan['id']?.toString() ?? '';
@@ -628,14 +650,10 @@ class _PersonalSettingsPanelState extends State<_PersonalSettingsPanel> {
       });
       _nuutsUg.clear();
       _nuutsUgDavtan.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.l10n.tr('pos_settings_saved'))),
-      );
+      showAppSnackBar(context, widget.l10n.tr('pos_settings_saved'));
       await widget.onSaved();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.l10n.tr('pos_settings_save_failed'))),
-      );
+      showAppSnackBar(context, widget.l10n.tr('pos_settings_save_failed'));
     }
   }
 
@@ -848,7 +866,11 @@ class _PersonalSettingsPanelState extends State<_PersonalSettingsPanel> {
   }
 }
 
-class _CombinedBaraaBonusKhaaltPanel extends StatelessWidget {
+/// "Бусад тохиргоо" — бараа, бонус, хаалт ГУРАВ нь өмнө нь тус тусдаа
+/// "Хадгалах" товчтой байсан тул нэг дэлгэц дээр 3 товч зэрэг харагдаж,
+/// аль нь юуг хадгалахыг нь мэдэхгүй байв. Одоо НЭГ л товчоор бүгдийг нь
+/// нэг дор хадгална.
+class _CombinedBaraaBonusKhaaltPanel extends StatefulWidget {
   const _CombinedBaraaBonusKhaaltPanel({
     required this.l10n,
     required this.baiguullaga,
@@ -864,122 +886,134 @@ class _CombinedBaraaBonusKhaaltPanel extends StatelessWidget {
   final Future<void> Function() onSaved;
 
   @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      children: [
-        _BaraaTokhirgooPanel(
-          l10n: l10n,
-          baiguullaga: baiguullaga,
-          salbariinId: salbariinId,
-          onSaved: onSaved,
-        ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Divider(height: 1),
-        ),
-        _LoyaltyPanel(
-          l10n: l10n,
-          baiguullagiinId: baiguullagiinId,
-        ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Divider(height: 1),
-        ),
-        _KhaaltPanel(
-          l10n: l10n,
-          baiguullaga: baiguullaga,
-          baiguullagiinId: baiguullagiinId,
-          onSaved: onSaved,
-        ),
-      ],
-    );
-  }
+  State<_CombinedBaraaBonusKhaaltPanel> createState() =>
+      _CombinedBaraaBonusKhaaltPanelState();
 }
 
-class _BaraaTokhirgooPanel extends StatefulWidget {
-  const _BaraaTokhirgooPanel({
-    required this.l10n,
-    required this.baiguullaga,
-    required this.salbariinId,
-    required this.onSaved,
-  });
+class _CombinedBaraaBonusKhaaltPanelState
+    extends State<_CombinedBaraaBonusKhaaltPanel> {
+  bool _baraaUne = false;
+  bool _bonusAshiglakh = false;
+  final _bonusKhuvi = TextEditingController();
+  bool _khaalt = false;
 
-  final AppLocalizations l10n;
-  final Map<String, dynamic>? baiguullaga;
-  final String salbariinId;
-  final Future<void> Function() onSaved;
-
-  @override
-  State<_BaraaTokhirgooPanel> createState() => _BaraaTokhirgooPanelState();
-}
-
-class _BaraaTokhirgooPanelState extends State<_BaraaTokhirgooPanel> {
-  bool? _baraaUne;
+  bool _loading = true;
   bool _saving = false;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _syncFromParent();
+  void initState() {
+    super.initState();
+    _syncFromOrg();
+    unawaited(_loadLoyalty());
   }
 
   @override
-  void didUpdateWidget(covariant _BaraaTokhirgooPanel oldWidget) {
+  void didUpdateWidget(covariant _CombinedBaraaBonusKhaaltPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.baiguullaga != widget.baiguullaga) _syncFromParent();
-  }
-
-  void _syncFromParent() {
-    final sal = _findSalbar(widget.baiguullaga, widget.salbariinId);
-    final baraa = sal?['tokhirgoo'] is Map ? (sal!['tokhirgoo'] as Map)['baraa'] : null;
-    if (baraa is Map) {
-      _baraaUne = baraa['baraaHudaldahUne'] == true;
-    } else {
-      _baraaUne = false;
+    if (oldWidget.baiguullaga != widget.baiguullaga) {
+      setState(_syncFromOrg);
     }
   }
 
-  Map<String, dynamic>? _findSalbar(Map<String, dynamic>? org, String salId) {
-    if (org == null) return null;
-    final list = org['salbaruud'];
+  @override
+  void dispose() {
+    _bonusKhuvi.dispose();
+    super.dispose();
+  }
+
+  Map<String, dynamic>? _salbar() {
+    final list = widget.baiguullaga?['salbaruud'];
     if (list is! List) return null;
     for (final e in list) {
-      if (e is Map && e['_id']?.toString() == salId) return Map<String, dynamic>.from(e);
+      if (e is Map && e['_id']?.toString() == widget.salbariinId) {
+        return Map<String, dynamic>.from(e);
+      }
     }
     return null;
   }
 
-  Future<void> _save() async {
-    final org = widget.baiguullaga;
-    if (org == null) return;
-    final list = org['salbaruud'];
-    if (list is! List) return;
-    var idx = -1;
+  int _salbarIndex() {
+    final list = widget.baiguullaga?['salbaruud'];
+    if (list is! List) return -1;
     for (var i = 0; i < list.length; i++) {
       final e = list[i];
-      if (e is Map && e['_id']?.toString() == widget.salbariinId) {
-        idx = i;
-        break;
-      }
+      if (e is Map && e['_id']?.toString() == widget.salbariinId) return i;
     }
-    if (idx < 0) return;
+    return -1;
+  }
+
+  void _syncFromOrg() {
+    final tok = _salbar()?['tokhirgoo'];
+    final baraa = tok is Map ? tok['baraa'] : null;
+    _baraaUne = baraa is Map && baraa['baraaHudaldahUne'] == true;
+
+    final orgTok = widget.baiguullaga?['tokhirgoo'];
+    _khaalt = orgTok is Map && orgTok['khaaltAshiglakhEsekh'] == true;
+  }
+
+  Future<void> _loadLoyalty() async {
+    final doc = await posSettingsService.loyaltyErkhAvya(widget.baiguullagiinId);
+    if (!mounted) return;
+    dynamic root = doc;
+    if (root is Map && root['data'] != null) root = root['data'];
+    final tok = root is Map ? root['tokhirgoo'] : null;
+    final loy = tok is Map ? tok['loyalty'] : null;
+    setState(() {
+      if (loy is Map) {
+        _bonusAshiglakh = loy['ashiglakhEsekh'] == true;
+        _bonusKhuvi.text = loy['khunglukhKhuvi']?.toString() ?? '';
+      }
+      _loading = false;
+    });
+  }
+
+  Future<void> _saveAll() async {
+    final l10n = widget.l10n;
+    final org = widget.baiguullaga;
+    if (org == null) return;
+
+    final pct =
+        int.tryParse(_bonusKhuvi.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    if (_bonusAshiglakh && pct <= 0) {
+      showAppSnackBar(context, l10n.tr('pos_settings_bonus_percent_required'),
+          variant: AppSnackVariant.error);
+      return;
+    }
+
     setState(() => _saving = true);
-    final ok = await posSettingsService.tokhirgooSalbarOruulya(
-      branchIndex: idx,
-      tokhirgooPayload: {
-        'baiguullagiinId': org['_id']?.toString(),
-        'baraa': {'baraaHudaldahUne': _baraaUne ?? false},
-      },
-    );
+    var ok = true;
+
+    final idx = _salbarIndex();
+    if (idx >= 0) {
+      ok = await posSettingsService.tokhirgooSalbarOruulya(
+            branchIndex: idx,
+            tokhirgooPayload: {
+              'baiguullagiinId': org['_id']?.toString(),
+              'baraa': {'baraaHudaldahUne': _baraaUne},
+            },
+          ) &&
+          ok;
+    }
+
+    ok = await posSettingsService.loyaltyErkhOruulya(
+          baiguullagiinId: widget.baiguullagiinId,
+          ashiglakhEsekh: _bonusAshiglakh,
+          khunglukhKhuvi: pct,
+        ) &&
+        ok;
+
+    ok = await posSettingsService.tokhirgooOruulya(
+          baiguullagiinId: widget.baiguullagiinId,
+          tokhirgooFields: {'khaaltAshiglakhEsekh': _khaalt},
+        ) &&
+        ok;
+
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          ok ? widget.l10n.tr('pos_settings_saved') : widget.l10n.tr('pos_settings_save_failed'),
-        ),
-      ),
+    showAppSnackBar(
+      context,
+      ok ? l10n.tr('pos_settings_saved') : l10n.tr('pos_settings_save_failed'),
+      variant: ok ? AppSnackVariant.success : AppSnackVariant.error,
     );
     if (ok) await widget.onSaved();
   }
@@ -987,21 +1021,70 @@ class _BaraaTokhirgooPanelState extends State<_BaraaTokhirgooPanel> {
   @override
   Widget build(BuildContext context) {
     final l10n = widget.l10n;
+    final tt = Theme.of(context).textTheme;
     if (widget.baiguullaga == null) {
       return Center(child: Text(l10n.tr('pos_settings_load_failed')));
     }
+    if (_loading) return const Center(child: CircularProgressIndicator());
+
     return ListView(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
       children: [
-        Text(l10n.tr('pos_settings_baraa_head'), style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          l10n.tr('pos_settings_baraa_head'),
+          style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
         SwitchListTile(
+          contentPadding: EdgeInsets.zero,
           title: Text(l10n.tr('pos_settings_baraa_une')),
-          value: _baraaUne ?? false,
+          value: _baraaUne,
           onChanged: (v) => setState(() => _baraaUne = v),
         ),
-        FilledButton(onPressed: _saving ? null : _save, child: Text(l10n.tr('save'))),
+        const Divider(height: 28),
+        Text(
+          l10n.tr('pos_settings_bonus_head'),
+          style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.tr('pos_settings_bonus_use')),
+          value: _bonusAshiglakh,
+          onChanged: (v) => setState(() => _bonusAshiglakh = v),
+        ),
+        TextField(
+          controller: _bonusKhuvi,
+          enabled: _bonusAshiglakh,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: l10n.tr('pos_settings_bonus_percent'),
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        const Divider(height: 28),
+        Text(
+          l10n.tr('pos_settings_door_head'),
+          style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.tr('pos_settings_door_use')),
+          value: _khaalt,
+          onChanged: (v) => setState(() => _khaalt = v),
+        ),
+        const SizedBox(height: 24),
+        FilledButton(
+          onPressed: _saving ? null : _saveAll,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+          ),
+          child: _saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(l10n.tr('save')),
+        ),
       ],
     );
   }
@@ -1062,14 +1145,10 @@ class _CategoryPanelState extends State<_CategoryPanel> {
     if (ok) {
       _ctrl.clear();
       _dedCtrl.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.l10n.tr('pos_settings_saved'))),
-      );
+      showAppSnackBar(context, widget.l10n.tr('pos_settings_saved'));
       await _load();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.l10n.tr('pos_settings_save_failed'))),
-      );
+      showAppSnackBar(context, widget.l10n.tr('pos_settings_save_failed'));
     }
   }
 
@@ -1100,14 +1179,10 @@ class _CategoryPanelState extends State<_CategoryPanel> {
     final ok = await posSettingsService.angilalUstga(c.id);
     if (!mounted) return;
     if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ангилал амжилттай устгагдлаа')),
-      );
+      showAppSnackBar(context, 'Ангилал амжилттай устгагдлаа');
       await _load();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.l10n.tr('pos_settings_save_failed'))),
-      );
+      showAppSnackBar(context, widget.l10n.tr('pos_settings_save_failed'));
     }
   }
 
@@ -1131,13 +1206,12 @@ class _CategoryPanelState extends State<_CategoryPanel> {
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Болих'),
           ),
-          FilledButton.icon(
+          FilledButton(
             onPressed: () => Navigator.pop(ctx, subCtrl.text.trim()),
-            icon: const Icon(Icons.check_circle_rounded),
-            label: const Text('Хадгалах'),
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF4CAF50),
+              backgroundColor: const Color(0xFFFF4469),
             ),
+            child: const Text('Хадгалах'),
           ),
         ],
       ),
@@ -1152,14 +1226,10 @@ class _CategoryPanelState extends State<_CategoryPanel> {
     );
     if (!mounted) return;
     if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Дэд ангилал нэмэгдлээ')),
-      );
+      showAppSnackBar(context, 'Дэд ангилал нэмэгдлээ');
       await _load();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.l10n.tr('pos_settings_save_failed'))),
-      );
+      showAppSnackBar(context, widget.l10n.tr('pos_settings_save_failed'));
     }
   }
 
@@ -1228,22 +1298,21 @@ class _CategoryPanelState extends State<_CategoryPanel> {
               const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
+                child: FilledButton(
                   onPressed: _saving ? null : _add,
-                  icon: const Icon(Icons.check_circle_rounded, size: 20),
-                  label: const Text(
-                    '✅  Хадгалах',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF4CAF50),
+                    backgroundColor: const Color(0xFFFF4469),
                     foregroundColor: Colors.white,
                     minimumSize: const Size.fromHeight(48),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Хадгалах',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
@@ -1388,6 +1457,10 @@ class _EbarimtBranchPanelState extends State<_EbarimtBranchPanel> {
   final _district = TextEditingController();
   bool _saving = false;
 
+  /// `/ebarimtMedeelelAvya` (POS API `rest/info`) — бүртгэлтэй ТТД, салбар,
+  /// дүүрэг/хорооны мэдээлэл.
+  Map<String, dynamic>? _registered;
+
   Map<String, dynamic>? _salMap() {
     final org = widget.baiguullaga;
     if (org == null) return null;
@@ -1405,12 +1478,24 @@ class _EbarimtBranchPanelState extends State<_EbarimtBranchPanel> {
   void initState() {
     super.initState();
     _pull();
+    unawaited(_loadRegistered());
   }
 
   @override
   void didUpdateWidget(covariant _EbarimtBranchPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.baiguullaga != widget.baiguullaga) _pull();
+  }
+
+  Future<void> _loadRegistered() async {
+    final orgId = widget.baiguullaga?['_id']?.toString();
+    if (orgId == null || orgId.isEmpty) return;
+    final info = await posSettingsService.ebarimtMedeelelAvya(
+      baiguullagiinId: orgId,
+      salbariinId: widget.salbariinId,
+    );
+    if (!mounted || info == null || info.isEmpty) return;
+    setState(() => _registered = info);
   }
 
   void _pull() {
@@ -1448,9 +1533,7 @@ class _EbarimtBranchPanelState extends State<_EbarimtBranchPanel> {
     if (idx < 0) return;
     if (_shine) {
       if (_tin.text.trim().isEmpty || _district.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.l10n.tr('pos_settings_ebarimt_required'))),
-        );
+        showAppSnackBar(context, widget.l10n.tr('pos_settings_ebarimt_required'));
         return;
       }
     }
@@ -1472,13 +1555,7 @@ class _EbarimtBranchPanelState extends State<_EbarimtBranchPanel> {
     );
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          ok ? widget.l10n.tr('pos_settings_saved') : widget.l10n.tr('pos_settings_save_failed'),
-        ),
-      ),
-    );
+    showAppSnackBar(context, ok ? widget.l10n.tr('pos_settings_saved') : widget.l10n.tr('pos_settings_save_failed'));
     if (ok) await widget.onSaved();
   }
 
@@ -1508,20 +1585,47 @@ class _EbarimtBranchPanelState extends State<_EbarimtBranchPanel> {
           value: _autoTax,
           onChanged: _shine ? (v) => setState(() => _autoTax = v) : null,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
+        // ТТД болон дүүрэг/хорооны код нь И-Баримтын БҮРТГЭЛЭЭС ирдэг тул
+        // энд гараар засахыг хориглов — буруу утга бичих нь баримтыг бүхэлд
+        // нь унагаадаг.
         TextField(
           controller: _tin,
-          enabled: _shine,
-          decoration: InputDecoration(labelText: l10n.tr('pos_settings_ebarimt_tin')),
+          readOnly: true,
+          decoration: InputDecoration(
+            labelText: l10n.tr('pos_settings_ebarimt_tin'),
+            border: const OutlineInputBorder(),
+            filled: true,
+            suffixIcon: const Icon(Icons.lock_outline, size: 18),
+          ),
         ),
         // Хоёр талбар зэрэгцэн наалдсанаас доод талбарын гарчиг нь дээд
         // талбарын хүрээтэй давхцаж, уншигдахгүй байсан.
         const SizedBox(height: 16),
         TextField(
           controller: _district,
-          enabled: _shine,
-          decoration: InputDecoration(labelText: l10n.tr('pos_settings_ebarimt_district')),
+          readOnly: true,
+          decoration: InputDecoration(
+            labelText: l10n.tr('pos_settings_ebarimt_district'),
+            border: const OutlineInputBorder(),
+            filled: true,
+            suffixIcon: const Icon(Icons.lock_outline, size: 18),
+          ),
         ),
+        const SizedBox(height: 8),
+        Text(
+          l10n.tr('pos_settings_ebarimt_locked_hint'),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+        if (_registered != null) ...[
+          const SizedBox(height: 16),
+          _EbarimtRegisteredCard(
+            title: l10n.tr('pos_settings_ebarimt_registered'),
+            info: _registered!,
+          ),
+        ],
         const SizedBox(height: 20),
         FilledButton(onPressed: _saving ? null : _save, child: Text(l10n.tr('save'))),
       ],
@@ -1705,188 +1809,6 @@ class _DansListPanelState extends State<_DansListPanel> {
   }
 }
 
-class _LoyaltyPanel extends StatefulWidget {
-  const _LoyaltyPanel({required this.l10n, required this.baiguullagiinId});
-
-  final AppLocalizations l10n;
-  final String baiguullagiinId;
-
-  @override
-  State<_LoyaltyPanel> createState() => _LoyaltyPanelState();
-}
-
-class _LoyaltyPanelState extends State<_LoyaltyPanel> {
-  bool _ashiglakh = false;
-  final _khuvi = TextEditingController();
-  bool _loading = true;
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  void dispose() {
-    _khuvi.dispose();
-    super.dispose();
-  }
-
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    final doc = await posSettingsService.loyaltyErkhAvya(widget.baiguullagiinId);
-    if (!mounted) return;
-    dynamic root = doc;
-    if (root is Map && root['data'] != null) root = root['data'];
-    Map<String, dynamic>? m;
-    if (root is Map) m = Map<String, dynamic>.from(root);
-    final tok = m?['tokhirgoo'];
-    final loy = tok is Map ? tok['loyalty'] : null;
-    if (loy is Map) {
-      _ashiglakh = loy['ashiglakhEsekh'] == true;
-      _khuvi.text = loy['khunglukhKhuvi']?.toString() ?? '';
-    }
-    setState(() => _loading = false);
-  }
-
-  Future<void> _save() async {
-    if (_ashiglakh) {
-      final pct = int.tryParse(_khuvi.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-      if (pct <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.l10n.tr('pos_settings_bonus_percent_required'))),
-        );
-        return;
-      }
-    }
-    setState(() => _saving = true);
-    final pct = int.tryParse(_khuvi.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-    final ok = await posSettingsService.loyaltyErkhOruulya(
-      baiguullagiinId: widget.baiguullagiinId,
-      ashiglakhEsekh: _ashiglakh,
-      khunglukhKhuvi: pct,
-    );
-    if (!mounted) return;
-    setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          ok ? widget.l10n.tr('pos_settings_saved') : widget.l10n.tr('pos_settings_save_failed'),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = widget.l10n;
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    return ListView(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(20),
-      children: [
-        Text(l10n.tr('pos_settings_bonus_head'), style: Theme.of(context).textTheme.titleMedium),
-        SwitchListTile(
-          title: Text(l10n.tr('pos_settings_bonus_use')),
-          value: _ashiglakh,
-          onChanged: (v) => setState(() => _ashiglakh = v),
-        ),
-        TextField(
-          controller: _khuvi,
-          enabled: _ashiglakh,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(labelText: l10n.tr('pos_settings_bonus_percent')),
-        ),
-        const SizedBox(height: 16),
-        FilledButton(onPressed: _saving ? null : _save, child: Text(l10n.tr('save'))),
-      ],
-    );
-  }
-}
-
-class _KhaaltPanel extends StatefulWidget {
-  const _KhaaltPanel({
-    required this.l10n,
-    required this.baiguullaga,
-    required this.baiguullagiinId,
-    required this.onSaved,
-  });
-
-  final AppLocalizations l10n;
-  final Map<String, dynamic>? baiguullaga;
-  final String baiguullagiinId;
-  final Future<void> Function() onSaved;
-
-  @override
-  State<_KhaaltPanel> createState() => _KhaaltPanelState();
-}
-
-class _KhaaltPanelState extends State<_KhaaltPanel> {
-  bool _khaalt = false;
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _sync();
-  }
-
-  @override
-  void didUpdateWidget(covariant _KhaaltPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.baiguullaga != widget.baiguullaga) _sync();
-  }
-
-  void _sync() {
-    final t = widget.baiguullaga?['tokhirgoo'];
-    if (t is Map) {
-      _khaalt = t['khaaltAshiglakhEsekh'] == true;
-    }
-  }
-
-  Future<void> _save() async {
-    setState(() => _saving = true);
-    final ok = await posSettingsService.tokhirgooOruulya(
-      baiguullagiinId: widget.baiguullagiinId,
-      tokhirgooFields: {'khaaltAshiglakhEsekh': _khaalt},
-    );
-    if (!mounted) return;
-    setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          ok ? widget.l10n.tr('pos_settings_saved') : widget.l10n.tr('pos_settings_save_failed'),
-        ),
-      ),
-    );
-    if (ok) await widget.onSaved();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = widget.l10n;
-    if (widget.baiguullaga == null) {
-      return Center(child: Text(l10n.tr('pos_settings_load_failed')));
-    }
-    return ListView(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(20),
-      children: [
-        Text(l10n.tr('pos_settings_door_head'), style: Theme.of(context).textTheme.titleMedium),
-        SwitchListTile(
-          title: Text(l10n.tr('pos_settings_door_use')),
-          value: _khaalt,
-          onChanged: (v) => setState(() => _khaalt = v),
-        ),
-        FilledButton(onPressed: _saving ? null : _save, child: Text(l10n.tr('save'))),
-      ],
-    );
-  }
-}
-
 class _BranchesPanel extends StatefulWidget {
   const _BranchesPanel({required this.l10n, required this.baiguullagiinId});
 
@@ -1974,9 +1896,7 @@ class _VersionControlPanelState extends State<_VersionControlPanel> {
     const baseUrl = ApiConfig.baseUrl; 
 
     if (_versionController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter version')),
-      );
+      showAppSnackBar(context, 'Please enter version');
       return;
     }
 
@@ -1996,13 +1916,9 @@ class _VersionControlPanelState extends State<_VersionControlPanel> {
     setState(() => _saving = false);
 
     if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.l10n.tr('pos_settings_saved'))),
-      );
+      showAppSnackBar(context, widget.l10n.tr('pos_settings_saved'));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.l10n.tr('pos_settings_save_failed'))),
-      );
+      showAppSnackBar(context, widget.l10n.tr('pos_settings_save_failed'));
     }
   }
 
@@ -2317,6 +2233,99 @@ class _ChatbotSettingsPanelState extends State<_ChatbotSettingsPanel> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// И-Баримтын бүртгэлээс ирсэн (засагддаггүй) мэдээллийн хайрцаг.
+class _EbarimtRegisteredCard extends StatelessWidget {
+  const _EbarimtRegisteredCard({required this.title, required this.info});
+
+  final String title;
+  final Map<String, dynamic> info;
+
+  static const _labels = <String, String>{
+    'merchantTin': 'ТТД',
+    'tin': 'ТТД',
+    'name': 'Байгууллагын нэр',
+    'merchantName': 'Байгууллагын нэр',
+    'branchNo': 'Салбарын дугаар',
+    'districtCode': 'Дүүрэг/хорооны код',
+    'districtName': 'Дүүрэг/хороо',
+    'posId': 'ПОС дугаар',
+    'posNo': 'ПОС дугаар',
+    'registerNo': 'Регистрийн дугаар',
+    'vatPayer': 'НӨАТ төлөгч',
+    'version': 'Хувилбар',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final rows = <MapEntry<String, String>>[];
+    void collect(Map<dynamic, dynamic> m) {
+      for (final e in m.entries) {
+        final key = e.key.toString();
+        final v = e.value;
+        if (v is Map) {
+          collect(v);
+          continue;
+        }
+        if (v == null || v is List) continue;
+        final text = v.toString().trim();
+        if (text.isEmpty) continue;
+        final label = _labels[key];
+        if (label == null) continue;
+        rows.add(MapEntry(label, text));
+      }
+    }
+
+    collect(info);
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          for (final r in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 150,
+                    child: Text(
+                      r.key,
+                      style: tt.bodySmall
+                          ?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      r.value,
+                      style: tt.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

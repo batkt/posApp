@@ -6,6 +6,7 @@ import '../../models/locale_model.dart';
 import '../../models/pos_session.dart';
 import '../../services/staff_admin_service.dart';
 import '../../staff/staff_license_group_builder.dart';
+import '../../utils/app_snackbar.dart';
 
 /// Admin-only: list employees and open per-user permission editor (web
 /// `hereglegchBurtgel` + `erkhiinTokhirgooModal`).
@@ -269,9 +270,7 @@ class _StaffPermissionEditorScreenState extends State<StaffPermissionEditorScree
     if (row.switchDisabled) return;
     if (value) {
       if (row.remaining <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context).tr('staff_admin_slots'))),
-        );
+        showAppSnackBar(context, AppLocalizations.of(context).tr('staff_admin_slots'));
         return;
       }
       row.remaining--;
@@ -301,17 +300,21 @@ class _StaffPermissionEditorScreenState extends State<StaffPermissionEditorScree
     return false;
   }
 
+  /// Илгээж байх хугацаанд товчийг идэвхгүй болгоно — олон дарахад
+  /// хүсэлт давхардаж илгээгддэг байв.
+  bool _saving = false;
+
   Future<void> _save() async {
+    if (_saving) return;
     final l10n = AppLocalizations.of(context);
     if (!_hasAnyWindowRoute()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('staff_admin_need_route'))),
-      );
+      showAppSnackBar(context, l10n.tr('staff_admin_need_route'));
       return;
     }
     final pos = context.read<AuthModel>().posSession;
     if (pos == null) return;
 
+    setState(() => _saving = true);
     final res = await staffAdminService.saveStaffPermissions(
       ajiltaniiId: widget.ajiltanId,
       baiguullagiinId: pos.baiguullagiinId,
@@ -319,15 +322,12 @@ class _StaffPermissionEditorScreenState extends State<StaffPermissionEditorScree
       salbaruud: _salbaruud,
     );
     if (!mounted) return;
+    setState(() => _saving = false);
     if (res.success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.tr('staff_admin_saved'))),
-      );
+      showAppSnackBar(context, l10n.tr('staff_admin_saved'));
       Navigator.pop(context);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res.message ?? l10n.tr('staff_admin_save_failed'))),
-      );
+      showAppSnackBar(context, res.message ?? l10n.tr('staff_admin_save_failed'));
     }
   }
 
@@ -350,7 +350,7 @@ class _StaffPermissionEditorScreenState extends State<StaffPermissionEditorScree
         actions: [
           if (!_loading && _loadError == null)
             TextButton(
-              onPressed: _save,
+              onPressed: _saving ? null : _save,
               child: Text(l10n.tr('save')),
             ),
         ],
@@ -452,8 +452,15 @@ class _StaffPermissionEditorScreenState extends State<StaffPermissionEditorScree
                     ],
                     const SizedBox(height: 24),
                     FilledButton.icon(
-                      onPressed: _save,
-                      icon: const Icon(Icons.save_rounded),
+                      onPressed: _saving ? null : _save,
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_rounded),
                       label: Text(l10n.tr('save')),
                     ),
                     const SizedBox(height: 32),

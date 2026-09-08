@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:posease/models/cart_model.dart';
+import 'package:posease/models/inventory_model.dart';
 import 'package:posease/models/sales_model.dart';
 
 Product _product({
@@ -34,6 +35,7 @@ Map<String, dynamic> _serverRow({
   String? uramshuulaliinId,
   double? undsenZarakhUne,
   bool dorvonNegGiftLine = false,
+  num? dorvonNegOriginalShirkheg,
 }) {
   return {
     '_id': id,
@@ -48,6 +50,8 @@ Map<String, dynamic> _serverRow({
     if (uramshuulaliinId != null) 'uramshuulaliinId': uramshuulaliinId,
     if (undsenZarakhUne != null) 'undsenZarakhUne': undsenZarakhUne,
     if (dorvonNegGiftLine) 'dorvonNegGiftLine': true,
+    if (dorvonNegOriginalShirkheg != null)
+      'dorvonNegOriginalShirkheg': dorvonNegOriginalShirkheg,
   };
 }
 
@@ -255,6 +259,296 @@ void main() {
         (row['shirkheg'] as num) * (row['niitUne'] as num),
         sales.lineGrossBase,
       );
+    });
+  });
+
+  group('Сагсны тоо ширхэг — бэлэг мөр хуваагдсан үед', () {
+    test('"N-т 1 үнэгүй" мөрийг хуваахад тоо нь НИЙЛБЭРЭЭРЭЭ гарна', () {
+      final sales = SalesModel();
+      final p = _product(id: 'p1', code: '10041', price: 5800);
+      sales.addToSale(p);
+      sales.updateSaleQuantity(p.id, 3);
+      expect(sales.qtyForProduct(p), 3);
+      expect(sales.uniqueSaleItems, 1);
+
+      // Сервер 3 ширхэгийг 2 төлбөртэй + 1 бэлэг болгон ХУВААНА. Бэлэг мөр
+      // нь `<id>_gift_<promoId>` гэсэн ӨӨР `_id`-тэй ирдэг.
+      sales.applyUramshuulalResult(
+        songogdsonEmnuud: [
+          _serverRow(id: 'p1', code: '10041', niitUne: 5800, shirkheg: 2),
+          _serverRow(
+            id: 'p1_gift_promoA',
+            code: '10041',
+            niitUne: 0,
+            shirkheg: 1,
+            uramshuulaliinId: 'promoA',
+            undsenZarakhUne: 5800,
+            dorvonNegGiftLine: true,
+          ),
+        ],
+      );
+
+      // Сагсанд 2 мөр боловч БАРАА нь нэг, ширхэг нь 3.
+      expect(sales.currentSaleItems, hasLength(2));
+      // Өмнө нь зөвхөн эхний мөрийг уншдаг байсан тул "×2" гэж харагдаж,
+      // "+" дарахад тоо нь урагш-хойш үсэрдэг байв.
+      expect(sales.qtyForProduct(p), 3);
+      // "2 төрөл" гэж тоологдохоо болино.
+      expect(sales.uniqueSaleItems, 1);
+    });
+
+    test('өөр барааны бэлэг тусдаа төрөл хэвээр', () {
+      final sales = SalesModel();
+      final base = _product(id: 'p10020', code: '10020', price: 5000);
+      sales.addToSale(base);
+      sales.applyUramshuulalResult(
+        songogdsonEmnuud: [
+          _serverRow(id: 'p10020', code: '10020', niitUne: 5000, shirkheg: 3),
+          _serverRow(
+            id: 'p10095_gift_promo1',
+            code: '10095',
+            niitUne: 0,
+            shirkheg: 1,
+            uramshuulaliinId: 'promo1',
+            undsenZarakhUne: 1200,
+          ),
+        ],
+      );
+      // 10095 бол ӨӨР бараа — 10020-ийн тоонд орохгүй.
+      expect(sales.qtyForProduct(base), 3);
+      expect(sales.uniqueSaleItems, 2);
+    });
+  });
+
+  group('Үлдэгдэл — "−" дарахад', () {
+    test('зөвхөн бэлэг мөр үлдсэн ч хасалт амжилттай болно', () {
+      final sales = SalesModel();
+      final p = _product(id: 'p1', code: '10041', price: 5800);
+      sales.addToSale(p);
+
+      // Сервер бүх ширхэгийг үнэгүй болгож, ТӨЛБӨРТЭЙ мөр үлдсэнгүй —
+      // мөрийн `_id` нь `<id>_gift_<promoId>` болж өөрчлөгдсөн.
+      sales.applyUramshuulalResult(
+        songogdsonEmnuud: [
+          _serverRow(
+            id: 'p1_gift_promoA',
+            code: '10041',
+            niitUne: 0,
+            shirkheg: 1,
+            uramshuulaliinId: 'promoA',
+            undsenZarakhUne: 5800,
+            dorvonNegGiftLine: true,
+          ),
+        ],
+      );
+      expect(sales.qtyForProduct(p), 1);
+
+      // Өмнө нь `_id`-гээр олдохгүй тул `false`-той адил чимээгүй өнгөрч,
+      // дуудагч нь үлдэгдлийг нэмсээр байдаг тул "−" дарах тусам үлдэгдэл
+      // өсдөг байв.
+      expect(sales.decrementSaleQuantity(p), isTrue);
+      expect(sales.qtyForProduct(p), 0);
+
+      // Сагс хоосорсны дараа дахин хасах гэвэл ХУДАЛ буцаана — дуудагч
+      // үлдэгдлийг нэмэхгүй.
+      expect(sales.decrementSaleQuantity(p), isFalse);
+    });
+
+    test('төлбөртэй мөрийг бэлгээс нь ӨМНӨ хасна', () {
+      final sales = SalesModel();
+      final p = _product(id: 'p1', code: '10041', price: 5800);
+      sales.addToSale(p);
+      sales.applyUramshuulalResult(
+        songogdsonEmnuud: [
+          _serverRow(id: 'p1', code: '10041', niitUne: 5800, shirkheg: 2),
+          _serverRow(
+            id: 'p1_gift_promoA',
+            code: '10041',
+            niitUne: 0,
+            shirkheg: 1,
+            uramshuulaliinId: 'promoA',
+            undsenZarakhUne: 5800,
+            dorvonNegGiftLine: true,
+          ),
+        ],
+      );
+      expect(sales.qtyForProduct(p), 3);
+      expect(sales.decrementSaleQuantity(p), isTrue);
+      expect(sales.qtyForProduct(p), 2);
+      // Бэлэг мөр хэвээрээ.
+      expect(sales.currentSaleItems.where((e) => e.isGiftLine), hasLength(1));
+    });
+
+    test('сагсанд огт байхгүй бараанд худал буцаана', () {
+      final sales = SalesModel();
+      expect(sales.decrementSaleQuantity(_product(id: 'x', code: 'X', price: 1)), isFalse);
+    });
+  });
+
+  group('Үлдэгдэл ба сагс салахгүй байх', () {
+    /// Хамгаалж буй ХУУЛЬ: аль ч дараалалд
+    ///     үлдэгдэл + сагсан дахь тоо == анхны үлдэгдэл
+    /// Өмнө нь [InventoryModel.deductStock] нь 0 дээр таслагддаг байсан
+    /// атал [InventoryModel.restock] дээд хязгааргүй байсан тул "+"-г
+    /// үлдэгдлээс илүү даргаад "−" дарах бүрд үлдэгдэл өсдөг байв.
+    int stockOf(InventoryModel inv, String id) =>
+        inv.getInventoryItem(id)!.currentStock;
+
+    test('"+"-г үлдэгдлээс илүү дарахад ч сагстайгаа таарна', () {
+      final inventory = InventoryModel();
+      final sales = SalesModel();
+      final p = _product(id: 'p1', code: '10041', price: 5800, uldegdel: 3);
+      inventory.addProduct(p, initialStock: 3);
+
+      // Кассчин "+"-г 10 удаа спамдав (үлдэгдэл ердөө 3).
+      for (var i = 0; i < 10; i++) {
+        expect(inventory.deductStock(p.id, 1), isTrue);
+        sales.addToSale(p);
+      }
+
+      // Илүү зарсан нь үлдэгдэл дээр ХАСАХ утгаар харагдана — нуугдахгүй.
+      expect(sales.qtyForProduct(p), 10);
+      expect(stockOf(inventory, p.id), -7);
+      expect(stockOf(inventory, p.id) + sales.qtyForProduct(p), 3);
+    });
+
+    test('"−" дарахад үлдэгдэл анхны хэмжээндээ ЯГ буцна', () {
+      final inventory = InventoryModel();
+      final sales = SalesModel();
+      final p = _product(id: 'p1', code: '10041', price: 5800, uldegdel: 3);
+      inventory.addProduct(p, initialStock: 3);
+
+      for (var i = 0; i < 10; i++) {
+        if (inventory.deductStock(p.id, 1)) sales.addToSale(p);
+      }
+      // Одоо "−"-г 10 удаа спамдав.
+      for (var i = 0; i < 10; i++) {
+        if (sales.decrementSaleQuantity(p)) inventory.restock(p.id, 1);
+      }
+
+      // Сагс хоосорч, үлдэгдэл нь ЯГ анхны 3 болно — илүү ГАРАХГҮЙ.
+      expect(sales.qtyForProduct(p), 0);
+      expect(stockOf(inventory, p.id), 3);
+    });
+
+    test('"+"/"−"-г холилдуулан дарсан ч нийлбэр хадгалагдана', () {
+      final inventory = InventoryModel();
+      final sales = SalesModel();
+      final p = _product(id: 'p1', code: '10041', price: 5800, uldegdel: 2);
+      inventory.addProduct(p, initialStock: 2);
+
+      // + + + + + − − + − − − − (үлдэгдлээс хэд дахин хэтэрнэ, эцэст нь тэг)
+      const taps = [1, 1, 1, 1, 1, -1, -1, 1, -1, -1, -1, -1];
+      for (final tap in taps) {
+        if (tap > 0) {
+          if (inventory.deductStock(p.id, 1)) sales.addToSale(p);
+        } else {
+          if (sales.decrementSaleQuantity(p)) inventory.restock(p.id, 1);
+        }
+        expect(
+          stockOf(inventory, p.id) + sales.qtyForProduct(p),
+          2,
+          reason: 'Үлдэгдэл ба сагс салсан байна',
+        );
+      }
+      expect(sales.qtyForProduct(p), 0);
+      expect(stockOf(inventory, p.id), 2);
+    });
+
+    test('сагснаас бүтнээр нь хасахад ч нийлбэр хадгалагдана', () {
+      final inventory = InventoryModel();
+      final sales = SalesModel();
+      final p = _product(id: 'p1', code: '10041', price: 5800, uldegdel: 4);
+      inventory.addProduct(p, initialStock: 4);
+
+      for (var i = 0; i < 6; i++) {
+        if (inventory.deductStock(p.id, 1)) sales.addToSale(p);
+      }
+      expect(stockOf(inventory, p.id), -2);
+
+      final qty = sales.qtyForProduct(p);
+      sales.removeFromSale(p.id);
+      inventory.restock(p.id, qty);
+
+      expect(sales.qtyForProduct(p), 0);
+      expect(stockOf(inventory, p.id), 4);
+    });
+
+    test('агуулахад байхгүй бараанд худал буцаана', () {
+      final inventory = InventoryModel();
+      expect(inventory.deductStock('yhgui', 1), isFalse);
+    });
+  });
+
+  group('"N-т 1 үнэгүй" — тоог цааш нэмэх', () {
+    /// Сервер (`routes/uramshuulalHunglultRoute.js`) нь мөр дээр
+    /// `dorvonNegOriginalShirkheg` байвал `shirkheg`-ийг ТҮҮГЭЭР дарж бичдэг:
+    ///
+    ///     if (hadPriorSplit) mur.shirkheg = mur.dorvonNegOriginalShirkheg;
+    ///
+    /// Тиймээс хуучирсан тэмдэглэгээг буцааж илгээвэл кассчины шинэ тоо
+    /// хаягдана. Доорх шалгалтууд түүнээс хамгаална.
+    late SalesModel sales;
+    late Product p;
+
+    setUp(() {
+      sales = SalesModel();
+      p = _product(id: 'p1', code: '10092', price: 5000);
+      sales.addToSale(p);
+      // Сервер 3 ширхэгийг 2 төлбөртэй + 1 бэлэг болгож хуваасан.
+      sales.applyUramshuulalResult(
+        songogdsonEmnuud: [
+          _serverRow(
+            id: 'p1',
+            code: '10092',
+            niitUne: 5000,
+            shirkheg: 2,
+            dorvonNegOriginalShirkheg: 3,
+          ),
+          _serverRow(
+            id: 'p1_gift_promoA',
+            code: '10092',
+            niitUne: 0,
+            shirkheg: 1,
+            uramshuulaliinId: 'promoA',
+            undsenZarakhUne: 5000,
+            dorvonNegGiftLine: true,
+          ),
+        ],
+      );
+    });
+
+    Map<String, dynamic> paidRow() => sales
+        .buildUramshuulalRows(fallbackSalbariinId: 'salbar1')
+        .firstWhere((r) => r['dorvonNegGiftLine'] != true);
+
+    test('юу ч өөрчлөөгүй бол тэмдэглэгээ ХЭВЭЭР буцна', () {
+      expect(sales.qtyForProduct(p), 3);
+      // Сервер энэ тэмдэглэгээгээр 3-ыг сэргээж, дахин 2+1 болгож хуваана.
+      expect(paidRow()['dorvonNegOriginalShirkheg'], 3);
+      expect(paidRow()['shirkheg'], 2);
+    });
+
+    test('"+" дарсны дараа хуучирсан тэмдэглэгээ БУЦАХГҮЙ', () {
+      sales.addToSale(p);
+      expect(sales.qtyForProduct(p), 4);
+
+      final row = paidRow();
+      // Тэмдэглэгээ хэвээр явбал сервер `shirkheg`-ийг 3 болгож дарж бичээд
+      // кассчины нэмэлтийг хаядаг — сагс 2 төлбөртэй дээр гялж зогсоно.
+      expect(
+        row.containsKey('dorvonNegOriginalShirkheg'),
+        isFalse,
+        reason: 'Хуучирсан dorvonNegOriginalShirkheg буцаж илгээгдэж байна',
+      );
+      expect(row['shirkheg'], 3);
+    });
+
+    test('"−" дарсны дараа ч хуучирсан тэмдэглэгээ БУЦАХГҮЙ', () {
+      expect(sales.decrementSaleQuantity(p), isTrue);
+      final row = paidRow();
+      expect(row.containsKey('dorvonNegOriginalShirkheg'), isFalse);
+      expect(row['shirkheg'], 1);
     });
   });
 }

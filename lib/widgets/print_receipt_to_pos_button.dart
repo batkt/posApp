@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/socket_service.dart';
 import '../services/terminal_barimt_signal_service.dart';
+import '../utils/app_snackbar.dart';
 
 /// Button to trigger a remote E-Barimt / receipt print request to the POS thermal printer.
 class PrintReceiptToPosButton extends StatefulWidget {
@@ -67,23 +68,14 @@ class _PrintReceiptToPosButtonState extends State<PrintReceiptToPosButton> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ПОС терминал руу баримт хэвлэх хүсэлт амжилттай илгээгдлээ!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        showAppSnackBar(context, 'ПОС терминал руу баримт хэвлэх хүсэлт амжилттай илгээгдлээ!');
       }
       widget.onSuccess?.call();
     } catch (e, st) {
       debugPrint('[PrintReceiptToPosButton] Error sending print request: $e\n$st');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Алдаа: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
+        showAppSnackBar(context, 'Алдаа: $e',
+            variant: AppSnackVariant.error);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

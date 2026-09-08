@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/app_snackbar.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -44,13 +45,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (success) {
       setState(() => _codeSent = true);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Утасны дугаар олдсонгүй. Шалгаад дахин оролдоно уу.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      showAppSnackBar(context, 'Утасны дугаар олдсонгүй. Шалгаад дахин оролдоно уу.', variant: AppSnackVariant.error);
     }
   }
 
@@ -68,20 +63,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     
     if (!mounted) return;
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Нууц үг амжилттай солигдлоо. Шинэ нууц үгээрээ нэвтэрнэ үү.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+      showAppSnackBar(context, 'Нууц үг амжилттай солигдлоо. Шинэ нууц үгээрээ нэвтэрнэ үү.', variant: AppSnackVariant.success);
       Navigator.pop(context); // close forgot password screen
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Код буруу эсвэл алдаа гарлаа.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      showAppSnackBar(context, 'Код буруу эсвэл алдаа гарлаа.', variant: AppSnackVariant.error);
     }
   }
 

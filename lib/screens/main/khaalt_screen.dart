@@ -11,6 +11,7 @@ import '../../services/khaalt_service.dart';
 import '../../services/pos_settings_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
+import '../../utils/app_snackbar.dart';
 
 /// Web parity: cash drawer close (`khaalt`) with denomination counts.
 class KhaaltScreen extends StatefulWidget {
@@ -261,12 +262,7 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
     }
 
     if (mungunTemdegt.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.tr('khaalt_need_counts')),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      showAppSnackBar(context, l10n.tr('khaalt_need_counts'));
       return;
     }
 
@@ -275,25 +271,13 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
     if (last != null) {
       final lastD = _dateOnly(last);
       if (!sel.isAfter(lastD)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.tr('khaalt_date_invalid')),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: AppColors.error,
-          ),
-        );
+        showAppSnackBar(context, l10n.tr('khaalt_date_invalid'), variant: AppSnackVariant.error);
         return;
       }
     }
 
     if (sel.isAfter(_lastSelectableDay)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.tr('khaalt_date_invalid')),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppColors.error,
-        ),
-      );
+      showAppSnackBar(context, l10n.tr('khaalt_date_invalid'), variant: AppSnackVariant.error);
       return;
     }
 
@@ -318,22 +302,10 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
         c.clear();
       }
       _tailbarController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.tr('khaalt_success')),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppColors.success,
-        ),
-      );
+      showAppSnackBar(context, l10n.tr('khaalt_success'), variant: AppSnackVariant.success);
       await _load();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.tr('khaalt_submit_failed')),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppColors.error,
-        ),
-      );
+      showAppSnackBar(context, l10n.tr('khaalt_submit_failed'), variant: AppSnackVariant.error);
     }
   }
 

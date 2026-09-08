@@ -160,12 +160,23 @@ class AuthModel extends ChangeNotifier {
       (_currentUser != null && _currentUser!.role == UserRole.admin) ||
       _staffAccess.allowsDashboard;
 
+  /// Нэрийг нь татах хүсэлт давхардуулахгүй байх түгжээ.
+  bool _branchOptionsLoading = false;
+
+  /// 24 оронтой hex — MongoDB `_id`. Хэрэглэгчид ХЭЗЭЭ Ч ийм зүйл
+  /// харуулахгүй (жиш. "Салбар солих: 65fa73c763d5f2fa7010198c").
+  static bool _looksLikeMongoId(String v) =>
+      RegExp(r'^[a-f\d]{24}$', caseSensitive: false).hasMatch(v.trim());
+
   /// Loads org branch list for admins / multi-branch users if not loaded yet.
   Future<void> ensureBranchOptionsLoaded() async {
     final session = _posSession;
     if (session == null) return;
+    if (_branchOptionsLoading) return;
+    if (_allBranchOptions != null && _allBranchOptions!.isNotEmpty) return;
     final bid = session.baiguullagiinId.trim();
     if (bid.isEmpty) return;
+    _branchOptionsLoading = true;
     try {
       final settings = PosSettingsService(api: posApiService);
       final orgRows = await settings.fetchSalbaruud(bid);
@@ -176,10 +187,13 @@ class AuthModel extends ChangeNotifier {
           notifyListeners();
         }
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _branchOptionsLoading = false;
+    }
   }
 
-  /// Label for the active `salbariinId` within [branchSwitchOptions], else raw id.
+ 
   String get activeSalbariinLabel {
     final id = _posSession?.salbariinId;
     if (id == null || id.isEmpty) return '';
@@ -190,6 +204,11 @@ class AuthModel extends ChangeNotifier {
       for (final b in _allBranchOptions!) {
         if (b.id == id && b.label != b.id) return b.label;
       }
+    }
+    if (_looksLikeMongoId(id)) {
+      // Нэр нь хараахан ирээгүй — ар талаар нь татаад, одоохондоо хоосон.
+      unawaited(ensureBranchOptionsLoaded());
+      return '';
     }
     return id;
   }

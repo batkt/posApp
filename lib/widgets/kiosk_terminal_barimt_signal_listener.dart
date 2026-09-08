@@ -9,6 +9,7 @@ import '../services/background_watchdog_service.dart';
 import '../services/socket_service.dart';
 import '../services/terminal_barimt_signal_service.dart';
 import 'visual_receipt_renderer.dart';
+import '../utils/app_snackbar.dart';
 
 /// Wraps POS screen. Listens for remote receipt print requests over Socket.IO
 /// and HTTP polling, prints them on POS thermal printer, and marks completed.
@@ -132,14 +133,7 @@ class _KioskTerminalBarimtSignalListenerState
       // Show snackbar on POS terminal if foreground UI is active
       if (mounted && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
         try {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Баримт хэвлэх хүсэлт ирлээ (${item.initiatorNer.isNotEmpty ? item.initiatorNer : "Ажилтан"})',
-              ),
-              duration: const Duration(seconds: 3),
-            ),
-          );
+          showAppSnackBar(context, 'Баримт хэвлэх хүсэлт ирлээ (${item.initiatorNer.isNotEmpty ? item.initiatorNer : "Ажилтан"})');
         } catch (_) {}
       }
 

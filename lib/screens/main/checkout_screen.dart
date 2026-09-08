@@ -13,6 +13,7 @@ import '../shared/receipt_screen.dart';
 import 'customers_screen.dart';
 import '../../models/customer_model.dart';
 import '../../models/locale_model.dart';
+import '../../utils/app_snackbar.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -128,15 +129,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     } on PosTransactionException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(posPaymentErrorUserMessage(e))),
-        );
+        showAppSnackBar(context, posPaymentErrorUserMessage(e));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(posPaymentErrorUserMessage(e))),
-        );
+        showAppSnackBar(context, posPaymentErrorUserMessage(e));
       }
     } finally {
       _paymentInFlight = false;
