@@ -947,11 +947,22 @@ class _KioskDrawerStackedPageState extends State<KioskDrawerStackedPage> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
-          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-        ),
+        // Буцах газартай бол БУЦАХ сум, эс бөгөөс цэсний товч.
+        //
+        // Өмнө нь цэснээс нээсэн бүх хуудас ☰-тэй байсан тул кассчин
+        // өмнөх дэлгэц рүүгээ буцах замгүй үлддэг байв. Цэс нь зүүн
+        // ирмэгээс шудрахад нээгдсээр байна.
+        leading: Navigator.of(context).canPop()
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: () => Navigator.of(context).maybePop(),
+              )
+            : IconButton(
+                icon: const Icon(Icons.menu),
+                tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
+                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              ),
       ),
       body: widget.body,
     );

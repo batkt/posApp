@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+import 'package:flutter/foundation.dart'
+    show debugPrint, kDebugMode, visibleForTesting;
 import 'package:http/http.dart' as http;
 import 'network_usage_service.dart';
 
@@ -248,6 +249,61 @@ class ApiService {
     }
   }
 
+  /// Токен хүчингүй болоход дуудагдана — `main.dart` энд албан гаралт бүртгэнэ.
+  ///
+  /// Аль ч [ApiService] инстанс (`apiService`, `posApiService`) нэг л
+  /// хандагчийг хуваалцахын тулд `static`.
+  static void Function(String message)? onSessionExpired;
+
+  /// Токен хугацаа нь дууссаныг МЭДЭЭНИЙ АГУУЛГААР танина.
+  ///
+  /// posBack-ийн `tokenShalgakh` нь `jsonwebtoken`-ий алдааг шууд дамжуулж,
+  /// [aldaaBarigch] нь `err.kod` байхгүй үед үүнийг **HTTP 500**-аар
+  /// `{ success: false, aldaa: "jwt expired" }` болгон буцаадаг. Тиймээс
+  /// зөвхөн 401 статусаар шүүвэл хугацаа дууссан session-ыг олж чадахгүй.
+  @visibleForTesting
+  static bool isSessionExpiredMessage(String? message) {
+    if (message == null) return false;
+    final m = message.toLowerCase();
+    if (m.contains('tokenexpirederror') || m.contains('jsonwebtokenerror')) {
+      return true;
+    }
+    if (m.contains('jwt') &&
+        (m.contains('expired') ||
+            m.contains('malformed') ||
+            m.contains('invalid') ||
+            m.contains('must be provided'))) {
+      return true;
+    }
+    return m.contains('token expired') ||
+        m.contains('invalid token') ||
+        m.contains('invalid signature');
+  }
+
+  /// Зөвхөн токентой байж байгаад унасан хүсэлтэд гаргана.
+  ///
+  /// Нэвтрэх хүсэлт (токенгүй) 401 буцаахад хэрэглэгчийг "хөөж гаргах"
+  /// зүйл байхгүй — тэнд буруу нууц үгийн мэдэгдэл л харагдана.
+  void _reportSessionExpired(String message) {
+    if (_token == null || _token!.isEmpty) return;
+    onSessionExpired?.call(message);
+  }
+
+  /// Амжилтгүй хариунд токены алдаа илэрвэл гаралт бүртгээд таслана.
+  ///
+  /// Зөвхөн АМЖИЛТГҮЙ хариун дээр дуудна — амжилттай хариуны `message`
+  /// талбарт санамсаргүй таарсан үг гаралт үүсгэхээс сэргийлнэ.
+  void _throwIfSessionExpired(String? errMsg, int statusCode) {
+    if (!isSessionExpiredMessage(errMsg) && statusCode != 401) return;
+    final message = errMsg ?? 'Нэвтрэх хугацаа дууссан байна';
+    _reportSessionExpired(message);
+    throw ApiException(
+      message,
+      statusCode: statusCode,
+      code: 'SESSION_EXPIRED',
+    );
+  }
+
   /// posBack [aldaaBarigch] uses `{ success: false, aldaa: "…" }` even with HTTP 500.
   static String? _messageFromErrorBody(String raw) {
     if (raw.isEmpty) return null;
@@ -277,8 +333,9 @@ class ApiService {
     final statusCode = response.statusCode;
     final raw = response.body;
     final errMsg = _messageFromErrorBody(raw);
+    final isOkStatus = statusCode >= 200 && statusCode < 300;
 
-    if (statusCode >= 200 && statusCode < 300) {
+    if (isOkStatus) {
       if (raw.isEmpty) {
         return ApiResponse<T>(
           success: true,
@@ -293,6 +350,7 @@ class ApiService {
         decoded = raw;
       }
       if (decoded is Map && decoded['success'] == false) {
+        _throwIfSessionExpired(errMsg, statusCode);
         throw ApiException(
           errMsg ?? 'Request failed',
           statusCode: statusCode,
@@ -306,13 +364,13 @@ class ApiService {
             : decoded as T?,
         statusCode: statusCode,
       );
-    } else if (statusCode == 401) {
-      throw ApiException(
-        errMsg ?? 'Unauthorized',
-        statusCode: statusCode,
-        code: 'UNAUTHORIZED',
-      );
-    } else if (statusCode == 403) {
+    }
+
+    // Токен хугацаа дуусахыг статус кодоос ҮЛ ХАМААРАН барина: posBack үүнийг
+    // 401 биш, 500-аар ч буцаадаг (дээрх [isSessionExpiredMessage]-г үз).
+    _throwIfSessionExpired(errMsg, statusCode);
+
+    if (statusCode == 403) {
       throw ApiException(
         errMsg ?? 'Forbidden',
         statusCode: statusCode,

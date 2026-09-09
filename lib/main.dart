@@ -17,6 +17,8 @@ import 'screens/main/branch_select_screen.dart';
 import 'theme/app_theme.dart';
 import 'services/version_service.dart';
 import 'services/api_service.dart';
+import 'services/inactivity_monitor.dart';
+import 'utils/app_snackbar.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'services/network_usage_service.dart';
 import 'services/background_watchdog_service.dart';
@@ -50,13 +52,105 @@ void main() async {
   runApp(POSApp(authModel: authModel));
 }
 
-class POSApp extends StatelessWidget {
+class POSApp extends StatefulWidget {
   const POSApp({super.key, required this.authModel});
 
   final AuthModel authModel;
 
+  /// Токен хугацаа дуусахад дэлгэцүүдийг ХААХАД хэрэгтэй — session нь
+  /// дурын дэлгэцээс (Navigator.push-аар овоолсон) унаж болно.
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
+  @override
+  State<POSApp> createState() => _POSAppState();
+}
+
+class _POSAppState extends State<POSApp> {
+  /// `logout()` өөрөө `/garah`-руу хүсэлт явуулдаг ба тэр нь мөн хугацаа
+  /// дууссан токентой тул дахин энэ хандагчийг дуудна — давхар гаралтаас
+  /// хамгаална.
+  bool _handlingSessionExpiry = false;
+
+  /// 15 минут идэвхгүй байвал сешнийг автоматаар хаана.
+  late final InactivityMonitor _inactivity =
+      InactivityMonitor(onTimeout: _handleInactivityTimeout);
+
+  @override
+  void initState() {
+    super.initState();
+    ApiService.onSessionExpired = _handleSessionExpired;
+    widget.authModel.addListener(_syncInactivityMonitor);
+    _syncInactivityMonitor();
+  }
+
+  /// Зөвхөн НЭВТЭРСЭН үед тоолно — нэвтрэх дэлгэц дээр хүлээж байгаа хүнийг
+  /// "гаргах" зүйл байхгүй.
+  void _syncInactivityMonitor() {
+    final loggedIn = widget.authModel.isLoggedIn;
+    if (loggedIn && !_inactivity.isRunning) {
+      _inactivity.start();
+    } else if (!loggedIn && _inactivity.isRunning) {
+      _inactivity.stop();
+    }
+  }
+
+  Future<void> _handleInactivityTimeout() async {
+    if (!widget.authModel.isLoggedIn) return;
+    await widget.authModel.logout();
+    POSApp.navigatorKey.currentState?.popUntil((route) => route.isFirst);
+    final ctx = POSApp.navigatorKey.currentContext;
+    if (ctx != null && ctx.mounted) {
+      showAppSnackBar(
+        ctx,
+        'Удаан хугацаанд үйлдэл хийгээгүй тул системээс гарлаа.',
+        variant: AppSnackVariant.warning,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    if (ApiService.onSessionExpired == _handleSessionExpired) {
+      ApiService.onSessionExpired = null;
+    }
+    widget.authModel.removeListener(_syncInactivityMonitor);
+    _inactivity.dispose();
+    super.dispose();
+  }
+
+  /// Сервер `{"success": false, "aldaa": "jwt expired"}` буцаавал session-ыг
+  /// шууд дуусгаж [LoginScreen] руу буцаана.
+  void _handleSessionExpired(String message) {
+    if (_handlingSessionExpiry) return;
+    final auth = widget.authModel;
+    if (!auth.isLoggedIn && !auth.isAuthenticated) return;
+    _handlingSessionExpiry = true;
+
+    // Хүсэлтийн хариу нь build-ийн дундаас ирж болзошгүй тул кадрын дараа.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await auth.logout();
+        // Овоолсон дэлгэцүүдийг хааж [AuthWrapper] руу буцаана — эс тэгвээс
+        // хугацаа дууссан ч кассын цонх нээлттэй хэвээр үлдэнэ.
+        POSApp.navigatorKey.currentState?.popUntil((route) => route.isFirst);
+        final ctx = POSApp.navigatorKey.currentContext;
+        if (ctx != null && ctx.mounted) {
+          showAppSnackBar(
+            ctx,
+            'Нэвтрэх хугацаа дууссан тул дахин нэвтэрнэ үү.',
+            variant: AppSnackVariant.error,
+          );
+        }
+      } finally {
+        _handlingSessionExpiry = false;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final authModel = widget.authModel;
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => LocaleModel()),
@@ -97,6 +191,7 @@ class POSApp extends StatelessWidget {
         builder: (context, localeModel, child) {
           return MaterialApp(
             title: 'posEase',
+            navigatorKey: POSApp.navigatorKey,
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
@@ -131,7 +226,15 @@ class POSApp extends StatelessWidget {
                     maxScaleFactor: 1.15,
                   ),
                 ),
-                child: child ?? const SizedBox.shrink(),
+                // Дурын хүрэлт/гүйлгэлт/товчлуур нь идэвхгүй байдлын тоолуурыг
+                // тэглэнэ. `Listener` нь HitTest-ээс ӨМНӨ дуудагддаг тул доорх
+                // товчнуудын ажиллагаанд огт саад болохгүй.
+                child: Listener(
+                  behavior: HitTestBehavior.translucent,
+                  onPointerDown: (_) => _inactivity.registerActivity(),
+                  onPointerSignal: (_) => _inactivity.registerActivity(),
+                  child: child ?? const SizedBox.shrink(),
+                ),
               );
             },
           );

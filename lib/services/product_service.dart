@@ -357,6 +357,13 @@ class ProductService {
 
   /// `PUT /aguulakh/:id` — same as web inventory edit (posBack `crud`).
   /// [fields] are merged on the server; always include [baiguullagiinId] and [salbariinId] for scoping.
+  /// Барааг засах — вэбийн `baraaZasakh` модалтай ЯГ ижил эндпойнт.
+  ///
+  /// Ерөнхий CRUD (`PUT /aguulakh/:id`) руу бичихээ БОЛИВ: тэр нь
+  ///   * `BaraaUneTuukh` (үнэ/өртгийн түүх) бичдэггүй,
+  ///   * НӨАТ/НХАТ-ын дүнг дахин тооцдоггүй,
+  ///   * олон баркодтой эцгийн `uldegdel`-ийг хүүхдүүдийнхээ нийлбэрээр
+  ///     хамгаалдаггүй тул зөв тооцсон үлдэгдлийг дарж бичих эрсдэлтэй.
   Future<({bool success, String? error})> updateAguulakh(
     String id, {
     required Map<String, dynamic> fields,
@@ -367,7 +374,7 @@ class ProductService {
     }
     try {
       final response = await _apiService.put<dynamic>(
-        '/aguulakh/$oid',
+        '/baraaZasyaa/$oid',
         body: fields,
         parser: (d) => d,
       );

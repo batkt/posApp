@@ -37,6 +37,16 @@ class InventoryItem {
 
   double get stockValue => (costPrice ?? product.price * 0.6) * currentStock;
 
+  /// Барааг БҮРТГЭСЭН мөч — "хамгийн сүүлд бүртгэсэн нь дээр" эрэмбийн түлхүүр.
+  ///
+  /// `updatedAt`-г ЗОРИУДААР эхэнд тавихгүй: хуучин барааны үнэ/үлдэгдлийг
+  /// засахад л тэр нь шинэчлэгддэг тул засварласан хуучин бараа шинэ
+  /// бүртгэлийн дээр гарч ирдэг байв.
+  DateTime? get registeredAt =>
+      product.createdAt ?? product.updatedAt ?? lastRestocked;
+
+  int get registeredAtKey => registeredAt?.millisecondsSinceEpoch ?? 0;
+
   InventoryItem copyWith({
     Product? product,
     int? currentStock,
@@ -268,13 +278,12 @@ class InventoryModel extends ChangeNotifier {
   ///
   /// Сервер `/aguulakh`-г `createdAt: -1`-ээр буцаадаг ч хуудас хуудсаар нь
   /// нийлүүлдэг тул энд тодорхой эрэмбэлж баталгаажуулна.
-  static int _newestFirstKey(InventoryItem i) =>
-      (i.product.createdAt ?? i.product.updatedAt ?? i.lastRestocked)
-          ?.millisecondsSinceEpoch ??
-      0;
-
-  static void _sortNewestFirst(List<InventoryItem> list) {
-    list.sort((a, b) => _newestFirstKey(b).compareTo(_newestFirstKey(a)));
+  static void sortNewestFirst(List<InventoryItem> list) {
+    list.sort((a, b) {
+      final byDate = b.registeredAtKey.compareTo(a.registeredAtKey);
+      if (byDate != 0) return byDate;
+      return a.product.name.compareTo(b.product.name);
+    });
   }
 
   List<InventoryItem> get filteredInventory {
@@ -301,7 +310,7 @@ class InventoryModel extends ChangeNotifier {
               true;
       return matchesCategory && matchesSearch;
     }).toList();
-    _sortNewestFirst(list);
+    sortNewestFirst(list);
     return list;
   }
 
@@ -491,6 +500,18 @@ class InventoryModel extends ChangeNotifier {
   ///
   /// Үлдэгдэлгүй барааг сагсанд огт оруулахгүй байх шийдвэрийг дуудагч
   /// (дэлгэц) гаргана — энд хориглодоггүй.
+  /// [amount]-ыг зарж болох эсэх — үлдэгдэл хүрэлцэхгүй бол `false`.
+  ///
+  /// [deductStock] нь ЗОРИУДААР хасах утга руу оруулдаг (дээрх тэнцлийг
+  /// хадгалахын тулд), тиймээс "үлдэгдлээс илүү зарахгүй" шийдвэрийг ЭНД,
+  /// дуудагчийн талд гаргана. Дэлгэц "+"-ийг үүгээр хаана.
+  bool canSell(String productId, [int amount = 1]) {
+    if (amount <= 0) return false;
+    final index = _inventory.indexWhere((item) => item.product.id == productId);
+    if (index < 0) return false;
+    return _inventory[index].currentStock >= amount;
+  }
+
   bool deductStock(String productId, int amount) {
     if (amount <= 0) return true;
     final index = _inventory.indexWhere((item) => item.product.id == productId);

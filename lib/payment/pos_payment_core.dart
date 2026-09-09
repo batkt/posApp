@@ -37,6 +37,19 @@ class PosWebTaxContext {
   /// Вэб дээрх шиг унтраалга ХАРАГДАХ эсэх.
   bool get showNuatSwitch => eBarimtShine && borluulaltNUAT;
 
+  /// Энэ борлуулалтыг НӨАТ-ГҮЙ авч байна уу.
+  ///
+  /// Нэр нь төөрөгдүүлмээр: `borluulaltNUAT` АСААЛТТАЙ үед мөрийн дүнгээс
+  /// НӨАТ нь ХАСАГДАЖ (`/1.1`), НӨАТ 0 болдог — өөрөөр хэлбэл НӨАТ-гүй
+  /// борлуулалт. Кассчин унтраалгыг асаавал ([baraaNUATModalOpen]) энгийн
+  /// НӨАТ-тай борлуулалт болно.
+  ///
+  /// Нөхцөлийг [PosPaymentCore.computeLineTaxes]-ээс ХУУЛААГҮЙ, харин
+  /// нэг эх сурвалж болгон энд төвлөрүүлэв — тэр хоёр салбал дэлгэц дээрх
+  /// дүн ба бодит тооцоо зөрнө.
+  bool get vatExcludedSale =>
+      borluulaltNUAT && isModalOpenTulbur && !baraaNUATModalOpen;
+
   /// Until settings load — typical e-barимт POS (per-product НӨАТ flags respected).
   static const PosWebTaxContext paymentDefault = PosWebTaxContext(
     borluulaltNUAT: false,
@@ -165,16 +178,11 @@ abstract final class PosPaymentCore {
       );
     }
 
-    if (ctx.borluulaltNUAT &&
-        ctx.isModalOpenTulbur &&
-        !ctx.baraaNUATModalOpen &&
-        noatBodohEsekh) {
+    if (ctx.vatExcludedSale && noatBodohEsekh) {
       z = _round2(z / 1.1);
     }
 
-    var tempNoatBodohEsekh = ctx.borluulaltNUAT &&
-            ctx.isModalOpenTulbur &&
-            !ctx.baraaNUATModalOpen
+    var tempNoatBodohEsekh = ctx.vatExcludedSale
         ? false
         : (ctx.eBarimtShine ? noatBodohEsekh : false);
 

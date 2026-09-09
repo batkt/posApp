@@ -26,6 +26,12 @@ class SaleItem {
   /// `quantity` хайрцаг × [Product.negKhairtsaganDahiShirhegiinToo].
   double? boxPiecesSold;
 
+  /// Жингийн бараа: граммаар оруулсан **бодит кг** (жишээ нь 250 гр → 0.25).
+  /// Хоосон бол `quantity` нь бүхэл кг гэж үзнэ. [boxPiecesSold]-ийн яг адил
+  /// зарчим — үлдэгдлийн нөөцлөлт нь бүхэл тоогоор явж, үнэ/API нь бутархайг
+  /// ашиглана.
+  double? soldWeightKg;
+
   /// `POST /uramshuulalShalgay` буцаасан мөрийн бүтэн бичлэг. Сервер нь
   /// урамшууллаа мөчлөг бүрт ДАХИН тооцдог тул өмнөх хариугаа (тэр дундаа
   /// `dorvonNegGiftLine`, `dorvonNegOriginalShirkheg` зэрэг зөвхөн сервер
@@ -60,6 +66,7 @@ class SaleItem {
     this.uramshuulaliinId,
     this.forceRetailPricing = false,
     this.boxPiecesSold,
+    this.soldWeightKg,
     this.serverRow,
     this.undsenZarakhUne,
     this.dorvonNegGiftLine = false,
@@ -78,6 +85,9 @@ class SaleItem {
     if (product.isBoxSaleUnit) {
       return boxPiecesSold ?? (quantity * _negPerBox);
     }
+    if (product.isWeightSaleUnit) {
+      return soldWeightKg ?? quantity.toDouble();
+    }
     return quantity.toDouble();
   }
 
@@ -86,6 +96,9 @@ class SaleItem {
     if (product.isBoxSaleUnit) {
       return effectivePieces / _negPerBox;
     }
+    if (product.isWeightSaleUnit) {
+      return effectivePieces;
+    }
     return quantity.toDouble();
   }
 
@@ -93,6 +106,10 @@ class SaleItem {
     if (product.isBoxSaleUnit) {
       final perPiece = unitPrice / _negPerBox;
       return perPiece * effectivePieces;
+    }
+    // `unitPrice` нь 1 кг-ийн үнэ тул бутархай кг-д шууд үржинэ.
+    if (product.isWeightSaleUnit) {
+      return unitPrice * effectivePieces;
     }
     return unitPrice * quantity;
   }
@@ -105,6 +122,7 @@ class SaleItem {
     String? uramshuulaliinId,
     bool? forceRetailPricing,
     double? boxPiecesSold,
+    double? soldWeightKg,
     Map<String, dynamic>? serverRow,
     double? undsenZarakhUne,
     bool? dorvonNegGiftLine,
@@ -117,6 +135,7 @@ class SaleItem {
       uramshuulaliinId: uramshuulaliinId ?? this.uramshuulaliinId,
       forceRetailPricing: forceRetailPricing ?? this.forceRetailPricing,
       boxPiecesSold: boxPiecesSold ?? this.boxPiecesSold,
+      soldWeightKg: soldWeightKg ?? this.soldWeightKg,
       serverRow: serverRow ?? this.serverRow,
       undsenZarakhUne: undsenZarakhUne ?? this.undsenZarakhUne,
       dorvonNegGiftLine: dorvonNegGiftLine ?? this.dorvonNegGiftLine,
@@ -506,8 +525,22 @@ class SalesModel extends ChangeNotifier {
     final rebuilt = <SaleItem>[];
     for (final row in songogdsonEmnuud) {
       final product = Product.fromJson(row);
-      final qty = _rowNum(row['shirkheg']);
-      if (qty <= 0) continue;
+      // `shirkheg` нь ҮРГЭЛЖ ШИРХЭГ (эсвэл жингийн бараанд кг) — [toUramshuulalRow]
+      // үүнийг [SaleItem.effectivePieces]-ээс бичдэг. Харин `quantity` нь
+      // хайрцагтай бараанд ХАЙРЦГИЙН тоо. Өмнө нь энэ хоёрыг шууд тэнцүүлдэг
+      // байсан тул урамшуулал шалгах бүрд 1 хайрцаг нь
+      // `negKhairtsaganDahiShirhegiinToo` дахин үржиж (1 → 720) байв.
+      final pieces = _rowNum(row['shirkheg']);
+      if (pieces <= 0) continue;
+      final int qtyUnits;
+      if (product.isBoxSaleUnit) {
+        final neg = product.negKhairtsaganDahiShirhegiinToo ?? 1;
+        qtyUnits = (pieces / (neg < 1 ? 1 : neg)).ceil();
+      } else if (product.isWeightSaleUnit) {
+        qtyUnits = pieces.ceil();
+      } else {
+        qtyUnits = pieces.round();
+      }
 
       final promoId = row['uramshuulaliinId']?.toString().trim();
       final isGift = promoId != null && promoId.isNotEmpty;
@@ -520,7 +553,7 @@ class SalesModel extends ChangeNotifier {
       rebuilt.add(
         SaleItem(
           product: product,
-          quantity: qty.round() < 1 ? 1 : qty.round(),
+          quantity: qtyUnits < 1 ? 1 : qtyUnits,
           unitPrice: unitPrice,
           // Бэлэг мөрийн "суурь" үнэ нь жинхэнэ үнэ нь — ингэснээр
           // [effectiveDiscount] бэлгийн дүнг хөнгөлөлт болгож тооцно.
@@ -529,7 +562,14 @@ class SalesModel extends ChangeNotifier {
               : (prior?.retailUnitPrice ?? unitPrice),
           uramshuulaliinId: isGift ? promoId : null,
           forceRetailPricing: isGift ? false : (prior?.forceRetailPricing ?? false),
-          boxPiecesSold: isGift ? null : prior?.boxPiecesSold,
+          // Серверийн буцаасан ширхэг нь эрх мэдэлтэй — бүхэлчилсэн
+          // `qtyUnits` дээр найдвал задалсан ширхэг (1.5 хайрцаг) алдагдана.
+          boxPiecesSold: isGift || !product.isBoxSaleUnit
+              ? null
+              : (pieces > 0 ? pieces : prior?.boxPiecesSold),
+          soldWeightKg: isGift || !product.isWeightSaleUnit
+              ? null
+              : (pieces > 0 ? pieces : prior?.soldWeightKg),
           serverRow: row,
           undsenZarakhUne: undsen,
           dorvonNegGiftLine: row['dorvonNegGiftLine'] == true,
@@ -624,6 +664,47 @@ class SalesModel extends ChangeNotifier {
   /// 💰 Final net payable total (subtotal - discount)
   double get total => (subtotal - effectiveDiscount).clamp(0.0, double.infinity);
 
+  /// Кассанд БОДИТООР авах дүн.
+  ///
+  /// НӨАТ-гүй борлуулалтад ([PosWebTaxContext.vatExcludedSale]) мөрийн дүнгээс
+  /// НӨАТ хасагдаж (`/1.1`) төлөх дүн буурдаг — вэбийн `posSystem/index.js`
+  /// нь `niitDun += e.zarsanNiitUne` (хуваасны дараах) → `turulruuKhiikhDun`
+  /// гэж яг үүнийг кассанд авдаг.
+  ///
+  /// Өмнө нь борлуулалтын дэлгэц [total]-ыг (хуваалтгүй) харуулдаг байсан тул
+  /// "Нийт төлөх 4,000₮" гэж бичээд, касс болон баримт дээр 3,636.36₮ гарч,
+  /// НӨАТ дахин хасагдсан мэт харагддаг байв.
+  double get payableTotal {
+    final ctx = _webTaxContext;
+    if (ctx == null || !ctx.vatExcludedSale) return total;
+    return PosPaymentCore.calculateCashierTotalsWeb(
+      lineGrossAmounts: _currentSale.map((e) => e.total.toDouble()).toList(),
+      noatBodohPerLine:
+          _currentSale.map((e) => e.product.noatBodohEsekh == true).toList(),
+      nhatBodohPerLine:
+          _currentSale.map((e) => e.product.nhatBodohEsekh == true).toList(),
+      discountMnt: 0,
+      ctx: ctx,
+    ).total;
+  }
+
+  /// НӨАТ-гүй борлуулалтад мөрийн дүнгээс ХАСАГДСАН НӨАТ.
+  ///
+  /// Үүнийг харуулахгүй бол "Дүн" ба "Нийт төлөх"-ийн зөрүү тайлбаргүй үлдэнэ.
+  double get excludedVat {
+    final diff = total - payableTotal;
+    return diff > 0.009 ? diff : 0.0;
+  }
+
+  /// НӨАТ-гүй дүн — тооцооны задаргаанд [tax]-ийн ДЭЭР харагдана.
+  ///
+  ///     нөатгүй дүн + НӨАТ == нийт төлөх
+  ///
+  /// Өмнө нь НӨАТ-ийн дээрх мөр нь НӨАТ багтсан бүтэн дүнг харуулдаг байсан
+  /// тул НӨАТ нь дүн дээр НЭМЭГДЭЖ байгаа мэт уншигдаж, задаргаа нь нийт
+  /// төлөхтэйгээ таардаггүй байв.
+  double get netTotal => (payableTotal - tax).clamp(0.0, double.infinity);
+
   // Sales history getters
   List<CompletedSale> get salesHistory => List.unmodifiable(_salesHistory);
 
@@ -681,6 +762,7 @@ class SalesModel extends ChangeNotifier {
     if (existingIndex >= 0) {
       final line = _currentSale[existingIndex];
       line.boxPiecesSold = null;
+      line.soldWeightKg = null;
       line.quantity++;
       _reapplyWholesaleForIndex(existingIndex);
     } else {
@@ -734,6 +816,48 @@ class SalesModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Картан дээрх тоо хэмжээний шошго — жингийн бараанд бодит жин.
+  ///
+  /// Жингийн мөрд "×1" гэж харуулах нь ХУДАЛ: 250 гр ч, 1 кг ч ижилхэн
+  /// харагдаж, кассчин юу нэмснээ картаас мэдэхгүй байв. Жингийн бус
+  /// бараанд `null` буцааж, картаа хэвийн "×N"-ээ хэвээр харуулна.
+  String? saleQuantityLabel(Product product) {
+    if (!product.isWeightSaleUnit) return null;
+    final kg = _currentSale
+        .where((e) => e.product.id == product.id && !e.isGiftLine)
+        .fold<double>(0, (sum, e) => sum + e.effectivePieces);
+    if (kg <= 0) return null;
+    if (kg < 1) return '${(kg * 1000).toStringAsFixed(0)}гр';
+    // Сүүлийн ач холбогдолгүй тэгүүдийг хасна: "2.50кг" биш "2.5кг".
+    final text = kg
+        .toStringAsFixed(2)
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
+    return '${text}кг';
+  }
+
+  /// Барааг сагснаас БҮРЭН хасаад нөөцөлсөн үлдэгдлийг нь буцаана.
+  ///
+  /// Картан дээрх (x) товч үүнийг дуудна. [removeFromSale] нь зөвхөн мөрийг
+  /// устгадаг тул үүнийг ганцаар дуудвал барьцаалсан үлдэгдэл "алга болж",
+  /// "сагс + үлдэгдэл == анхны үлдэгдэл" тэнцэл эвдэрнэ.
+  void removeLineRestoringStock(
+    String productId, {
+    InventoryModel? inventory,
+  }) {
+    final lines = _currentSale.where((e) => e.product.id == productId);
+    if (lines.isEmpty) return;
+    // Бэлэг мөр үлдэгдэл барьцаалдаггүй тул буцаах тооноос хасна.
+    final reserved = lines.fold<int>(
+      0,
+      (sum, e) => sum + (e.isGiftLine ? 0 : e.quantity),
+    );
+    if (inventory != null && reserved > 0) {
+      inventory.restock(productId, reserved);
+    }
+    removeFromSale(productId);
+  }
+
   void updateSaleQuantity(String productId, int quantity) {
     if (quantity <= 0) {
       removeFromSale(productId);
@@ -742,6 +866,7 @@ class SalesModel extends ChangeNotifier {
     final index = _currentSale.indexWhere((item) => item.product.id == productId);
     if (index >= 0) {
       _currentSale[index].boxPiecesSold = null;
+      _currentSale[index].soldWeightKg = null;
       _currentSale[index].quantity = quantity;
       _reapplyWholesaleForIndex(index);
       _pruneStaleDorvonNegPicks();
@@ -754,6 +879,7 @@ class SalesModel extends ChangeNotifier {
     if (index >= 0) {
       final line = _currentSale[index];
       line.boxPiecesSold = null;
+      line.soldWeightKg = null;
       line.quantity++;
       _reapplyWholesaleForIndex(index);
       _pruneStaleDorvonNegPicks();
@@ -790,6 +916,7 @@ class SalesModel extends ChangeNotifier {
     final line = _currentSale[index];
     if (line.quantity > 1) {
       line.boxPiecesSold = null;
+      line.soldWeightKg = null;
       line.quantity--;
       _reapplyWholesaleForIndex(index);
       _pruneStaleDorvonNegPicks();
@@ -826,6 +953,39 @@ class SalesModel extends ChangeNotifier {
         inventory.restock(productId, oldQty - newQty);
       } else {
         // Хайрцгийн ширхэг нь үлдэгдлээр аль хэдийн хязгаарлагдсан.
+        inventory.deductStock(productId, newQty - oldQty);
+      }
+    }
+    _reapplyWholesaleForIndex(i);
+    _pruneStaleDorvonNegPicks();
+    notifyListeners();
+  }
+
+  /// Жингийн мөрийг ГРАММААР тохируулна ([setBoxLinePieces]-ийн яг адил зарчим).
+  ///
+  /// Үлдэгдэл нь бүхэл тоо (`int`) тул нөөцлөлтийг ДЭЭШ бүхэлчилнэ: 250 гр
+  /// авахад 1 кг барьцаална. Ингэснээр хэзээ ч илүү зарахгүй бөгөөд
+  /// "сагс + үлдэгдэл == анхны үлдэгдэл" тэнцэл хэвээр хадгалагдана.
+  void setWeightLineGrams(
+    String productId,
+    double grams, {
+    InventoryModel? inventory,
+  }) {
+    final i = _currentSale.indexWhere((e) => e.product.id == productId);
+    if (i < 0) return;
+    final line = _currentSale[i];
+    if (!line.product.isWeightSaleUnit) return;
+    final maxKg =
+        (line.product.uldegdel ?? line.product.stock).toDouble();
+    final kg = (grams / 1000).clamp(0.001, maxKg <= 0 ? 0.001 : maxKg);
+    final newQty = kg.ceil().clamp(1, 999999);
+    final oldQty = line.quantity;
+    line.soldWeightKg = kg;
+    line.quantity = newQty;
+    if (inventory != null && oldQty != newQty) {
+      if (oldQty > newQty) {
+        inventory.restock(productId, oldQty - newQty);
+      } else {
         inventory.deductStock(productId, newQty - oldQty);
       }
     }

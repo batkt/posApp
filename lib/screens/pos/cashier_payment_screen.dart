@@ -1108,6 +1108,10 @@ class _SummaryPanel extends StatelessWidget {
               ],
             ),
           ),
+          // НӨАТ-гүй дүн → НӨАТ → нийт дүн. Задаргаа нь нийт дүнтэйгээ
+          // таарч байхын тулд НӨАТ-ийн ДЭЭР нь суурь дүнг харуулна.
+          if (vat > 0 || nhhat > 0)
+            _row(context, 'НӨАТ-гүй дүн', _fmtMnt(total - vat - nhhat)),
           if (vat > 0) _row(context, 'НӨАТ', _fmtMnt(vat)),
           if (excludedVat > 0.009)
             _row(context, 'НӨАТ (хасагдсан)', '−${_fmtMnt(excludedVat)}'),

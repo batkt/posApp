@@ -17,6 +17,7 @@ import '../../widgets/barcode_scan_sheet.dart';
 import '../../widgets/test_image_widget.dart';
 import '../../widgets/authenticated_image.dart';
 import '../../widgets/box_line_pieces_sheet.dart';
+import '../../widgets/weight_line_grams_sheet.dart';
 import '../../widgets/beleg_songokh_sheet.dart';
 import '../../widgets/dorvon_neg_tie_breaker_sheet.dart';
 import '../../services/terminal_tulbur_signal_service.dart';
@@ -31,6 +32,44 @@ import '../../utils/app_snackbar.dart';
 /// Урамшууллын бэлэг мөрийг нь оруулж НИЙЛБЭРЛЭНЭ — [SalesModel.qtyForProduct].
 int _saleQtyForProduct(SalesModel sales, Product product) =>
     sales.qtyForProduct(product);
+
+/// Хайрцаг задлах / грамм оруулах цонхыг нээнэ.
+///
+/// Бараа сагсанд байхгүй бол ЭХЛЭЭД нэмнэ — эс тэгвээс засах мөр байхгүй
+/// тул цонх хоосон нээгдэнэ.
+Future<void> _openQuantitySheet(
+  BuildContext context,
+  InventoryModel inventory,
+  SalesModel sales,
+  InventoryItem item,
+) async {
+  var line = sales.currentSaleItems
+      .where((e) => e.product.id == item.product.id && !e.isGiftLine)
+      .firstOrNull;
+  if (line == null) {
+    if (!inventory.canSell(item.product.id)) {
+      showAppSnackBar(context, 'Бүтээгдэхүүн дууссан',
+          variant: AppSnackVariant.error);
+      return;
+    }
+    if (!inventory.deductStock(item.product.id, 1)) {
+      showAppSnackBar(context, 'Барааны үлдэгдэл олдсонгүй',
+          variant: AppSnackVariant.error);
+      return;
+    }
+    sales.addToSale(item.product);
+    line = sales.currentSaleItems
+        .where((e) => e.product.id == item.product.id && !e.isGiftLine)
+        .firstOrNull;
+    if (line == null) return;
+  }
+  if (!context.mounted) return;
+  if (item.product.isWeightSaleUnit) {
+    await showWeightLineGramsSheet(context, line);
+  } else {
+    await showBoxLinePiecesSheet(context, line);
+  }
+}
 
 class POSScreen extends StatefulWidget {
   const POSScreen({
@@ -987,8 +1026,10 @@ class _POSScreenState extends State<POSScreen> {
                               ),
                             ),
                             Text(
+                              // Кассанд авах бодит дүн (НӨАТ-гүй борлуулалтад
+                              // хасалт хийгдсэний дараах).
                               MntAmountFormatter.formatTugrikSpaced(
-                                  sales.total),
+                                  sales.payableTotal),
                               style: tt.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w800,
                                 color: cs.primary,
@@ -1287,19 +1328,15 @@ class _POSScreenState extends State<POSScreen> {
           return i.currentStock > 0 || inThisSale > 0;
         }
 
-        DateTime stamp(InventoryItem i) =>
-            i.product.updatedAt ??
-            i.product.createdAt ??
-            i.lastRestocked ??
-            DateTime.fromMillisecondsSinceEpoch(0);
         products.sort((a, b) {
           final aa = gridShelfSortActive(a);
           final ab = gridShelfSortActive(b);
           if (aa != ab) return aa ? -1 : 1;
           // Хамгийн СҮҮЛД бүртгэсэн бараа эхэнд — өмнө нь нэрээр цагаан
           // толгойн дарааллаар эрэмбэлдэг тул шинэ бараа доогуур булагдаж,
-          // кассчин олдоггүй байв.
-          final byStamp = stamp(b).compareTo(stamp(a));
+          // кассчин олдоггүй байв. Бараа материалын дэлгэцтэй ЯГ ижил
+          // түлхүүрээр ([InventoryItem.registeredAtKey]) эрэмбэлнэ.
+          final byStamp = b.registeredAtKey.compareTo(a.registeredAtKey);
           if (byStamp != 0) return byStamp;
           return a.product.name.compareTo(b.product.name);
         });
@@ -1351,17 +1388,18 @@ class _POSScreenState extends State<POSScreen> {
               key: ValueKey(item.product.id),
               item: item,
               inSaleQuantity: inSale,
-              onTap: (item.currentStock > 0 || inSale > 0)
+              // Үлдэгдэл ҮЛДСЭН үед л "+" идэвхтэй. Өмнө нь `|| inSale > 0`
+              // байсан тул нэг ч ширхэг сагсанд орсны дараа үлдэгдэл дууссан
+              // ч "+" ажилласаар, үлдэгдэл нь "−15 хайрцаг" хүртэл хасах утга
+              // руу ордог байв. [InventoryModel.deductStock] нь тэнцлээ
+              // хадгалахын тулд хасах утгыг хориглодоггүй тул хязгаарыг ЭНД
+              // тавина ([InventoryModel.canSell]).
+              onTap: inventory.canSell(item.product.id)
                   ? () {
                       // Бараа сонгосны дараа хайлтын гар хаагдана.
                       FocusScope.of(context).unfocus();
                       // Үлдэгдлийг ХАСАЖ чадсан үед л сагсанд нэмнэ —
                       // ингэснээр сагс ба үлдэгдэл хэзээ ч салахгүй.
-                      // [InventoryModel.deductStock] нь үлдэгдлээс илүү
-                      // зарахыг хориглодоггүй (хасах утга руу орно), учир
-                      // нь "+"-г спамдах үед хориглох нь улаан мэдэгдлээр
-                      // дүүргэдэг байв. Зөвхөн бараа нь агуулахын
-                      // жагсаалтад огт байхгүй үед л амжилтгүй болно.
                       if (inventory.deductStock(item.product.id, 1)) {
                         sales.addToSale(item.product);
                         return;
@@ -1380,6 +1418,17 @@ class _POSScreenState extends State<POSScreen> {
                         inventory.restock(item.product.id, 1);
                       }
                     }
+                  : null,
+              onRemoveLineFromSale: inSale > 0
+                  ? () => sales.removeLineRestoringStock(
+                        item.product.id,
+                        inventory: inventory,
+                      )
+                  : null,
+              saleQuantityLabel: sales.saleQuantityLabel(item.product),
+              onEditQuantity: (item.product.isBoxSaleUnit ||
+                      item.product.isWeightSaleUnit)
+                  ? () => _openQuantitySheet(context, inventory, sales, item)
                   : null,
             );
           },
@@ -1425,9 +1474,15 @@ class _POSScreenState extends State<POSScreen> {
           : null,
       onIncrement: () {
         final inventory = context.read<InventoryModel>();
+        // Үлдэгдлээс ИЛҮҮ зарахыг хориглоно — сагсны мөрөн дээрх "+" нь
+        // картныхтай ижил дүрэмтэй байх ёстой, эс тэгвээс үлдэгдэл эндүүр
+        // хасах утга руу орно.
+        if (!inventory.canSell(item.product.id)) {
+          showAppSnackBar(context, 'Бүтээгдэхүүн дууссан',
+              variant: AppSnackVariant.error);
+          return;
+        }
         // Үлдэгдлийг хасаж чадсан тохиолдолд Л сагсны тоог нэмнэ.
-        // Үлдэгдэл хүрэлцэхгүй бол хориглохгүй — хасах утга руу ороод
-        // "−" дарахад яг эргэж нэмэгдэнэ (сагстайгаа салахгүй).
         if (!inventory.deductStock(item.product.id, 1)) {
           showAppSnackBar(context, 'Барааны үлдэгдэл олдсонгүй');
           return;
@@ -1706,7 +1761,28 @@ class _POSScreenState extends State<POSScreen> {
               isTotal: false,
             ),
           ],
+          // НӨАТ-гүй борлуулалтад мөрийн дүнгээс НӨАТ хасагддаг — үүнийг
+          // харуулахгүй бол "Дүн" ба "Нийт төлөх"-ийн зөрүү тайлбаргүй үлдэнэ.
+          if (sales.excludedVat > 0.009) ...[
+            const SizedBox(height: 6),
+            _buildSummaryRow(
+              context: context,
+              label: 'НӨАТ (хасагдсан)',
+              amount: -sales.excludedVat,
+              isTotal: false,
+            ),
+          ],
+          // НӨАТ-гүй дүн → НӨАТ → нийт төлөх. НӨАТ-ийн дээрх мөр нь НӨАТ
+          // багтсан бүтэн дүн байсан тул задаргаа нь нийлбэртэйгээ таардаггүй,
+          // НӨАТ нь дээрээс НЭМЭГДЭЖ байгаа мэт харагддаг байв.
           if (sales.tax > 0) ...[
+            const SizedBox(height: 6),
+            _buildSummaryRow(
+              context: context,
+              label: 'НӨАТ-гүй дүн',
+              amount: sales.netTotal,
+              isTotal: false,
+            ),
             const SizedBox(height: 6),
             _buildSummaryRow(
               context: context,
@@ -1729,7 +1805,7 @@ class _POSScreenState extends State<POSScreen> {
                 ),
               ),
               Text(
-                MntAmountFormatter.formatTugrikSpaced(sales.total),
+                MntAmountFormatter.formatTugrikSpaced(sales.payableTotal),
                 style: textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w900,
                   color: colorScheme.primary,
@@ -1845,7 +1921,16 @@ class _POSScreenState extends State<POSScreen> {
               ),
               const SizedBox(height: 12),
               _sheetSummaryLine(context, 'Дүн', sales.subtotal, false),
+              if (sales.excludedVat > 0.009) ...[
+                const SizedBox(height: 8),
+                _sheetSummaryLine(
+                    context, 'НӨАТ (хасагдсан)', -sales.excludedVat, false),
+              ],
+              // НӨАТ-гүй дүн → НӨАТ → нийт төлөх (дээрх самбартай ижил).
               if (sales.tax > 0) ...[
+                const SizedBox(height: 8),
+                _sheetSummaryLine(
+                    context, 'НӨАТ-гүй дүн', sales.netTotal, false),
                 const SizedBox(height: 8),
                 _sheetSummaryLine(context, 'НӨАТ (10%)', sales.tax, false),
               ],
@@ -1863,7 +1948,7 @@ class _POSScreenState extends State<POSScreen> {
                     ),
                   ),
                   Text(
-                    MntAmountFormatter.formatTugrikSpaced(sales.total),
+                    MntAmountFormatter.formatTugrikSpaced(sales.payableTotal),
                     style: tt.titleLarge?.copyWith(
                       fontWeight: FontWeight.w800,
                       color: cs.primary,
@@ -2019,12 +2104,24 @@ class _ProductCard extends StatelessWidget {
   /// Remove one unit from sale + restock (shown as − on card when in sale).
   final VoidCallback? onRemoveOneFromSale;
 
+  /// Барааг сагснаас БҮРЭН хасах (картны зүүн дээд буланд (x)).
+  final VoidCallback? onRemoveLineFromSale;
+
+  /// Хайрцаг задлах / грамм оруулах цонхыг нээх (зөвхөн тийм бараанд).
+  final VoidCallback? onEditQuantity;
+
+  /// Сагсанд орсон тоог харуулах шошго — жингийн бараанд "250гр" гэх мэт.
+  final String? saleQuantityLabel;
+
   const _ProductCard({
     super.key,
     required this.item,
     required this.onTap,
     this.inSaleQuantity = 0,
     this.onRemoveOneFromSale,
+    this.onRemoveLineFromSale,
+    this.onEditQuantity,
+    this.saleQuantityLabel,
   });
 
   static const Color _stockPlentyGreen = Color(0xFF16A34A);
@@ -2167,7 +2264,7 @@ class _ProductCard extends StatelessWidget {
                           ],
                         ),
                         child: Text(
-                          '×$inSaleQuantity',
+                          saleQuantityLabel ?? '×$inSaleQuantity',
                           style: textTheme.labelLarge?.copyWith(
                             color: colorScheme.onPrimary,
                             fontWeight: FontWeight.w900,
@@ -2180,6 +2277,17 @@ class _ProductCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                  if (inCart && onRemoveLineFromSale != null)
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      child: _ImageStepperButton(
+                        icon: Icons.close_rounded,
+                        tooltip: 'Сагснаас хасах',
+                        negative: true,
+                        onTap: onRemoveLineFromSale,
+                      ),
+                    ),
                   if (inCart && onRemoveOneFromSale != null)
                     Positioned(
                       left: 0,
@@ -2189,6 +2297,27 @@ class _ProductCard extends StatelessWidget {
                         tooltip: 'Нэгээр хасах',
                         negative: true,
                         onTap: onRemoveOneFromSale,
+                      ),
+                    ),
+                  // Хайрцаг задлах / жин оруулах — АВТОМАТААР гарахгүй,
+                  // зөвхөн энэ товчоор нээгдэнэ.
+                  //
+                  // Зурагны ТӨВД байрлана, доод ирмэг дээр БИШ: гар утсанд
+                  // сараалж 3 баганатай (карт ~115px) тул доод ирмэг дээрх
+                  // гурван 46px товч давхцаж, энэ товч нь "−"-ийн дээр
+                  // будагдан түүний даралтыг залгидаг байв.
+                  if (onEditQuantity != null)
+                    Positioned.fill(
+                      child: Center(
+                        child: _ImageStepperButton(
+                          icon: item.product.isWeightSaleUnit
+                              ? Icons.scale_rounded
+                              : Icons.inventory_2_outlined,
+                          tooltip: item.product.isWeightSaleUnit
+                              ? 'Жин оруулах'
+                              : 'Хайрцаг задлах',
+                          onTap: onEditQuantity,
+                        ),
                       ),
                     ),
                   // "+" нь сагсанд байгаа эсэхээс үл хамааран ҮРГЭЛЖ

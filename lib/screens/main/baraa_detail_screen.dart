@@ -20,6 +20,7 @@ import '../../widgets/barcode_scan_sheet.dart';
 import '../../widgets/category_picker_section.dart';
 import '../../widgets/niimbot_printer_dialog.dart';
 import '../../utils/app_snackbar.dart';
+import '../../widgets/measure_unit_field.dart';
 
 /// One row of web `Form.List` / `aguulakh.buuniiUneJagsaalt` (`buuniiToo`, `buuniiUne`).
 class _BuuniiTierCtrls {
@@ -319,6 +320,17 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
     }
   }
 
+  /// Үлдэгдлийг гараар оруулж болох уу (вэбийн `uldegdelZasakhBolomjtoi`).
+  ///
+  /// Зөвхөн ХӨДӨЛГӨӨНГҮЙ бараанд — үлдэгдэл нь орлого/зарлагын гүйлгээгээр
+  /// хөтлөгддөг тул засварын цонхноос дарж бичих ёсгүй. Олон баркодтой
+  /// бараанд бүр ч болохгүй: эцгийн үлдэгдэл нь хүүхдүүдийнхээ нийлбэрээр
+  /// сервер дээр автоматаар синк хийгддэг.
+  bool get _uldegdelZasakhBolomjtoi =>
+      _item.product.olonBarCodeEsekh != true &&
+      _item.currentStock <= 0 &&
+      (_item.product.uldegdel ?? 0) <= 0;
+
   Future<void> _onSave() async {
     if (!_formKey.currentState!.validate()) return;
     final p = _item.product;
@@ -339,7 +351,6 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
     }
 
     final niit = _parseDoubleLoose(_niitUne.text);
-    final urtug = _parseDoubleLoose(_urtugUne.text);
     final ul = _parseIntLoose(_uldegdel.text);
     final negK = _parseIntLoose(_negKhairtsag.text);
 
@@ -369,13 +380,10 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
       // өгөгдлөөс нь бүрмөсөн хаядаг тул сервер дээр ХУУЧИН утга үлддэг —
       // "засч болохгүй байна" гэдгийн нэг шалтгаан. Хоосон мөрөөр илгээнэ.
       'boginoNer': _bogino.text.trim(),
-      'code': _code.text.trim(),
       'barCode': _barCode.text.trim(),
       'khemjikhNegj': _khemjikh.text.trim(),
       'angilal': _angilal.text.trim(),
       'niitUne': niit,
-      'urtugUne': urtug,
-      'uldegdel': ul,
       'idevkhteiEsekh': _idevkhteiEsekh,
       'noatBodohEsekh': _noatBodohEsekh,
       'nhatBodohEsekh': _nhatBodohEsekh,
@@ -383,6 +391,17 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
       'buuniiUneEsekh': _buuniiUneEsekh,
       'buuniiUneJagsaalt': buuniiPayload,
     };
+    // ЗАСАГДАХГҮЙ талбарууд — дэлгэц дээр нь ч түгжээтэй тул илгээхээ ч болино.
+    // Сервер өөрчлөгдөөгүй талбарыг хүлээж авдаггүй биш ч, эдгээрийг дарж
+    // бичих нь бодит эх сурвалжтайгаа зөрчилддөг:
+    //   * `code` (дотоод код) — бүртгэлийн дараа хөдөлбөл түүх, гүйлгээ,
+    //     баркодын холбоос бүхэлдээ тасарна.
+    //   * `urtugUne` (нэгж өртөг) — орлогын гүйлгээгээр л бүрддэг.
+    //   * `uldegdel` — орлого/зарлагаар хөтлөгддөг; зөвхөн хөдөлгөөнгүй
+    //     (0 үлдэгдэлтэй, олон баркодгүй) бараанд эхний үлдэгдлийг оруулна.
+    if (_uldegdelZasakhBolomjtoi) {
+      body['uldegdel'] = ul;
+    }
     if (zurgiinId != null) {
       body['zurgiinId'] = zurgiinId;
     }
@@ -402,7 +421,7 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
       return;
     }
 
-    await context.read<InventoryModel>().refreshInventory();
+    await context.read<InventoryModel>().refreshInventory(force: true);
     if (!mounted) return;
     final inv = context.read<InventoryModel>();
     try {
@@ -668,9 +687,7 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
                       niitUne: _niitUne,
                       urtugUne: _urtugUne,
                       uldegdel: _uldegdel,
-                      // Зөвхөн хөдөлгөөнгүй (0 үлдэгдэлтэй) бараанд.
-                      uldegdelZasakhBolomjtoi: _item.currentStock <= 0 &&
-                          (_item.product.uldegdel ?? 0) <= 0,
+                      uldegdelZasakhBolomjtoi: _uldegdelZasakhBolomjtoi,
                       negKhairtsag: _negKhairtsag,
                       buuniiTiers: _buuniiTiers,
                       idevkhtei: _idevkhteiEsekh,
@@ -1267,6 +1284,9 @@ class _EditForm extends StatelessWidget {
           TextFormField(
             onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: barCode,
+            // Тоон гар автоматаар нээгдэнэ. `digitsOnly` формат ЗОРИУДААР
+            // нэмэхгүй — үсэгтэй баркодыг скайнераар/хуулж оруулах ёстой.
+            keyboardType: TextInputType.number,
             onChanged: (v) {
               if (v.trim().length >= 8) {
                 onLookupBbns(v.trim());
@@ -1358,13 +1378,18 @@ class _EditForm extends StatelessWidget {
             onSelectSubcategory: onSelectSubcategory,
           ),
           const SizedBox(height: 10),
-          TextFormField(
-            onTapOutside: (_) => FocusScope.of(context).unfocus(),
+          // Хайж сонгох + гараас бичих. Нэгжийн бичиглэл зөрвөл
+          // хайрцаг/жингийн логик буруу ажилладаг тул сонголтоор жигдрүүлнэ.
+          MeasureUnitField(
             controller: khemjikh,
-            decoration: InputDecoration(
-              labelText: l10n.tr('baraa_khemjikh'),
-              border: const OutlineInputBorder(),
-            ),
+            label: l10n.tr('baraa_khemjikh'),
+            // Тухайн байгууллагад аль хэдийн хэрэглэгдсэн нэгжүүд ч
+            // жагсаалтад орно.
+            existingUnits: context
+                .read<InventoryModel>()
+                .inventory
+                .map((e) => e.product.khemjikhNegj ?? '')
+                .where((u) => u.trim().isNotEmpty),
           ),
           const SizedBox(height: 10),
           TextFormField(

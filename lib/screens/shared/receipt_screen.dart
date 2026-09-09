@@ -55,7 +55,7 @@ class ReceiptLine {
     required this.lineTotal,
     this.noatBodohEsekh = false,
     this.nhatiinDunPerUnit = 0,
-    this.units = 1,
+    this.units = 1.0,
   });
 
   final String name;
@@ -71,7 +71,10 @@ class ReceiptLine {
 
   final bool noatBodohEsekh;
   final double nhatiinDunPerUnit;
-  final int units;
+
+  /// НХАТ үржих БОДИТ нэгжийн тоо. Жингийн бараанд бутархай (0.25 кг) байж
+  /// болно — бүхэл тоогоор бодвол 250 гр-т бүтэн 1 кг-ийн НХАТ ноогдоно.
+  final double units;
 }
 
 /// [CompletedSale]-ийн мөрүүдийг баримтын мөр болгоно — каталогийн үнэ биш,
@@ -83,14 +86,18 @@ List<ReceiptLine> buildReceiptLines(List<SaleItem> items) {
         name: i.product.name,
         quantityLabel: i.product.isBoxSaleUnit
             ? '${i.apiTooUnits.toStringAsFixed(i.apiTooUnits % 1 == 0 ? 0 : 2)}\nхайрцаг'
-            : '${i.quantity}',
+            // Жингийн бараанд `quantity` нь нөөцөлсөн БҮХЭЛ кг тул баримт
+            // дээр бичвэл дүнтэйгээ зөрнө (250 гр → "1" ш, гэвч 1/4 үнэ).
+            : i.product.isWeightSaleUnit
+                ? '${i.effectivePieces.toStringAsFixed(i.effectivePieces % 1 == 0 ? 0 : 3)}\nкг'
+                : '${i.quantity}',
         unitPrice: i.product.isBoxSaleUnit
             ? (i.negPerBox > 0 ? i.unitPrice / i.negPerBox : i.unitPrice)
             : i.unitPrice,
         lineTotal: i.total,
         noatBodohEsekh: i.product.noatBodohEsekh == true,
         nhatiinDunPerUnit: i.product.nhatiinDun ?? 0,
-        units: i.quantity,
+        units: i.effectivePieces,
       ),
   ];
 }
@@ -222,7 +229,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           lineTotal: i.total,
           noatBodohEsekh: i.product.noatBodohEsekh == true,
           nhatiinDunPerUnit: i.product.nhatiinDun ?? 0,
-          units: i.quantity,
+          units: i.quantity.toDouble(),
         ),
     ];
   }
@@ -1076,7 +1083,12 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                       // И-Баримтын цонхоор дамждаг байсан тул цонхыг цуцлах /
                       // И-Баримт амжилтгүй болоход баримт огт хэвлэгддэггүй
                       // байв.
-                      if (_taxContext.eBarimtShine) ...[
+                      // НӨАТ-ГҮЙ борлуулалтад И-Баримт огт хамаагүй — НӨАТ
+                      // хасагдаж, татварын баримт үүсэхгүй. Өмнө нь товч нь
+                      // гарсаар байсан тул кассчин НӨАТ-гүй дүн дээр И-Баримт
+                      // хэвлэхийг оролдож байв.
+                      if (_taxContext.eBarimtShine &&
+                          !_taxContext.vatExcludedSale) ...[
                         SizedBox(
                           width: double.infinity,
                           child: OutlinedButton.icon(

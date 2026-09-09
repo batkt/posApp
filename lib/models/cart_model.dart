@@ -159,6 +159,18 @@ class Product {
     return fallback;
   }
 
+  /// Mongo/JSON огноог тэвчээртэй уншина: ISO мөр, `{$date: ...}`, эсвэл
+  /// epoch millis. Эрэмбэ ("сүүлд бүртгэсэн нь дээр") үүн дээр тулгуурладаг
+  /// тул буруу төрөл ирэхэд алдаа шидэхгүй, зүгээр `null` буцаана.
+  static DateTime? _asDateTime(dynamic v) {
+    if (v == null) return null;
+    if (v is DateTime) return v;
+    if (v is int) return DateTime.fromMillisecondsSinceEpoch(v);
+    if (v is String) return DateTime.tryParse(v);
+    if (v is Map) return _asDateTime(v[r'$date'] ?? v['date']);
+    return null;
+  }
+
   /// Bar codes / codes often arrive as JSON numbers; scanners return strings.
   static String? _asOptionalString(dynamic v) {
     if (v == null) return null;
@@ -213,8 +225,8 @@ class Product {
       zurgiinId: json['zurgiinId'],
       orlogdsonEsekh: json['orlogdsonEsekh'],
       zarlagdsanEsekh: json['zarlagdsanEsekh'],
-      createdAt: DateTime.tryParse(json['createdAt'] ?? ''),
-      updatedAt: DateTime.tryParse(json['updatedAt'] ?? ''),
+      createdAt: _asDateTime(json['createdAt']),
+      updatedAt: _asDateTime(json['updatedAt']),
       ajiltan: json['ajiltan'],
       butsaaltToo: _firstInt([
         json['butsaaltiinTooKhemjee'],
@@ -321,6 +333,18 @@ class Product {
     final kn = khemjikhNegj?.trim().toLowerCase() ?? '';
     if (kn.isEmpty) return false;
     return kn.contains('хайрцаг');
+  }
+
+  /// Жингээр (кг/гр) зардаг бараа — граммаар бутархай зарна.
+  ///
+  /// Хайрцаглалт ДАВАМГАЙЛНА: нэг мөрийг хоёр өөр тоо хэмжээний логикоор
+  /// (хайрцаг задлах ба жин) зэрэг бодох боломжгүй.
+  bool get isWeightSaleUnit {
+    if (isBoxSaleUnit) return false;
+    final k = khemjikhNegj?.trim().toLowerCase();
+    if (k == null || k.isEmpty) return false;
+    const units = {'кг', 'kg', 'гр', 'грамм', 'g', 'gram', 'гр.', 'кг.'};
+    return units.contains(k);
   }
 
   /// Suffix after stock / quantity on POS (web `posSystem`: "хайрцаг" vs "ш").

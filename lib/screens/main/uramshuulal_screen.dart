@@ -14,6 +14,80 @@ import '../../services/uramshuulal_service.dart';
 import '../../utils/app_snackbar.dart';
 
 /// Screen for managing & viewing Promotions (Урамшуулал) and Promotion Reports.
+/// Урамшууллын ДЭЛГЭРЭНГҮЙ тайлангийн нэг мөр
+/// (`POST /uramshuulliinDelgerenguiTailanAvya`).
+///
+/// Өмнө нь нэгтгэсэн `/uramshuulliinTovchooTailanAvya`-г уншдаг байсан ч
+/// тэр нь баримтын дугаар, огноог ОГТ буцаадаггүй бөгөөд дүн нь өртөг
+/// (`too × urtugUne`) байсан тул өртөггүй бараа "0.00" харагддаг байв.
+class UramshuulalReportRow {
+  const UramshuulalReportRow({
+    required this.ner,
+    required this.code,
+    required this.too,
+    required this.saleTotal,
+    required this.costTotal,
+    required this.unitLabel,
+    this.barimtiinDugaar,
+    this.ognoo,
+    this.uramshuulal,
+  });
+
+  final String ner;
+  final String code;
+  final double too;
+  final double saleTotal;
+  final double costTotal;
+  final String unitLabel;
+  final String? barimtiinDugaar;
+  final DateTime? ognoo;
+  final String? uramshuulal;
+
+  /// Мөрөнд харуулах дүн — ХУДАЛДАХ үнэ нь тэргүүн эрэмбэтэй.
+  ///
+  /// Хуучин гүйлгээнд `undsenZarakhUne` хадгалагдаагүй байж болох тул
+  /// өртгөөр нөхнө; хоёулаа 0 бол [hasNoPrice] үнэн болно.
+  double get amount => saleTotal > 0 ? saleTotal : costTotal;
+
+  bool get hasNoPrice => saleTotal <= 0 && costTotal <= 0;
+
+  static double _num(dynamic v) {
+    if (v is num) return v.toDouble();
+    return double.tryParse('${v ?? ''}') ?? 0;
+  }
+
+  /// Бэлгийн мөрийн `too` нь хайрцагтай бараанд ХАЙРЦАГ, жингийнд КГ.
+  static String _unitLabelFor(Map<String, dynamic> j) {
+    final kn = j['khemjikhNegj']?.toString().trim().toLowerCase() ?? '';
+    final neg = _num(j['negKhairtsaganDahiShirhegiinToo']);
+    final boxFlag = j['shirkheglekhEsekh'];
+    final isBox = boxFlag == true ||
+        (boxFlag == null && (neg >= 2 || kn.contains('хайрцаг')));
+    if (isBox) return 'хайрцаг';
+    const weight = {'кг', 'kg', 'гр', 'грамм', 'g', 'gram'};
+    if (weight.contains(kn)) return kn.startsWith('к') || kn == 'kg' ? 'кг' : 'гр';
+    return 'ширхэг';
+  }
+
+  factory UramshuulalReportRow.fromJson(Map<String, dynamic> j) {
+    return UramshuulalReportRow(
+      ner: j['ner']?.toString() ?? j['_id']?['ner']?.toString() ?? 'Бараа',
+      code: j['code']?.toString() ?? j['_id']?['code']?.toString() ?? '',
+      too: _num(j['too'] ?? j['niitToo']),
+      saleTotal: _num(j['niitZarakhUne']) > 0
+          ? _num(j['niitZarakhUne'])
+          : _num(j['undsenZarakhUne']) * _num(j['too'] ?? j['niitToo']),
+      costTotal: _num(j['niitUrtug']),
+      unitLabel: _unitLabelFor(j),
+      barimtiinDugaar: j['barimtiinDugaar']?.toString(),
+      ognoo: DateTime.tryParse(j['ognoo']?.toString() ?? ''),
+      uramshuulal: j['uramshuulal'] is List
+          ? (j['uramshuulal'] as List).whereType<String>().join(', ')
+          : j['uramshuulal']?.toString(),
+    );
+  }
+}
+
 class UramshuulalScreen extends StatefulWidget {
   const UramshuulalScreen({super.key, this.showAppBar = true});
 
@@ -47,20 +121,9 @@ class _UramshuulalScreenState extends State<UramshuulalScreen>
     );
   }
 
-  /// `/uramshuulliinTovchooTailanAvya` нь `{_id:{code,ner,negjUrtug},
-  /// niitToo, niitUrtug}` буцаадаг.
-  static double _reportAmount(Map<String, dynamic> item) =>
-      (item['niitUrtug'] as num?)?.toDouble() ??
-      (item['hungulsunDun'] as num?)?.toDouble() ??
-      0.0;
-
-  static int _reportCount(Map<String, dynamic> item) =>
-      (item['niitToo'] as num?)?.toInt() ??
-      (item['too'] as num?)?.toInt() ??
-      0;
-  List<Map<String, dynamic>> _reportItems = [];
+  List<UramshuulalReportRow> _reportItems = [];
   double _totalReportDiscount = 0.0;
-  int _totalReportCount = 0;
+  double _totalReportCount = 0;
 
   @override
   void initState() {
@@ -135,17 +198,17 @@ class _UramshuulalScreenState extends State<UramshuulalScreen>
     });
 
     try {
-      final bodyData = tailanService.uramshuulalTovchooBody(
+      final bodyData = tailanService.uramshuulalDelgerenguiBody(
         baiguullagiinId: pos.baiguullagiinId,
         salbariinId: pos.salbariinId,
         ekhlekh: _range.start,
         duusakh: _range.end,
       );
 
-      // Серверт `/uramshuulalTovchoo` гэсэн зам БАЙХГҮЙ (404) — жинхэнэ нэр нь
-      // `routes/tailanRoute.js`-ийн `/uramshuulliinTovchooTailanAvya`.
+      // ДЭЛГЭРЭНГҮЙ тайланг уншина: нэгтгэсэн `/uramshuulliinTovchooTailanAvya`
+      // нь баримтын дугаар, огноог буцаадаггүй.
       final res = await posApiService.post<List<dynamic>>(
-        '/uramshuulliinTovchooTailanAvya',
+        '/uramshuulliinDelgerenguiTailanAvya',
         body: bodyData,
         parser: (d) => d is List ? d : [],
       );
@@ -153,13 +216,20 @@ class _UramshuulalScreenState extends State<UramshuulalScreen>
       if (!mounted) return;
 
       if (res.success && res.data != null) {
-        final list = res.data!.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        final list = res.data!
+            .whereType<Map>()
+            .map((e) => UramshuulalReportRow.fromJson(
+                Map<String, dynamic>.from(e)))
+            .toList()
+          // Хамгийн сүүлийн баримт эхэнд.
+          ..sort((a, b) => (b.ognoo ?? DateTime(0))
+              .compareTo(a.ognoo ?? DateTime(0)));
         double sumDisc = 0.0;
-        int sumCnt = 0;
+        double sumCnt = 0;
 
         for (final item in list) {
-          sumDisc += _reportAmount(item);
-          sumCnt += _reportCount(item);
+          sumDisc += item.amount;
+          sumCnt += item.too;
         }
 
         setState(() {
@@ -319,7 +389,11 @@ class _UramshuulalScreenState extends State<UramshuulalScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Гарчиг нь БҮТЭН мөрөө эзэлнэ. Өмнө нь нэр, төрөл, төлөв,
+                  // ⋮ дөрвөв нэг мөрөнд шахагдаж, утсан дээр нэр нь 3 мөр
+                  // болж тасарч, уншигдахгүй байв.
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
                         padding: const EdgeInsets.all(8),
@@ -344,71 +418,52 @@ class _UramshuulalScreenState extends State<UramshuulalScreen>
                               style: textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Төрөл: $turul',
-                              style: textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
+                            const SizedBox(height: 4),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: isActive
+                                        ? AppColors.successContainer
+                                        : colorScheme.surfaceContainerHighest,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    isActive ? 'Идэвхтэй' : 'Дууссан',
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: isActive
+                                          ? AppColors.onSuccessContainer
+                                          : colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  turul,
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isActive
-                              ? AppColors.successContainer
-                              : colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          isActive ? 'Идэвхтэй' : 'Дууссан',
-                          style: textTheme.labelSmall?.copyWith(
-                            color: isActive
-                                ? AppColors.onSuccessContainer
-                                : colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      PopupMenuButton<String>(
+                      // Анхдагч PopupMenu нь картаа халхлан таслаад, хэв
+                      // маягийн хувьд ч апп-ын бусад цэснээс тасардаг байсан
+                      // тул доод хуудас (bottom sheet) болгов.
+                      IconButton(
                         tooltip: 'Үйлдэл',
                         icon: const Icon(Icons.more_vert_rounded, size: 20),
-                        onSelected: (v) {
-                          if (v == 'detail') _showPromoDetail(p);
-                          if (v == 'extend') _extendPromo(p);
-                          if (v == 'delete') _deletePromo(p);
-                        },
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(
-                            value: 'detail',
-                            child: Row(children: [
-                              Icon(Icons.info_outline_rounded, size: 18),
-                              SizedBox(width: 8),
-                              Text('Дэлгэрэнгүй'),
-                            ]),
-                          ),
-                          PopupMenuItem(
-                            value: 'extend',
-                            child: Row(children: [
-                              Icon(Icons.event_repeat_rounded, size: 18),
-                              SizedBox(width: 8),
-                              Text('Хугацаа сунгах'),
-                            ]),
-                          ),
-                          PopupMenuItem(
-                            value: 'delete',
-                            child: Row(children: [
-                              Icon(Icons.delete_outline_rounded,
-                                  size: 18, color: AppColors.error),
-                              SizedBox(width: 8),
-                              Text('Устгах',
-                                  style: TextStyle(color: AppColors.error)),
-                            ]),
-                          ),
-                        ],
+                        onPressed: () => _showPromoActions(p),
                       ),
                     ],
                   ),
@@ -442,6 +497,61 @@ class _UramshuulalScreenState extends State<UramshuulalScreen>
   }
 
   // ── Урамшууллын үйлдлүүд ────────────────────────────────────────────────
+
+  /// Картны ⋮ үйлдлүүд — доод хуудсаар.
+  ///
+  /// Апп-ын бусад цэснүүдтэй (бараа задлах, бөөний үнэ, урамшуулал сонгох)
+  /// ижил хэлбэртэй байснаар товчнууд бүтэн өргөнтэй, хүрэхэд том, картаа
+  /// халхлахгүй.
+  Future<void> _showPromoActions(Map<String, dynamic> p) async {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final ner = p['ner']?.toString() ?? 'Урамшуулал';
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(
+                ner,
+                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.info_outline_rounded),
+              title: const Text('Дэлгэрэнгүй'),
+              onTap: () => Navigator.pop(ctx, 'detail'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.event_repeat_rounded),
+              title: const Text('Хугацаа сунгах'),
+              onTap: () => Navigator.pop(ctx, 'extend'),
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline_rounded, color: cs.error),
+              title: Text('Устгах', style: TextStyle(color: cs.error)),
+              onTap: () => Navigator.pop(ctx, 'delete'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted || action == null) return;
+    if (action == 'detail') _showPromoDetail(p);
+    if (action == 'extend') await _extendPromo(p);
+    if (action == 'delete') await _deletePromo(p);
+  }
 
   Future<void> _extendPromo(Map<String, dynamic> p) async {
     final id = (p['_id'] ?? p['id'])?.toString() ?? '';
@@ -615,7 +725,7 @@ class _UramshuulalScreenState extends State<UramshuulalScreen>
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '$_totalReportCount удаа',
+                                '${_totalReportCount % 1 == 0 ? _totalReportCount.toStringAsFixed(0) : _totalReportCount.toStringAsFixed(2)} удаа',
                                 style: textTheme.titleLarge?.copyWith(
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -641,28 +751,56 @@ class _UramshuulalScreenState extends State<UramshuulalScreen>
                     )
                   else
                     ..._reportItems.map((item) {
-                      final name = item['_id']?['ner']?.toString() ??
-                          item['ner']?.toString() ??
-                          'Урамшуулал';
-                      final code = item['_id']?['code']?.toString() ?? '';
-                      final discount = _reportAmount(item);
-                      final count = _reportCount(item);
+                      final count = item.too % 1 == 0
+                          ? item.too.toStringAsFixed(0)
+                          : item.too.toStringAsFixed(2);
+                      final meta = <String>[
+                        if (item.code.isNotEmpty) item.code,
+                        'Өгсөн тоо: $count ${item.unitLabel}',
+                      ].join('  ·  ');
+                      final receipt = <String>[
+                        if (item.barimtiinDugaar != null &&
+                            item.barimtiinDugaar!.isNotEmpty)
+                          '№ ${item.barimtiinDugaar}',
+                        if (item.ognoo != null)
+                          MongolianDateFormatter.formatShortDate(item.ognoo!),
+                      ].join('  ·  ');
 
                       return Card(
                         margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
                           leading: const Icon(Icons.card_giftcard_rounded),
-                          title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text(
-                            code.isEmpty
-                                ? 'Өгсөн тоо: $count ширхэг'
-                                : '$code  ·  Өгсөн тоо: $count ширхэг',
+                          title: Text(item.ner,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(meta),
+                              if (receipt.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    receipt,
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
+                          isThreeLine: receipt.isNotEmpty,
                           trailing: Text(
-                            MntAmountFormatter.format(discount),
+                            // Үнэ огт бүртгэгдээгүй бол "0.00" гэж төөрөгдүүлэхээс
+                            // илүү "—" гэж шууд хэлнэ.
+                            item.hasNoPrice
+                                ? '—'
+                                : MntAmountFormatter.format(item.amount),
                             style: textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.bold,
-                              color: colorScheme.primary,
+                              color: item.hasNoPrice
+                                  ? colorScheme.onSurfaceVariant
+                                  : colorScheme.primary,
                             ),
                           ),
                         ),

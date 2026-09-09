@@ -14,6 +14,7 @@ import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/barcode_scan_sheet.dart';
 import '../../widgets/category_picker_section.dart';
 import '../../utils/app_snackbar.dart';
+import '../../widgets/measure_unit_field.dart';
 
 /// One row of web `Form.List` / `aguulakh.buuniiUneJagsaalt` (`buuniiToo`, `buuniiUne`).
 class _BuuniiTierCtrls {
@@ -317,7 +318,7 @@ class _BaraaAddScreenState extends State<BaraaAddScreen> {
       return;
     }
 
-    await context.read<InventoryModel>().refreshInventory();
+    await context.read<InventoryModel>().refreshInventory(force: true);
     if (!mounted) return;
     Navigator.pop(context);
 
@@ -758,6 +759,10 @@ class _EditForm extends StatelessWidget {
           TextFormField(
             onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: code,
+            // Тоон гар автоматаар нээгдэнэ. `digitsOnly` формат ЗОРИУДААР
+            // нэмэхгүй — зарим байгууллагын код/баркод үсэг агуулдаг бөгөөд
+            // скайнераас/хуулж тавихад тэдгээр нь хэвээр орох ёстой.
+            keyboardType: TextInputType.number,
             decoration: InputDecoration(
               labelText: l10n.tr('baraa_code'),
               border: const OutlineInputBorder(),
@@ -777,6 +782,10 @@ class _EditForm extends StatelessWidget {
           TextFormField(
             onTapOutside: (_) => FocusScope.of(context).unfocus(),
             controller: barCode,
+            // Тоон гар автоматаар нээгдэнэ. `digitsOnly` формат ЗОРИУДААР
+            // нэмэхгүй — зарим байгууллагын код/баркод үсэг агуулдаг бөгөөд
+            // скайнераас/хуулж тавихад тэдгээр нь хэвээр орох ёстой.
+            keyboardType: TextInputType.number,
             onChanged: (v) {
               if (v.trim().length >= 8) {
                 onLookupBbns(v.trim());
@@ -869,13 +878,18 @@ class _EditForm extends StatelessWidget {
             onSelectSubcategory: onSelectSubcategory,
           ),
           const SizedBox(height: 10),
-          TextFormField(
-            onTapOutside: (_) => FocusScope.of(context).unfocus(),
+          // Хайж сонгох + гараас бичих. Нэгжийн бичиглэл зөрвөл
+          // хайрцаг/жингийн логик буруу ажилладаг тул сонголтоор жигдрүүлнэ.
+          MeasureUnitField(
             controller: khemjikh,
-            decoration: InputDecoration(
-              labelText: l10n.tr('baraa_khemjikh'),
-              border: const OutlineInputBorder(),
-            ),
+            label: l10n.tr('baraa_khemjikh'),
+            // Тухайн байгууллагад аль хэдийн хэрэглэгдсэн нэгжүүд ч
+            // жагсаалтад орно.
+            existingUnits: context
+                .read<InventoryModel>()
+                .inventory
+                .map((e) => e.product.khemjikhNegj ?? '')
+                .where((u) => u.trim().isNotEmpty),
           ),
           const SizedBox(height: 10),
           TextFormField(
