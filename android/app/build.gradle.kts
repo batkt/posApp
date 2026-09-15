@@ -24,13 +24,6 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
-    packaging {
-        jniLibs {
-            // PAX DAL (DeviceConfig) expects extracted .so files under app nativeLibraryDir.
-            useLegacyPackaging = true
-        }
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -49,19 +42,14 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        externalNativeBuild {
-            cmake {
-                arguments("-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON")
-            }
-            ndkBuild {
-                arguments("APP_LDFLAGS+=-Wl,-z,max-page-size=16384")
-            }
-        }
     }
 
     packaging {
         jniLibs {
-            useLegacyPackaging = true
+            useLegacyPackaging = false
+            excludes += listOf(
+                "**/libpaxcanvas.so",
+            )
         }
     }
 
