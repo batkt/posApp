@@ -24,6 +24,18 @@ void main() {
       expect(ctx.vatExcludedSale, isFalse);
     });
 
+    test('тохиргооноос ачаалсан контекст (унтраалга анхны утгаараа) НӨАТ-гүй '
+        'гэж танихгүй — баримтын дэлгэцэд кассын төлвийг дамжуулах ёстой', () {
+      // `loadPosWebTaxContext` нь `baraaNUATModalOpen: borl` гэж буцаадаг.
+      const ctx = PosWebTaxContext(
+        borluulaltNUAT: true,
+        eBarimtShine: true,
+        isModalOpenTulbur: true,
+        baraaNUATModalOpen: true,
+      );
+      expect(ctx.vatExcludedSale, isFalse);
+    });
+
     test('"Борлуулалтын НӨАТ" унтраалттай бол НӨАТ-гүй горим биш', () {
       const ctx = PosWebTaxContext(
         borluulaltNUAT: false,

@@ -417,6 +417,7 @@ class _KioskTerminalPaySignalListenerState
                 orderNumber: completed.id,
                 guilgeeniiMongoId: guilgeeMongoId,
                 cashierSlipTotals: slip,
+                vatExcludedSale: sales.webTaxContext?.vatExcludedSale ?? false,
               ),
             ),
           );

@@ -518,6 +518,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           orderNumber: completed.id,
           guilgeeniiMongoId: guilgeeniiMongoId,
           cashierSlipTotals: slip,
+          vatExcludedSale: _taxCtx.vatExcludedSale,
         ),
       ),
     );

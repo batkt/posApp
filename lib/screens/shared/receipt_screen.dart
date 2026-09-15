@@ -113,7 +113,16 @@ class ReceiptScreen extends StatefulWidget {
     this.guilgeeniiMongoId,
     this.cashierSlipTotals,
     this.saleLines,
+    this.vatExcludedSale = false,
   });
+
+  /// Борлуулалтыг НӨАТ-ГҮЙ авсан эсэх — кассчны "НӨАТ ашиглах эсэх"
+  /// унтраалгын БОДИТ төлөв ([PosWebTaxContext.vatExcludedSale]).
+  ///
+  /// Тохиргооноос дахин ачаалсан [PosWebTaxContext] нь унтраалгыг анхны
+  /// (`borluulaltNUAT`) утгаар нь авдаг тул `vatExcludedSale` нь тэнд ҮРГЭЛЖ
+  /// false гардаг — иймээс дуудагч талаас дамжуулна.
+  final bool vatExcludedSale;
 
   /// Бодит зарсан үнэ/дүнтэй мөрүүд. Өгөгдсөн бол [items]-ын оронд
   /// хэвлэгдэнэ.
@@ -185,6 +194,11 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       }
     }
   }
+
+  /// НӨАТ-гүй борлуулалт — И-Баримт хэвлэхгүй, баримт дээр НӨАТ задлахгүй
+  /// (мөрийн дүнгээс НӨАТ аль хэдийн хасагдсан тул дахин хасч харуулна).
+  bool get _vatExcluded =>
+      widget.vatExcludedSale || _taxContext.vatExcludedSale;
 
   String get _paymentMethodName =>
       PaymentDisplayConfig.labelMn(widget.paymentMethod);
@@ -525,7 +539,8 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final canPosEbarimt = auth.canSubmitPosSales &&
         widget.guilgeeniiMongoId != null &&
         widget.guilgeeniiMongoId!.isNotEmpty;
-    final enableTax = _taxContext.eBarimtShine || _taxContext.borluulaltNUAT;
+    final enableTax =
+        (_taxContext.eBarimtShine || _taxContext.borluulaltNUAT) && !_vatExcluded;
     final receiptLines = _lines;
     final cartTax = _cartTaxApprox(receiptLines,
         enableVat: enableTax && (e != null || canPosEbarimt));
@@ -992,7 +1007,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       'totalAmount': widget.total,
       'paymentMethod': widget.paymentMethod,
       'baiguullagiinNer': mName,
-      'eBarimtShine': _taxContext.eBarimtShine,
+      'eBarimtShine': _taxContext.eBarimtShine && !_vatExcluded,
       'items': widget.items
           .map((i) => {
                 'name': i.product.name,
@@ -1087,8 +1102,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                       // хасагдаж, татварын баримт үүсэхгүй. Өмнө нь товч нь
                       // гарсаар байсан тул кассчин НӨАТ-гүй дүн дээр И-Баримт
                       // хэвлэхийг оролдож байв.
-                      if (_taxContext.eBarimtShine &&
-                          !_taxContext.vatExcludedSale) ...[
+                      if (_taxContext.eBarimtShine && !_vatExcluded) ...[
                         SizedBox(
                           width: double.infinity,
                           child: OutlinedButton.icon(
@@ -1118,7 +1132,10 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                           salbariinId: context.read<AuthModel>().posSession?.salbariinId ?? '',
                           barimtType: 'ebarimt',
                           onBeforeSend: () async {
-                            if (_ebarimt == null && canPosEbarimt && _taxContext.eBarimtShine) {
+                            if (_ebarimt == null &&
+                                canPosEbarimt &&
+                                _taxContext.eBarimtShine &&
+                                !_vatExcluded) {
                               await _onEbarimtPrintPressed(context);
                             }
                             return _buildCompleteBarimtData();
