@@ -14,6 +14,7 @@ import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/barcode_scan_sheet.dart';
 import '../../widgets/category_picker_section.dart';
 import '../../utils/app_snackbar.dart';
+import '../../utils/form_scroll.dart';
 import '../../widgets/measure_unit_field.dart';
 
 /// One row of web `Form.List` / `aguulakh.buuniiUneJagsaalt` (`buuniiToo`, `buuniiUne`).
@@ -250,7 +251,7 @@ class _BaraaAddScreenState extends State<BaraaAddScreen> {
     // while a field is still focused can just close the keyboard instead of
     // triggering the save, requiring a second tap.
     FocusScope.of(context).unfocus();
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateAndScrollToError(_formKey)) return;
     final session = context.read<AuthModel>().posSession;
     if (session == null) return;
     final baigId = session.baiguullagiinId;

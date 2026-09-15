@@ -20,6 +20,7 @@ import '../../widgets/barcode_scan_sheet.dart';
 import '../../widgets/category_picker_section.dart';
 import '../../widgets/niimbot_printer_dialog.dart';
 import '../../utils/app_snackbar.dart';
+import '../../utils/form_scroll.dart';
 import '../../widgets/measure_unit_field.dart';
 
 /// One row of web `Form.List` / `aguulakh.buuniiUneJagsaalt` (`buuniiToo`, `buuniiUne`).
@@ -332,7 +333,7 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
       (_item.product.uldegdel ?? 0) <= 0;
 
   Future<void> _onSave() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateAndScrollToError(_formKey)) return;
     final p = _item.product;
     final l10n = AppLocalizations.of(context);
 

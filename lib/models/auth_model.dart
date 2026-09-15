@@ -422,7 +422,8 @@ class AuthModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> resetPassword(String phone) async {
+  /// Амжилттай бол `null`, эс бол дугаарын талбарт харуулах алдаа.
+  Future<String?> resetPassword(String phone) async {
     return await authService.requestPasswordReset(phone.trim());
   }
 

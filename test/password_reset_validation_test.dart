@@ -61,4 +61,30 @@ void main() {
       expect(PasswordResetRules.codeError('  '), isNotNull);
     });
   });
+
+  group('Код илгээх хүсэлтийн серверийн алдаа', () {
+    test('серверийн "олдсонгүй" нь бүртгэлгүй дугаар гэж харагдана', () {
+      expect(
+        PasswordResetRules.phoneLookupError('Бүртгэлтэй ажилтан олдсонгүй'),
+        'Бүртгэлгүй дугаар байна',
+      );
+    });
+
+    test('сүлжээний алдааг бүртгэлгүй гэж андуурахгүй', () {
+      final msg = PasswordResetRules.phoneLookupError(
+        'Network error: Failed host lookup',
+        code: 'NETWORK_ERROR',
+      );
+      expect(msg, isNot('Бүртгэлгүй дугаар байна'));
+      expect(msg, contains('холбогдож'));
+    });
+
+    test('бусад серверийн мессежийг хэвээр нь харуулна', () {
+      expect(
+        PasswordResetRules.phoneLookupError('Утасны дугаар оруулна уу'),
+        'Утасны дугаар оруулна уу',
+      );
+      expect(PasswordResetRules.phoneLookupError(null), isNotEmpty);
+    });
+  });
 }

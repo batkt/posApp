@@ -750,62 +750,12 @@ class _UramshuulalScreenState extends State<UramshuulalScreen>
                       ),
                     )
                   else
-                    ..._reportItems.map((item) {
-                      final count = item.too % 1 == 0
-                          ? item.too.toStringAsFixed(0)
-                          : item.too.toStringAsFixed(2);
-                      final meta = <String>[
-                        if (item.code.isNotEmpty) item.code,
-                        'Өгсөн тоо: $count ${item.unitLabel}',
-                      ].join('  ·  ');
-                      final receipt = <String>[
-                        if (item.barimtiinDugaar != null &&
-                            item.barimtiinDugaar!.isNotEmpty)
-                          '№ ${item.barimtiinDugaar}',
-                        if (item.ognoo != null)
-                          MongolianDateFormatter.formatShortDate(item.ognoo!),
-                      ].join('  ·  ');
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          leading: const Icon(Icons.card_giftcard_rounded),
-                          title: Text(item.ner,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(meta),
-                              if (receipt.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Text(
-                                    receipt,
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          isThreeLine: receipt.isNotEmpty,
-                          trailing: Text(
-                            // Үнэ огт бүртгэгдээгүй бол "0.00" гэж төөрөгдүүлэхээс
-                            // илүү "—" гэж шууд хэлнэ.
-                            item.hasNoPrice
-                                ? '—'
-                                : MntAmountFormatter.format(item.amount),
-                            style: textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: item.hasNoPrice
-                                  ? colorScheme.onSurfaceVariant
-                                  : colorScheme.primary,
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
+                    ..._reportItems.map(
+                      (item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _PromoReportCard(item: item),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -815,6 +765,181 @@ class _UramshuulalScreenState extends State<UramshuulalScreen>
   }
 }
 
+
+/// Урамшууллын тайлангийн нэг мөр — баримтын жагсаалтын картын хэв маягаар.
+///
+/// Өмнө нь код, өгсөн тоо, баримтын дугаар, огноо бүгд "·"-ээр нийлж хоёр
+/// мөр болж шахагддаг байв. Одоо баримтын дугаар ба огноо тус тусдаа
+/// дүрс тэмдэгтэй мөрөнд, тоо хэмжээ нь дүнгийн доор шошго хэлбэрээр,
+/// код нь доод зурваст харагдана.
+class _PromoReportCard extends StatelessWidget {
+  const _PromoReportCard({required this.item});
+
+  final UramshuulalReportRow item;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final count = item.too % 1 == 0
+        ? item.too.toStringAsFixed(0)
+        : item.too.toStringAsFixed(2);
+    final dugaar = item.barimtiinDugaar?.trim() ?? '';
+    final ognoo = item.ognoo;
+    const tabular = [FontFeature.tabularFigures()];
+
+    Widget metaRow(IconData icon, String text, {bool strong = false}) => Row(
+          children: [
+            Icon(icon, size: 12, color: cs.onSurfaceVariant),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: tt.bodySmall?.copyWith(
+                  color: strong ? cs.onSurface : cs.onSurfaceVariant,
+                  fontWeight: strong ? FontWeight.w600 : FontWeight.w500,
+                  fontFeatures: tabular,
+                ),
+              ),
+            ),
+          ],
+        );
+
+    return Material(
+      color: cs.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.65)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(
+                    Icons.card_giftcard_rounded,
+                    color: cs.primary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.ner,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      if (dugaar.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        metaRow(Icons.receipt_long_outlined, dugaar,
+                            strong: true),
+                      ],
+                      if (ognoo != null) ...[
+                        const SizedBox(height: 3),
+                        metaRow(
+                          Icons.access_time_rounded,
+                          '${MongolianDateFormatter.formatShortDate(ognoo)}  '
+                          '${MongolianDateFormatter.formatTime(ognoo)}',
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      // Үнэ огт бүртгэгдээгүй бол "0.00" гэж төөрөгдүүлэхээс
+                      // илүү "—" гэж шууд хэлнэ.
+                      item.hasNoPrice
+                          ? '—'
+                          : MntAmountFormatter.format(item.amount),
+                      style: tt.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color:
+                            item.hasNoPrice ? cs.onSurfaceVariant : cs.primary,
+                        fontFeatures: tabular,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: cs.secondaryContainer.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '$count ${item.unitLabel}',
+                        style: tt.labelSmall?.copyWith(
+                          color: cs.onSecondaryContainer,
+                          fontWeight: FontWeight.w700,
+                          fontFeatures: tabular,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (item.code.isNotEmpty)
+            Container(
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerLowest,
+                border: Border(
+                  top: BorderSide(
+                    color: cs.outlineVariant.withValues(alpha: 0.5),
+                  ),
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+              child: Row(
+                children: [
+                  Icon(Icons.qr_code_2_rounded,
+                      size: 14, color: cs.onSurfaceVariant),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      'Код ${item.code}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
 
 /// Урамшууллын дэлгэрэнгүй — нөхцөл, бэлэг, хугацаа, сунгалтын түүх.
 class _PromoDetailSheet extends StatelessWidget {

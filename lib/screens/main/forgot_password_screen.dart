@@ -25,6 +25,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _codeSent = false;
   bool _obscurePassword = true;
 
+  /// Серверээс ирсэн дугаарын алдаа (жишээ нь бүртгэлгүй дугаар) — дараагийн
+  /// алхам руу шилжүүлэхгүй, "Дугаар" алхмын талбарын доор харуулна.
+  String? _phoneServerError;
+
   /// Дахин илгээх хүртэлх үлдсэн секунд — SMS ирээгүй үед хэрэглэгч гацахгүй.
   int _resendIn = 0;
   Timer? _resendTimer;
@@ -42,20 +46,26 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Future<void> _sendResetRequest() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _phoneServerError = null;
+    });
 
     final auth = context.read<AuthModel>();
-    final success = await auth.resetPassword(_phoneController.text.trim());
-
-    setState(() => _isLoading = false);
+    final error = await auth.resetPassword(_phoneController.text.trim());
 
     if (!mounted) return;
 
-    if (success) {
+    setState(() => _isLoading = false);
+
+    if (error == null) {
       setState(() => _codeSent = true);
       _startResendCountdown();
+    } else if (_codeSent) {
+      // "Дахин илгээх" — дугаарын талбар энэ алхамд харагдахгүй.
+      showAppSnackBar(context, error, variant: AppSnackVariant.error);
     } else {
-      showAppSnackBar(context, 'Утасны дугаар олдсонгүй. Шалгаад дахин оролдоно уу.', variant: AppSnackVariant.error);
+      setState(() => _phoneServerError = error);
     }
   }
 
@@ -180,11 +190,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             LengthLimitingTextInputFormatter(PasswordResetRules.phoneLength),
           ],
           onFieldSubmitted: (_) => _sendResetRequest(),
-          decoration: const InputDecoration(
+          onChanged: (_) {
+            if (_phoneServerError != null) {
+              setState(() => _phoneServerError = null);
+            }
+          },
+          decoration: InputDecoration(
             labelText: 'Утасны дугаар',
             hintText: '8811 2233',
             counterText: '',
-            prefixIcon: Icon(Icons.smartphone_outlined),
+            prefixIcon: const Icon(Icons.smartphone_outlined),
+            errorText: _phoneServerError,
           ),
           validator: PasswordResetRules.phoneError,
         ),
@@ -212,8 +228,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           textInputAction: TextInputAction.next,
           decoration: InputDecoration(
             labelText: 'Шинэ нууц үг',
-            helperText:
-                'Хамгийн багадаа ${PasswordResetRules.minPasswordLength} тэмдэгт',
             prefixIcon: const Icon(Icons.lock_outline),
             suffixIcon: IconButton(
               tooltip: _obscurePassword ? 'Нууц үг харах' : 'Нууц үг нуух',

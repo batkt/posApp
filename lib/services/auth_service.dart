@@ -5,6 +5,7 @@ import '../auth/staff_screen_access.dart';
 import '../models/auth_model.dart';
 import '../models/branch_option.dart';
 import '../models/pos_session.dart';
+import '../utils/password_reset_rules.dart';
 import 'baiguullaga_service.dart';
 import 'pos_settings_service.dart';
 import 'terminal_hardware_service.dart';
@@ -398,8 +399,11 @@ class AuthService {
     }
   }
 
-  /// Request password reset
-  Future<bool> requestPasswordReset(String phone) async {
+  /// Request password reset.
+  ///
+  /// Амжилттай бол `null`, эс бол хэрэглэгчид харуулах шалтгаан
+  /// (жишээ нь "Бүртгэлгүй дугаар байна").
+  Future<String?> requestPasswordReset(String phone) async {
     try {
       final response = await _apiService.post<Map<String, dynamic>>(
         '/nuutsUgMartasan',
@@ -409,9 +413,13 @@ class AuthService {
         parser: (data) => data as Map<String, dynamic>,
       );
 
-      return response.success;
+      return response.success
+          ? null
+          : PasswordResetRules.phoneLookupError(response.message);
+    } on ApiException catch (e) {
+      return PasswordResetRules.phoneLookupError(e.message, code: e.code);
     } catch (e) {
-      return false;
+      return PasswordResetRules.phoneLookupError(null);
     }
   }
 

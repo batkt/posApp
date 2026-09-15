@@ -22,6 +22,23 @@ abstract final class PasswordResetRules {
     return null;
   }
 
+  /// "Код илгээх" хүсэлт амжилтгүй болсон шалтгааныг дугаарын талбарын доор
+  /// харуулах мессеж болгоно.
+  ///
+  /// Сервер бүртгэлгүй дугаарт "Бүртгэлтэй ажилтан олдсонгүй" гэж буцаадаг
+  /// байсан ч апп үүнийг хаяж ерөнхий snackbar харуулдаг байв.
+  static String phoneLookupError(String? message, {String? code}) {
+    if (code == 'NETWORK_ERROR' || code == 'TIMEOUT') {
+      return 'Сервертэй холбогдож чадсангүй. Дахин оролдоно уу.';
+    }
+    final m = (message ?? '').trim();
+    final lower = m.toLowerCase();
+    if (lower.contains('олдсонгүй') || lower.contains('бүртгэлгүй')) {
+      return 'Бүртгэлгүй дугаар байна';
+    }
+    return m.isNotEmpty ? m : 'Код илгээж чадсангүй. Дахин оролдоно уу.';
+  }
+
   static String? codeError(String? value) {
     final v = (value ?? '').trim();
     if (v.isEmpty) return 'Баталгаажуулах код оруулна уу';
