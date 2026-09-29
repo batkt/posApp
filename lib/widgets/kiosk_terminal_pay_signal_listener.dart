@@ -14,6 +14,7 @@ import '../models/sales_model.dart';
 import '../payment/pos_payment_core.dart';
 import '../screens/shared/receipt_screen.dart';
 import '../services/background_watchdog_service.dart';
+import '../services/pos_settings_service.dart';
 import '../services/pos_transaction_service.dart';
 import '../services/socket_service.dart';
 import '../services/terminal_tulbur_signal_service.dart';
@@ -227,15 +228,46 @@ class _KioskTerminalPaySignalListenerState
         final auth = context.read<AuthModel>();
         final session = auth.posSession;
 
-        final due = (sales.isSaleEmpty || sales.total <= 0) ? item.amountMnt : sales.total;
-        final std = PosPaymentCore.calculateStandardSaleTotals(due);
-        final tw = CashierTotals(
-          cappedDiscount: 0,
-          net: std.net,
-          vat: std.vat,
-          nhhat: 0,
-          total: due,
-        );
+        // Утаснаас ирсэн сагсны мөрүүд (шинэ формат: { baraa, too, unitPrice, ... }).
+        // Байвал ердийн кассын борлуулалт шиг бодит бараа + салбарын НӨАТ/НХАТ
+        // тохиргоогоор бүртгэнэ; байхгүй (хуучин апп) бол өмнөх ерөнхий мөр.
+        final requestLines = _saleLinesFromRequest(item);
+        PosWebTaxContext? taxCtx;
+        if (session != null && requestLines.isNotEmpty) {
+          try {
+            taxCtx = await posSettingsService.loadPosWebTaxContext(
+              baiguullagiinId: session.baiguullagiinId,
+              salbariinId: session.salbariinId,
+            );
+          } catch (e) {
+            debugPrint('>>> [KioskTerminalPaySignalListener] tax ctx load failed: $e');
+          }
+        }
+
+        final due = requestLines.isNotEmpty
+            ? item.amountMnt
+            : ((sales.isSaleEmpty || sales.total <= 0) ? item.amountMnt : sales.total);
+        final CashierTotals tw;
+        if (requestLines.isNotEmpty && taxCtx != null) {
+          tw = PosPaymentCore.calculateCashierTotalsWeb(
+            lineGrossAmounts: requestLines.map((e) => e.total.toDouble()).toList(),
+            noatBodohPerLine:
+                requestLines.map((e) => e.product.noatBodohEsekh == true).toList(),
+            nhatBodohPerLine:
+                requestLines.map((e) => e.product.nhatBodohEsekh == true).toList(),
+            discountMnt: 0,
+            ctx: taxCtx,
+          );
+        } else {
+          final std = PosPaymentCore.calculateStandardSaleTotals(due);
+          tw = CashierTotals(
+            cappedDiscount: 0,
+            net: std.net,
+            vat: std.vat,
+            nhhat: 0,
+            total: due,
+          );
+        }
 
         String? guilgeeMongoId;
         String finalOrderNo = PaymentDisplayConfig.generateOrderPreview();
@@ -258,7 +290,11 @@ class _KioskTerminalPaySignalListenerState
               finalOrderNo = orderNo;
             }
 
-            if (item.baraanuud.isNotEmpty) {
+            if (requestLines.isNotEmpty) {
+              // Утасны сагсыг яг хэвээр нь (үнэ, тоо, жин/хайрцаг) сэргээнэ
+              sales.restoreParkedSale(requestLines, guilgeeniiDugaar: finalOrderNo);
+              sales.setWebTaxContext(taxCtx);
+            } else if (item.baraanuud.isNotEmpty) {
               sales.clearSale();
               for (int i = 0; i < item.baraanuud.length; i++) {
                 final raw = item.baraanuud[i];
@@ -310,15 +346,15 @@ class _KioskTerminalPaySignalListenerState
               sales: sales,
               paymentTurul:
                   PosTransactionService.paymentMethodToTurul(PosPaymentCore.methodCard),
-              niitUne: due,
+              niitUne: tw.total,
               tulsunDun: due,
               hariult: 0,
               hungulsunDun: 0,
-              noatiinDun: std.vat,
-              noatguiDun: std.net,
-              nhatiinDun: 0,
+              noatiinDun: tw.vat,
+              noatguiDun: tw.net,
+              nhatiinDun: tw.nhhat,
               guilgeeniiDugaar: finalOrderNo,
-              webTaxContext: sales.webTaxContext,
+              webTaxContext: requestLines.isNotEmpty ? taxCtx : sales.webTaxContext,
             );
             guilgeeMongoId =
                 PosTransactionService.parseGuilgeeniiMongoIdFromSaveResponse(saveResp);
@@ -368,11 +404,11 @@ class _KioskTerminalPaySignalListenerState
                         ))
                     .toList(),
                 subtotal: due,
-                tax: std.vat,
+                tax: tw.vat,
                 total: due,
                 paymentMethod: PosPaymentCore.methodCard,
                 timestamp: DateTime.now(),
-                noatguiSum: std.net,
+                noatguiSum: tw.net,
               );
 
         if (mounted) {
@@ -449,6 +485,34 @@ class _KioskTerminalPaySignalListenerState
         );
       } catch (_) {}
     }
+  }
+
+  /// Утасны `createRequest(baraanuud: ...)` илгээсэн мөрүүдийг [SaleItem] болгоно.
+  /// Хуучин формат (`baraa` түлхүүргүй) бол хоосон буцаана.
+  List<SaleItem> _saleLinesFromRequest(TerminalPaySignalItem item) {
+    double? d(dynamic v) => v is num ? v.toDouble() : double.tryParse('${v ?? ''}');
+    final out = <SaleItem>[];
+    for (final raw in item.baraanuud) {
+      if (raw is! Map || raw['baraa'] is! Map) return const [];
+      final m = Map<String, dynamic>.from(raw);
+      final product = Product.fromJson(Map<String, dynamic>.from(m['baraa'] as Map));
+      final unit = d(m['unitPrice']) ?? product.price;
+      final qty = (d(m['too']) ?? 1).round();
+      final uramshuulaliinId = m['uramshuulaliinId']?.toString();
+      out.add(SaleItem(
+        product: product,
+        unitPrice: unit,
+        retailUnitPrice: d(m['retailUnitPrice']) ?? unit,
+        quantity: qty < 1 ? 1 : qty,
+        // Утсан дээр тогтсон үнийг бөөний үнээр дахин тооцохгүй
+        forceRetailPricing: true,
+        soldWeightKg: d(m['soldWeightKg']),
+        boxPiecesSold: d(m['boxPiecesSold']),
+        uramshuulaliinId:
+            (uramshuulaliinId == null || uramshuulaliinId.isEmpty) ? null : uramshuulaliinId,
+      ));
+    }
+    return out;
   }
 
   @override

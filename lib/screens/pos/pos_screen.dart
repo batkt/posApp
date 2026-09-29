@@ -668,6 +668,22 @@ class _POSScreenState extends State<POSScreen> {
         amountMnt: sales.total,
         tailbar:
             '${sales.uniqueSaleItems} төрөл · ${sales.salePieceCountApprox} ширхэг',
+        // Терминал ердийн кассын борлуулалт шиг бодит бараа, НӨАТ/НХАТ-аар
+        // бүртгэхийн тулд мөр бүрийг бүтнээр нь илгээнэ.
+        baraanuud: sales.currentSaleItems
+            .map((l) => <String, dynamic>{
+                  'baraa': l.product.toBaraaDocument(
+                    fallbackSalbariinId: session.salbariinId,
+                  ),
+                  'too': l.quantity,
+                  'unitPrice': l.unitPrice,
+                  'retailUnitPrice': l.retailUnitPrice,
+                  if (l.soldWeightKg != null) 'soldWeightKg': l.soldWeightKg,
+                  if (l.boxPiecesSold != null) 'boxPiecesSold': l.boxPiecesSold,
+                  if (l.uramshuulaliinId != null)
+                    'uramshuulaliinId': l.uramshuulaliinId,
+                })
+            .toList(),
       );
       if (!context.mounted) return;
       showAppSnackBar(context, l10n.tr('terminal_signal_sent'));

@@ -79,6 +79,9 @@ class TerminalTulburSignalService {
     required String salbariinId,
     required double amountMnt,
     String tailbar = '',
+    /// Сагсны мөрүүд — терминал бодит бараагаар борлуулалт үүсгэнэ
+    /// (хоосон бол нэг ерөнхий "CARD" мөр гардаг байсан).
+    List<Map<String, dynamic>> baraanuud = const [],
   }) async {
     final uri = Uri.parse('${ApiConfig.posBaseUrl}/terminalTulburKhuseeltUusgey');
     final res = await _http
@@ -89,6 +92,7 @@ class TerminalTulburSignalService {
             'salbariinId': salbariinId,
             'amountMnt': amountMnt,
             'tailbar': tailbar,
+            if (baraanuud.isNotEmpty) 'baraanuud': baraanuud,
           }),
         )
         .timeout(ApiConfig.timeout);
@@ -115,6 +119,7 @@ class TerminalTulburSignalService {
           'initiatorNer': item.initiatorNer,
           'initiatorAjiltanId': item.initiatorAjiltanId,
           'tailbar': item.tailbar,
+          'baraanuud': item.baraanuud,
         });
       }
       return item;
