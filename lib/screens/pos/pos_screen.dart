@@ -110,6 +110,11 @@ class _POSScreenState extends State<POSScreen> {
 
   static const Duration _promoSyncDebounce = Duration(milliseconds: 350);
 
+  /// Терминал руу илгээсэн картын хүсэлтийн үр дүнг хүлээх (3 сек тутам).
+  Timer? _terminalTuluvTimer;
+  static const Duration _terminalTuluvInterval = Duration(seconds: 3);
+  static const Duration _terminalTuluvMax = Duration(minutes: 20);
+
   @override
   void initState() {
     super.initState();
@@ -276,6 +281,7 @@ class _POSScreenState extends State<POSScreen> {
   @override
   void dispose() {
     _promoSyncTimer?.cancel();
+    _terminalTuluvTimer?.cancel();
     _promoWatchedSales?.removeListener(_onCartChangedForPromo);
     _searchController.dispose();
     _cashierPageController?.dispose();
@@ -648,6 +654,54 @@ class _POSScreenState extends State<POSScreen> {
 
 
 
+  /// Сагсны агуулгын тэмдэг — үр дүн ирэхэд сагс өөрчлөгдөөгүй эсэхийг шалгана.
+  String _saleSignature(SalesModel sales) => sales.currentSaleItems
+      .map((l) => '${l.product.id}|${l.quantity}|${l.unitPrice}')
+      .join(',');
+
+  /// Терминал гүйлгээг дуусгах (амжилттай) эсвэл цуцлах (амжилтгүй) хүртэл
+  /// хүлээж, аль ч үед утасны сагсыг цэвэрлэнэ. Хүлээх хооронд худалдагч
+  /// шинэ борлуулалт эхлүүлсэн бол (сагс өөр болсон) түүнийг устгахгүй.
+  void _watchTerminalRequest(String requestId, String sentSignature) {
+    _terminalTuluvTimer?.cancel();
+    final ekhelsen = DateTime.now();
+    var shalgajBaina = false;
+    _terminalTuluvTimer = Timer.periodic(_terminalTuluvInterval, (timer) async {
+      if (shalgajBaina) return;
+      if (!mounted || DateTime.now().difference(ekhelsen) > _terminalTuluvMax) {
+        timer.cancel();
+        return;
+      }
+      shalgajBaina = true;
+      final tuluv = await TerminalTulburSignalService().fetchStatus(requestId);
+      shalgajBaina = false;
+      if (tuluv == null || tuluv == 'pending' || !mounted) return;
+      timer.cancel();
+
+      final amjilttai = tuluv == 'completed';
+      final sales = context.read<SalesModel>();
+      final sagsHevendee = _saleSignature(sales) == sentSignature;
+      if (sagsHevendee && !sales.isSaleEmpty) {
+        if (amjilttai) {
+          // Терминал борлуулалтыг бүртгэсэн — үлдэгдлийг буцаахгүй
+          sales.clearSale();
+        } else {
+          _clearSaleAndRestock(context, sales);
+        }
+      }
+      if (_cashierPageController != null) _goCashierProductsStep();
+      showAppSnackBar(
+        context,
+        amjilttai
+            ? 'Картын гүйлгээ амжилттай'
+            : tuluv == 'expired'
+                ? 'Картын хүсэлтийн хугацаа дууслаа'
+                : 'Картын гүйлгээ амжилтгүй/цуцлагдлаа',
+        variant: amjilttai ? AppSnackVariant.success : AppSnackVariant.warning,
+      );
+    });
+  }
+
   /// Mobile staff → posBack → kiosk polls and can open UniPOS for this amount.
   Future<void> _sendTerminalCardSignal(
     BuildContext context,
@@ -663,7 +717,8 @@ class _POSScreenState extends State<POSScreen> {
     }
     final session = auth.posSession!;
     try {
-      await TerminalTulburSignalService().createRequest(
+      final sentSignature = _saleSignature(sales);
+      final created = await TerminalTulburSignalService().createRequest(
         salbariinId: session.salbariinId,
         amountMnt: sales.total,
         tailbar:
@@ -687,6 +742,9 @@ class _POSScreenState extends State<POSScreen> {
       );
       if (!context.mounted) return;
       showAppSnackBar(context, l10n.tr('terminal_signal_sent'));
+      if (created != null) {
+        _watchTerminalRequest(created.id, sentSignature);
+      }
     } on TerminalTulburSignalException catch (e) {
       if (context.mounted) {
         showAppSnackBar(context, e.message, variant: AppSnackVariant.error);

@@ -8,9 +8,11 @@ import '../../theme/app_theme.dart';
 import '../../utils/app_date_range_picker.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/app_date_range_filter_button.dart';
+import 'tailan/baraa_tailan_tab.dart';
 
-/// Single consolidated “closing” report: totals by payment method for the period.
-/// Uses `POST /borluulaltiinTailanKhelbereerAvya` (same as web POS).
+/// Тайлан — 2 таб, хугацааны шүүлт хуваалцана:
+///   • Борлуулалт — төлбөрийн хэлбэрээр (`POST /borluulaltiinTailanKhelbereerAvya`)
+///   • Бараа — вэбийн Барааны тайлан (`POST /baraaMaterialiinTailanAvya`)
 class TailanScreen extends StatefulWidget {
   const TailanScreen({super.key, this.showAppBar = true});
 
@@ -20,8 +22,10 @@ class TailanScreen extends StatefulWidget {
   State<TailanScreen> createState() => _TailanScreenState();
 }
 
-class _TailanScreenState extends State<TailanScreen> {
+class _TailanScreenState extends State<TailanScreen>
+    with SingleTickerProviderStateMixin {
   final TailanService _tailan = TailanService();
+  late final TabController _tabs = TabController(length: 2, vsync: this);
   late DateTimeRange _range;
   Future<TailanPostResult>? _future;
 
@@ -34,6 +38,12 @@ class _TailanScreenState extends State<TailanScreen> {
       end: DateTime(now.year, now.month + 1, 0, 23, 59, 59),
     );
     _future = _load();
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
   }
 
   Future<TailanPostResult> _load() async {
@@ -94,14 +104,12 @@ class _TailanScreenState extends State<TailanScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Text(
-              l10n.tr('tailan_consolidated_subtitle'),
-              style: textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
+          TabBar(
+            controller: _tabs,
+            tabs: [
+              Tab(text: l10n.tr('tailan_tab_payment')),
+              Tab(text: l10n.tr('tailan_tab_baraa')),
+            ],
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -117,41 +125,64 @@ class _TailanScreenState extends State<TailanScreen> {
             ),
           ),
           Expanded(
-            child: FutureBuilder<TailanPostResult>(
-              key: ValueKey<Object>('${_range.start}_${_range.end}'),
-              future: _future,
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting &&
-                    !snap.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final r = snap.data;
-                if (r == null || !r.ok) {
-                  final msg = r?.error == 'no_session'
-                      ? l10n.tr('toololt_no_session')
-                      : (r?.error ?? '—');
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
+            child: TabBarView(
+              controller: _tabs,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
                       child: Text(
-                        msg,
-                        textAlign: TextAlign.center,
-                        style: textTheme.bodyLarge?.copyWith(
-                          color: AppColors.error,
+                        l10n.tr('tailan_consolidated_subtitle'),
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
-                  );
-                }
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    final f = _load();
-                    setState(() => _future = f);
-                    await f;
-                  },
-                  child: _NegtgelPaymentList(data: r.data),
-                );
-              },
+                    Expanded(
+                      child: FutureBuilder<TailanPostResult>(
+                        key: ValueKey<Object>('${_range.start}_${_range.end}'),
+                        future: _future,
+                        builder: (context, snap) {
+                          if (snap.connectionState == ConnectionState.waiting &&
+                              !snap.hasData) {
+                            return const Center(
+                                child: CircularProgressIndicator());
+                          }
+                          final r = snap.data;
+                          if (r == null || !r.ok) {
+                            final msg = r?.error == 'no_session'
+                                ? l10n.tr('toololt_no_session')
+                                : (r?.error ?? '—');
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Text(
+                                  msg,
+                                  textAlign: TextAlign.center,
+                                  style: textTheme.bodyLarge?.copyWith(
+                                    color: AppColors.error,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                          return RefreshIndicator(
+                            onRefresh: () async {
+                              final f = _load();
+                              setState(() => _future = f);
+                              await f;
+                            },
+                            child: _NegtgelPaymentList(data: r.data),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                BaraaTailanTab(range: _range),
+              ],
             ),
           ),
         ],

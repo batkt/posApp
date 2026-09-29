@@ -158,6 +158,23 @@ class TerminalTulburSignalService {
         .toList();
   }
 
+  /// Хүсэлтийн төлөв: `pending` | `completed` | `cancelled` | `expired`
+  /// (сүлжээний алдаа гэх мэт үед null).
+  Future<String?> fetchStatus(String id) async {
+    try {
+      final uri = Uri.parse('${ApiConfig.posBaseUrl}/terminalTulburKhuseeltTuluv');
+      final res = await _http
+          .post(uri, headers: _headers(), body: jsonEncode({'id': id}))
+          .timeout(ApiConfig.timeout);
+      if (res.statusCode < 200 || res.statusCode >= 300) return null;
+      final decoded = res.body.isEmpty ? null : jsonDecode(res.body);
+      if (decoded is Map && decoded['data'] is Map) {
+        return (decoded['data'] as Map)['status']?.toString();
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<void> markCompleted(String id) async {
     final uri = Uri.parse('${ApiConfig.posBaseUrl}/terminalTulburKhuseeltDuussan');
     final res = await _http
