@@ -655,11 +655,6 @@ class _POSScreenState extends State<POSScreen> {
 
 
 
-  /// Сагсны агуулгын тэмдэг — үр дүн ирэхэд сагс өөрчлөгдөөгүй эсэхийг шалгана.
-  String _saleSignature(SalesModel sales) => sales.currentSaleItems
-      .map((l) => '${l.product.id}|${l.quantity}|${l.unitPrice}')
-      .join(',');
-
   /// Картын терминал руу илгээсэн хүсэлтийн үр дүнг арын горимд хүлээнэ.
   ///
   /// Сагс нь илгээх мөчид аль хэдийн цэвэрлэгдсэн ([_sendTerminalCardSignal]).
