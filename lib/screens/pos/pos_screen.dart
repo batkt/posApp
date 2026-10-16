@@ -660,10 +660,17 @@ class _POSScreenState extends State<POSScreen> {
       .map((l) => '${l.product.id}|${l.quantity}|${l.unitPrice}')
       .join(',');
 
-  /// Терминал гүйлгээг дуусгах (амжилттай) эсвэл цуцлах (амжилтгүй) хүртэл
-  /// хүлээж, аль ч үед утасны сагсыг цэвэрлэнэ. Хүлээх хооронд худалдагч
-  /// шинэ борлуулалт эхлүүлсэн бол (сагс өөр болсон) түүнийг устгахгүй.
-  void _watchTerminalRequest(String requestId, String sentSignature) {
+  /// Картын терминал руу илгээсэн хүсэлтийн үр дүнг арын горимд хүлээнэ.
+  ///
+  /// Сагс нь илгээх мөчид аль хэдийн цэвэрлэгдсэн ([_sendTerminalCardSignal]).
+  /// Терминал амжилттай бол юу ч хийхгүй (бараа терминал дээр бүртгэгдсэн);
+  /// цуцлагдсан/хугацаа дууссан бол үлдэгдлийг буцааж, сагсыг сэргээх эсэхийг
+  /// асууна.
+  void _watchTerminalRequest(
+    String requestId,
+    List<SaleItem> ilgeesenMuruud,
+    String? guilgeeniiDugaar,
+  ) {
     _terminalTuluvTimer?.cancel();
     final ekhelsen = DateTime.now();
     var shalgajBaina = false;
@@ -679,27 +686,56 @@ class _POSScreenState extends State<POSScreen> {
       if (tuluv == null || tuluv == 'pending' || !mounted) return;
       timer.cancel();
 
-      final amjilttai = tuluv == 'completed';
-      final sales = context.read<SalesModel>();
-      final sagsHevendee = _saleSignature(sales) == sentSignature;
-      if (sagsHevendee && !sales.isSaleEmpty) {
-        if (amjilttai) {
-          // Терминал борлуулалтыг бүртгэсэн — үлдэгдлийг буцаахгүй
-          sales.clearSale();
-        } else {
-          _clearSaleAndRestock(context, sales);
-        }
+      if (tuluv == 'completed') {
+        showAppSnackBar(context, 'Картын гүйлгээ амжилттай',
+            variant: AppSnackVariant.success);
+        return;
       }
-      if (_cashierPageController != null) _goCashierProductsStep();
-      showAppSnackBar(
-        context,
-        amjilttai
-            ? 'Картын гүйлгээ амжилттай'
-            : tuluv == 'expired'
-                ? 'Картын хүсэлтийн хугацаа дууслаа'
-                : 'Картын гүйлгээ амжилтгүй/цуцлагдлаа',
-        variant: amjilttai ? AppSnackVariant.success : AppSnackVariant.warning,
+
+      // Амжилтгүй — илгээхэд хасагдсан үлдэгдлийг буцаана
+      final inventory = context.read<InventoryModel>();
+      for (final line in ilgeesenMuruud) {
+        inventory.restock(line.product.id, line.quantity);
+      }
+      final sergeekh = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(tuluv == 'expired'
+              ? 'Картын хүсэлтийн хугацаа дууслаа'
+              : 'Картын гүйлгээ амжилтгүй/цуцлагдлаа'),
+          content: const Text('Илгээсэн сагсыг сэргээж дахин оролдох уу?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Үгүй'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Сагс сэргээх'),
+            ),
+          ],
+        ),
       );
+      if (sergeekh != true || !mounted) return;
+      final sales = context.read<SalesModel>();
+      if (!sales.isSaleEmpty) {
+        showAppSnackBar(
+          context,
+          'Сагсанд шинэ бараа байна — эхлээд дуусгах эсвэл цэвэрлэнэ үү',
+          variant: AppSnackVariant.warning,
+        );
+        return;
+      }
+      for (final line in ilgeesenMuruud) {
+        inventory.deductStock(line.product.id, line.quantity);
+      }
+      sales.restoreParkedSale(
+        ilgeesenMuruud,
+        guilgeeniiDugaar: guilgeeniiDugaar ?? '',
+      );
+      if (widget.cashierMode && _cashierPageController != null) {
+        _goCashierCheckoutStep();
+      }
     });
   }
 
@@ -718,7 +754,6 @@ class _POSScreenState extends State<POSScreen> {
     }
     final session = auth.posSession!;
     try {
-      final sentSignature = _saleSignature(sales);
       final created = await TerminalTulburSignalService().createRequest(
         salbariinId: session.salbariinId,
         amountMnt: sales.total,
@@ -742,9 +777,18 @@ class _POSScreenState extends State<POSScreen> {
             .toList(),
       );
       if (!context.mounted) return;
-      showAppSnackBar(context, l10n.tr('terminal_signal_sent'));
+      showAppSnackBar(context, l10n.tr('terminal_signal_sent'),
+          variant: AppSnackVariant.success);
       if (created != null) {
-        _watchTerminalRequest(created.id, sentSignature);
+        // Терминал хүлээж авмагц апп дээрх гүйлгээг ШУУД цэвэрлэнэ —
+        // худалдагч дараагийн үйлчлүүлэгчийг шууд эхлүүлнэ. Үлдэгдлийг
+        // буцаахгүй (терминал борлуулалтыг бүртгэнэ); амжилтгүй болбол
+        // [_watchTerminalRequest] буцааж, сэргээх боломж өгнө.
+        final ilgeesenMuruud = List<SaleItem>.of(sales.currentSaleItems);
+        final dugaar = sales.guilgeeniiDugaar;
+        sales.clearSale();
+        if (_cashierPageController != null) _goCashierProductsStep();
+        _watchTerminalRequest(created.id, ilgeesenMuruud, dugaar);
       }
     } on TerminalTulburSignalException catch (e) {
       if (context.mounted) {
