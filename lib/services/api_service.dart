@@ -277,8 +277,15 @@ class ApiService {
     }
     return m.contains('token expired') ||
         m.contains('invalid token') ||
-        m.contains('invalid signature');
+        m.contains('invalid signature') ||
+        isBusadTukhuurumjMessage(message);
   }
+
+  /// Нэг эрхээр нэг төхөөрөмж: энэ эрхээр өөр төхөөрөмжөөс (вэб, апп,
+  /// андройд пос) дараа нь нэвтэрсэн (posBack `middleware/sessShalgakh.js`,
+  /// 401 + kod `BUSAD_TUKHUURUMJ`).
+  static bool isBusadTukhuurumjMessage(String? message) =>
+      message != null && message.contains('өөр төхөөрөмжөөс нэвтэрсэн');
 
   /// Зөвхөн токентой байж байгаад унасан хүсэлтэд гаргана.
   ///

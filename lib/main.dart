@@ -138,7 +138,9 @@ class _POSAppState extends State<POSApp> {
         if (ctx != null && ctx.mounted) {
           showAppSnackBar(
             ctx,
-            'Нэвтрэх хугацаа дууссан тул дахин нэвтэрнэ үү.',
+            ApiService.isBusadTukhuurumjMessage(message)
+                ? 'Таны эрхээр өөр төхөөрөмжөөс нэвтэрсэн тул энэ төхөөрөмжөөс гарлаа.'
+                : 'Нэвтрэх хугацаа дууссан тул дахин нэвтэрнэ үү.',
             variant: AppSnackVariant.error,
           );
         }
