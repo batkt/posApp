@@ -26,7 +26,7 @@ Future<void> showWeightLineGramsSheet(
   SaleItem item,
 ) async {
   if (!item.product.isWeightSaleUnit) return;
-  final maxKg = (item.product.uldegdel ?? item.product.stock).toDouble();
+  final maxKg = item.product.boditUldegdel;
   if (maxKg <= 0) return;
 
   await showModalBottomSheet<void>(

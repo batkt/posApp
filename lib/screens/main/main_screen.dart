@@ -182,8 +182,8 @@ class _MainScreenState extends State<MainScreen> {
       );
     }
     */
-    if (access.allowsBarimtiinJagsaalt) {
-      /*
+    // Худалдан авалт — жагсаалт + «Шинэ худалдан авалт» (орлого авах эрхтэй бол)
+    if (access.allowsBarimtiinJagsaalt || access.allowsBaraaOrlogokh) {
       push(
         const PurchaseListScreen(showAppBar: false),
         _MenuItem(
@@ -194,7 +194,8 @@ class _MainScreenState extends State<MainScreen> {
           index: 0,
         ),
       );
-      */
+    }
+    if (access.allowsBarimtiinJagsaalt) {
       push(
         const SalesHistoryScreen(showAppBar: false),
         _MenuItem(

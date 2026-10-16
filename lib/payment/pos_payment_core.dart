@@ -7,7 +7,12 @@ class PosWebTaxContext {
     required this.eBarimtShine,
     this.isModalOpenTulbur = true,
     this.baraaNUATModalOpen = false,
+    this.baraaUneOorchlokh = false,
   });
+
+  /// Салбарын `tokhirgoo.baraa.baraaHudaldahUne` — кассаас барааны худалдах
+  /// үнийг өөрчлөх эрх (Тохиргоо → «Барааны худалдах үнэ өөрчлөх эсэх»).
+  final bool baraaUneOorchlokh;
 
   /// Web `salbar?.tokhirgoo?.borluulaltNUAT` (org-level in mobile: from `baiguullaga.tokhirgoo`).
   final bool borluulaltNUAT;
@@ -27,11 +32,16 @@ class PosWebTaxContext {
   /// байв.
   final bool baraaNUATModalOpen;
 
-  PosWebTaxContext copyWith({bool? baraaNUATModalOpen}) => PosWebTaxContext(
+  PosWebTaxContext copyWith({
+    bool? baraaNUATModalOpen,
+    bool? baraaUneOorchlokh,
+  }) =>
+      PosWebTaxContext(
         borluulaltNUAT: borluulaltNUAT,
         eBarimtShine: eBarimtShine,
         isModalOpenTulbur: isModalOpenTulbur,
         baraaNUATModalOpen: baraaNUATModalOpen ?? this.baraaNUATModalOpen,
+        baraaUneOorchlokh: baraaUneOorchlokh ?? this.baraaUneOorchlokh,
       );
 
   /// Вэб дээрх шиг унтраалга ХАРАГДАХ эсэх.

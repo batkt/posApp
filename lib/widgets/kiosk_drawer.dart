@@ -9,6 +9,7 @@ import '../screens/main/dashboard_screen.dart';
 import '../screens/main/customers_screen.dart';
 import '../screens/main/inventory_screen.dart';
 import '../screens/main/out_of_stock_baraa_screen.dart';
+import '../screens/main/purchase_list_screen.dart';
 import '../screens/main/sales_history_screen.dart';
 import '../screens/main/pos_settings_hub_screen.dart';
 import '../screens/main/tailan_screen.dart';
@@ -128,8 +129,8 @@ class KioskDrawer extends StatelessWidget {
             titleKey: 'tailan_menu',
           ),
         ),
-      /*
-      if (access.allowsBarimtiinJagsaalt)
+      // Худалдан авалт — жагсаалт + «Шинэ худалдан авалт» (main_screen-тэй ижил эрх)
+      if (access.allowsBarimtiinJagsaalt || access.allowsBaraaOrlogokh)
         _KioskMenuAction(
           icon: Icons.shopping_cart_outlined,
           labelKey: 'menu_hudaldan_avalt',
@@ -140,7 +141,6 @@ class KioskDrawer extends StatelessWidget {
             titleKey: 'menu_hudaldan_avalt',
           ),
         ),
-      */
       if (access.allowsBarimtiinJagsaalt)
         _KioskMenuAction(
           icon: Icons.history_rounded,

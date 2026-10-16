@@ -15,6 +15,10 @@ class KhariltsagchService {
     String search = '',
     int page = 1,
     int pageSize = 100,
+    /// Жишээ нь `Нийлүүлэгч` — вэбийн нийлүүлэгч сонголттой ижил шүүлт.
+    String? turul,
+    /// Нийлүүлэгч байгууллагын хэмжээнд (салбаргүй) бүртгэгддэг тул false.
+    bool branchOnly = true,
   }) async {
     final q = search.trim();
     final pattern = RegExp.escape(q);
@@ -28,7 +32,8 @@ class KhariltsagchService {
         {'register': {r'$regex': pattern, r'$options': 'i'}},
       ],
       'baiguullagiinId': baiguullagiinId,
-      'salbariinId': salbariinId,
+      if (branchOnly) 'salbariinId': salbariinId,
+      if (turul != null && turul.isNotEmpty) 'turul': turul,
     };
 
     try {
@@ -168,6 +173,58 @@ class KhariltsagchService {
     }
   }
 }
+
+extension KhariltsagchZasakh on KhariltsagchService {
+  /// Зөвхөн ирсэн талбаруудыг шинэчилнэ · `PUT /khariltsagch/<id>`.
+  Future<KhariltsagchRegisterResult> updateFields({
+    required String khariltsagchiinId,
+    required Map<String, dynamic> fields,
+  }) async {
+    final id = khariltsagchiinId.trim();
+    if (id.isEmpty) {
+      return KhariltsagchRegisterResult.fail('Харилцагчийн ID олдсонгүй');
+    }
+    try {
+      final response = await _apiOf(this).put<dynamic>(
+        '/khariltsagch/$id',
+        body: fields,
+        parser: (d) => d,
+      );
+      if (response.success) return KhariltsagchRegisterResult.ok();
+      return KhariltsagchRegisterResult.fail(
+        response.message ?? 'Хадгалахад алдаа гарлаа',
+      );
+    } on ApiException catch (e) {
+      return KhariltsagchRegisterResult.fail(e.message);
+    } catch (e) {
+      return KhariltsagchRegisterResult.fail(e.toString());
+    }
+  }
+
+  /// Харилцагч устгах · `DELETE /khariltsagch/<id>` (вэб `deleteMethod`).
+  Future<KhariltsagchRegisterResult> ustgakh(String khariltsagchiinId) async {
+    final id = khariltsagchiinId.trim();
+    if (id.isEmpty) {
+      return KhariltsagchRegisterResult.fail('Харилцагчийн ID олдсонгүй');
+    }
+    try {
+      final response = await _apiOf(this).delete<dynamic>(
+        '/khariltsagch/$id',
+        parser: (d) => d,
+      );
+      if (response.success) return KhariltsagchRegisterResult.ok();
+      return KhariltsagchRegisterResult.fail(
+        response.message ?? 'Устгахад алдаа гарлаа',
+      );
+    } on ApiException catch (e) {
+      return KhariltsagchRegisterResult.fail(e.message);
+    } catch (e) {
+      return KhariltsagchRegisterResult.fail(e.toString());
+    }
+  }
+}
+
+ApiService _apiOf(KhariltsagchService s) => s._api;
 
 class KhariltsagchRegisterResult {
   KhariltsagchRegisterResult._({required this.success, this.error});

@@ -20,8 +20,9 @@ double? _parsePiecesInput(String raw) {
 Future<void> showBoxLinePiecesSheet(BuildContext context, SaleItem item) async {
   if (!item.product.isBoxSaleUnit) return;
   final neg = item.negPerBox;
-  final maxPieces =
-      (item.product.uldegdel ?? item.product.stock).toDouble() * neg;
+  // Бутархай үлдэгдлийг (0.5 хайрцаг г.м.) тасалж болохгүй — яг утгаар.
+  final rawMax = item.product.boditUldegdel * neg;
+  final maxPieces = rawMax < 0.01 ? 0.01 : rawMax;
   final initial = item.effectivePieces.clamp(0.01, maxPieces);
 
   await showModalBottomSheet<void>(

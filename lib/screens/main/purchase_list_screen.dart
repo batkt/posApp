@@ -7,6 +7,7 @@ import '../../services/hudaldan_avalt_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/app_date_range_filter_button.dart';
+import 'restock_screen.dart';
 
 /// Web parity: `barimtiinJagsaalt` tab **Худалдан авалт** (`/orlogoZarlagiinTuukh`).
 class PurchaseListScreen extends StatefulWidget {
@@ -85,6 +86,16 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
     });
   }
 
+  Future<void> _shineKhudaldanAvalt() async {
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const RestockScreen(title: 'Шинэ худалдан авалт'),
+      ),
+    );
+    if (ok == true && mounted) _load(reset: true);
+  }
+
   String _khelberMn(String? k) {
     switch (k) {
       case 'belen':
@@ -102,7 +113,18 @@ class _PurchaseListScreenState extends State<PurchaseListScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
+    final shineErkhtei =
+        context.watch<AuthModel>().staffAccess.allowsBaraaOrlogokh;
+
     return Scaffold(
+      floatingActionButton: shineErkhtei
+          ? FloatingActionButton.extended(
+              heroTag: 'shineKhudaldanAvalt',
+              onPressed: _shineKhudaldanAvalt,
+              icon: const Icon(Icons.add_shopping_cart_rounded),
+              label: const Text('Шинэ худалдан авалт'),
+            )
+          : null,
       appBar: widget.showAppBar
           ? AppBar(
               title: widget.customerNameForTitle != null &&

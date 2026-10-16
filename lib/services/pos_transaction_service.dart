@@ -111,7 +111,7 @@ class PosTransactionService {
         'undsenZarakhUne': _fixed2Num(undsenZarakhUne),
       if (dorvonNegGiftLine) 'dorvonNegGiftLine': true,
       'urtugUne': _fixed2Num(product.urtugUne ?? product.costPrice),
-      'uldegdel': _fixed2Num(product.uldegdel ?? product.stock),
+      'uldegdel': _fixed2Num(product.uldegdelBodit ?? product.uldegdel ?? product.stock),
       'idevkhteiEsekh': product.isAvailable,
       'zurgiinId': product.zurgiinId,
       'noatBodohEsekh': noatBodohEsekh,

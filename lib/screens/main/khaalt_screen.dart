@@ -19,9 +19,15 @@ class KhaaltScreen extends StatefulWidget {
     super.key,
     this.showAppBar = true,
     this.embeddedDialog = false,
+    this.onTokhirgooChanged,
   });
 
   final bool showAppBar;
+
+  /// Тохиргоо цонхноос нээгдсэн үед — «Хаалт ашиглах эсэх»-ийг эндээс
+  /// асаах/унтраахад Тохиргоо (Бусад тохиргоо) өгөгдлөө дахин ачаална.
+  /// Мөн энэ үед л «идэвхгүй болгох» товч гарна.
+  final Future<void> Function()? onTokhirgooChanged;
 
   /// Layout for [showKhaaltModal]: column with header + divider + scroll body (no [Scaffold]).
   final bool embeddedDialog;
@@ -411,12 +417,58 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
     );
   }
 
+  bool _idevkhjuulj = false;
+
+  /// Байгууллагын `tokhirgoo.khaaltAshiglakhEsekh`-ийг асаах/унтраах (вэбийн
+  /// Тохиргоо → Хаалт-тай ижил `/tokhirgooOruulya`).
+  Future<void> _khaaltTokhirgooSolikh(bool asaakh) async {
+    final session = context.read<AuthModel>().posSession;
+    if (session == null || _idevkhjuulj) return;
+    setState(() => _idevkhjuulj = true);
+    final ok = await posSettingsService.tokhirgooOruulya(
+      baiguullagiinId: session.baiguullagiinId,
+      tokhirgooFields: {'khaaltAshiglakhEsekh': asaakh},
+    );
+    if (!mounted) return;
+    setState(() => _idevkhjuulj = false);
+    if (!ok) {
+      showAppSnackBar(context, 'Тохиргоо хадгалахад алдаа гарлаа',
+          variant: AppSnackVariant.error);
+      return;
+    }
+    showAppSnackBar(context, asaakh ? 'Хаалт идэвхжлээ' : 'Хаалт идэвхгүй боллоо',
+        variant: AppSnackVariant.success);
+    await _load();
+    await widget.onTokhirgooChanged?.call();
+  }
+
+  Future<void> _khaaltUnttraakh() async {
+    final batlakh = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Хаалт идэвхгүй болгох'),
+        content: const Text(
+            'Хаалт ашиглахгүй болгох уу? Дараа нь эндээс эсвэл Бусад тохиргооноос дахин асааж болно.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Үгүй')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Тийм')),
+        ],
+      ),
+    );
+    if (batlakh == true) await _khaaltTokhirgooSolikh(false);
+  }
+
   Widget _messageState({
     required IconData icon,
     required Color iconColor,
     required String message,
     required TextStyle? textStyle,
     required ColorScheme colorScheme,
+    Widget? action,
   }) {
     return Center(
       child: SingleChildScrollView(
@@ -443,6 +495,10 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
                     textAlign: TextAlign.center,
                     style: textStyle,
                   ),
+                  if (action != null) ...[
+                    const SizedBox(height: 20),
+                    action,
+                  ],
                 ],
               ),
             ),
@@ -931,6 +987,19 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
             const SizedBox(height: 20),
             _totalAndSubmit(l10n, colorScheme, textTheme),
           ],
+          // Тохиргооноос нээсэн, админ бол хаалтыг унтрааж болно
+          if (widget.onTokhirgooChanged != null &&
+              context.read<AuthModel>().staffAccess.hasFullAccess) ...[
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: _idevkhjuulj ? null : _khaaltUnttraakh,
+              icon: const Icon(Icons.power_settings_new_rounded),
+              label: const Text('Хаалт идэвхгүй болгох'),
+              style: TextButton.styleFrom(
+                foregroundColor: colorScheme.error,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1063,6 +1132,26 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
         message: l10n.tr('khaalt_disabled'),
         textStyle: textTheme.bodyLarge,
         colorScheme: colorScheme,
+        // Админ (бүрэн эрхтэй) бол эндээс шууд асаана
+        action: context.read<AuthModel>().staffAccess.hasFullAccess
+            ? FilledButton.icon(
+                onPressed:
+                    _idevkhjuulj ? null : () => _khaaltTokhirgooSolikh(true),
+                icon: _idevkhjuulj
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.power_settings_new_rounded),
+                label: const Text('Хаалт идэвхжүүлэх'),
+              )
+            : Text(
+                'Админ Тохиргоо → Бусад тохиргоо → «Хаалт ашиглах эсэх»-ийг асаана',
+                textAlign: TextAlign.center,
+                style: textTheme.bodySmall
+                    ?.copyWith(color: colorScheme.onSurfaceVariant),
+              ),
       );
     }
 

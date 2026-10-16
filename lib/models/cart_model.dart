@@ -33,6 +33,12 @@ class Product {
   final bool? ajilUilchilgeeEsekh;
   final bool? ognooniiMedeelelBurtgekhEsekh;
   final int? uldegdel;
+
+  /// API-ийн `uldegdel`-ийн яг утга (бутархай). Хайрцагтай барааг ширхэгээр,
+  /// жингийн барааг граммаар зарсны дараа үлдэгдэл бутархай болдог (жишээ нь
+  /// 0.5 хайрцаг). [uldegdel] нь бүхэлчилсэн (тасалсан) тул 0.5 → 0 болж
+  /// барааг огт зарж болохгүй болгодог байв.
+  final double? uldegdelBodit;
   final int? negKhairtsaganDahiShirhegiinToo;
   final double? niitUne;
   final double? noatiinDun;
@@ -88,6 +94,7 @@ class Product {
     this.ajilUilchilgeeEsekh,
     this.ognooniiMedeelelBurtgekhEsekh,
     this.uldegdel,
+    this.uldegdelBodit,
     this.negKhairtsaganDahiShirhegiinToo,
     this.niitUne,
     this.noatiinDun,
@@ -115,6 +122,13 @@ class Product {
       if (n != null) return n.toInt();
     }
     return fallback;
+  }
+
+  static double? _asNullableDouble(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v.trim());
+    return null;
   }
 
   static int? _asNullableInt(dynamic v) {
@@ -216,6 +230,7 @@ class Product {
       nhatBodohEsekh: json['nhatBodohEsekh'],
       ognooniiMedeelelBurtgekhEsekh: json['ognooniiMedeelelBurtgekhEsekh'],
       uldegdel: _asNullableInt(json['uldegdel']),
+      uldegdelBodit: _asNullableDouble(json['uldegdel']),
       negKhairtsaganDahiShirhegiinToo:
           _asNullableInt(json['negKhairtsaganDahiShirhegiinToo']),
       niitUne: _asDouble(json['niitUne']),
@@ -335,6 +350,19 @@ class Product {
     return kn.contains('хайрцаг');
   }
 
+  /// Яг үлдэгдэл (хайрцаг / кг / ширхэг) — ширхэгээр/граммаар зарах хязгаарт.
+  double get boditUldegdel =>
+      uldegdelBodit ?? (uldegdel ?? stock).toDouble();
+
+  /// Сагсны нөөцлөлтөд (бүхэл тоо) ашиглах үлдэгдэл — бутархайг ДЭЭШ
+  /// бүхэлчилнэ (0.5 хайрцаг → 1), эс бөгөөс үлдсэн хагас хайрцгийг зарах
+  /// боломжгүй. Бодит хязгаарыг [boditUldegdel]-ээр тавина.
+  int get sellableStock {
+    final b = uldegdelBodit;
+    if (b != null) return b <= 0 ? 0 : b.ceil();
+    return uldegdel ?? stock;
+  }
+
   /// Жингээр (кг/гр) зардаг бараа — граммаар бутархай зарна.
   ///
   /// Хайрцаглалт ДАВАМГАЙЛНА: нэг мөрийг хоёр өөр тоо хэмжээний логикоор
@@ -382,7 +410,7 @@ class Product {
       'khemjikhNegj': khemjikhNegj,
       'niitUne': niitUne ?? price,
       'urtugUne': urtugUne ?? costPrice,
-      'uldegdel': uldegdel ?? stock,
+      'uldegdel': uldegdelBodit ?? uldegdel ?? stock,
       'idevkhteiEsekh': isAvailable,
       'zurgiinId': zurgiinId,
       'noatBodohEsekh': noatBodohEsekh,

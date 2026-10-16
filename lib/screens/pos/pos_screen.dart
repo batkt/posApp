@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
@@ -1542,6 +1543,10 @@ class _POSScreenState extends State<POSScreen> {
       showPromoAction: item.product.uramshuulal.isNotEmpty,
       onBulkTap: () => _showBulkPricingSheet(context, item),
       onPromoTap: () => _showPromotionSheet(context, item),
+      onPriceTap: sales.webTaxContext?.baraaUneOorchlokh == true &&
+              !item.isGiftLine
+          ? () => _showUneOorchlokhDialog(context, item)
+          : null,
       onBoxPiecesTap: item.product.isBoxSaleUnit &&
               item.uramshuulaliinId == null
           ? () => showBoxLinePiecesSheet(context, item)
@@ -2631,6 +2636,7 @@ class _SaleItemTile extends StatelessWidget {
     required this.onBulkTap,
     required this.onPromoTap,
     this.onBoxPiecesTap,
+    this.onPriceTap,
     this.sheetMode = false,
     this.dorvonNegFreeUnits = 0,
   });
@@ -2644,6 +2650,9 @@ class _SaleItemTile extends StatelessWidget {
   final VoidCallback onBulkTap;
   final VoidCallback onPromoTap;
   final VoidCallback? onBoxPiecesTap;
+
+  /// Тохиргоонд «Барааны худалдах үнэ өөрчлөх» асаалттай үед л.
+  final VoidCallback? onPriceTap;
   final bool sheetMode;
 
   /// "N-т 1 үнэгүй" урамшуулалд энэ мөрөнд ноогдсон үнэгүй ширхэгийн тоо.
@@ -2812,13 +2821,33 @@ class _SaleItemTile extends StatelessWidget {
                       ),
                     ),
                   ],
-                  if (showBulkAction || showPromoAction) ...[
+                  if (showBulkAction || showPromoAction || onPriceTap != null) ...[
                     const SizedBox(height: 4),
                     Wrap(
                       spacing: 2,
                       runSpacing: 0,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
+                        if (onPriceTap != null)
+                          TextButton.icon(
+                            onPressed: onPriceTap,
+                            icon: const Icon(Icons.edit_outlined, size: 16),
+                            label: Text(
+                              'Үнэ өөрчлөх',
+                              style: textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 0,
+                              ),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              foregroundColor: colorScheme.primary,
+                            ),
+                          ),
                         if (showBulkAction)
                           TextButton(
                             onPressed: onBulkTap,
@@ -3009,4 +3038,67 @@ class _SaleItemTile extends StatelessWidget {
       },
     );
   }
+}
+
+
+/// Кассаас мөрийн нэгж үнийг гараар өөрчлөх (вэб `handleZarahUneChange`).
+/// Тохиргоонд «Барааны худалдах үнэ өөрчлөх эсэх» асаалттай үед л дуудагдана.
+Future<void> _showUneOorchlokhDialog(BuildContext context, SaleItem item) async {
+  final ctrl = TextEditingController(
+    text: item.unitPrice % 1 == 0
+        ? item.unitPrice.toStringAsFixed(0)
+        : item.unitPrice.toStringAsFixed(2),
+  );
+  final khairtsag = item.product.isBoxSaleUnit;
+  final shine = await showDialog<double>(
+    context: context,
+    builder: (ctx) {
+      void batlakh() {
+        final v = double.tryParse(ctrl.text.replaceAll(',', '.').trim());
+        if (v == null || v <= 0) return;
+        Navigator.pop(ctx, v);
+      }
+
+      return AlertDialog(
+        title: const Text('Үнэ өөрчлөх'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(item.product.name,
+                style: Theme.of(ctx)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+              ],
+              decoration: InputDecoration(
+                labelText: khairtsag ? 'Нэг хайрцгийн үнэ' : 'Нэгж үнэ',
+                suffixText: '₮',
+                border: const OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => batlakh(),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Болих'),
+          ),
+          FilledButton(onPressed: batlakh, child: const Text('Хадгалах')),
+        ],
+      );
+    },
+  );
+  ctrl.dispose();
+  if (shine == null || !context.mounted) return;
+  context.read<SalesModel>().updateSaleItemPrice(item.product.id, shine);
 }

@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/auth_model.dart';
+import '../../models/cart_model.dart';
 import '../../models/inventory_model.dart';
 import '../../models/locale_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/authenticated_image.dart';
+import '../../utils/app_snackbar.dart';
 import 'baraa_detail_screen.dart';
+import 'restock_screen.dart';
 
 /// Lists branch products with zero stock (Дууссан), newest first, with category chips.
 class OutOfStockBaraaScreen extends StatefulWidget {
@@ -22,6 +26,39 @@ class OutOfStockBaraaScreen extends StatefulWidget {
 class _OutOfStockBaraaScreenState extends State<OutOfStockBaraaScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _category = 'Бүгд';
+
+  /// Нөхөх (орлого авах)-аар сонгосон барааны _id → бараа
+  final Map<String, Product> _songoson = {};
+
+  void _songoltSolikh(Product p) {
+    // Олон баркодтой барааны үлдэгдэл хүүхэд баркод дээр — аль баркодыг
+    // нөхөхийг эндээс тодорхойлох боломжгүй тул вэбээс орлогодоно.
+    if (p.olonBarCodeEsekh == true) {
+      showAppSnackBar(
+        context,
+        'Олон баркодтой барааг вэбийн «Бараа орлогодох»-оос нөхнө үү',
+        variant: AppSnackVariant.warning,
+      );
+      return;
+    }
+    setState(() {
+      if (_songoson.containsKey(p.id)) {
+        _songoson.remove(p.id);
+      } else {
+        _songoson[p.id] = p;
+      }
+    });
+  }
+
+  Future<void> _orlogoAvakh() async {
+    final products = _songoson.values.toList();
+    if (products.isEmpty) return;
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => RestockScreen(products: products)),
+    );
+    if (ok == true && mounted) setState(_songoson.clear);
+  }
 
   @override
   void initState() {
@@ -40,8 +77,33 @@ class _OutOfStockBaraaScreenState extends State<OutOfStockBaraaScreen> {
     final l10n = AppLocalizations.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final nokhokhErkhtei =
+        context.watch<AuthModel>().staffAccess.allowsBaraaOrlogokh;
 
     return Scaffold(
+      bottomNavigationBar: nokhokhErkhtei && _songoson.isNotEmpty
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => setState(_songoson.clear),
+                      child: const Text('Цуцлах'),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _orlogoAvakh,
+                        icon: const Icon(Icons.add_shopping_cart_rounded),
+                        label: Text('Нөхөх / орлого авах (${_songoson.length})'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
       appBar: widget.showAppBar
           ? AppBar(
               title: Text(l10n.tr('out_of_stock_baraa_title')),
@@ -217,6 +279,11 @@ class _OutOfStockBaraaScreenState extends State<OutOfStockBaraaScreen> {
                                     ],
                                   ),
                                 ),
+                                if (nokhokhErkhtei)
+                                  Checkbox(
+                                    value: _songoson.containsKey(p.id),
+                                    onChanged: (_) => _songoltSolikh(p),
+                                  ),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 8,

@@ -16,6 +16,8 @@ import '../../models/category_model.dart';
 import '../../utils/mongolian_date_formatter.dart';
 import '../../widgets/chat_fab.dart';
 import 'support_chat_page.dart';
+import 'khaalt_screen.dart';
+import '../../models/sales_model.dart';
 import '../../utils/app_snackbar.dart';
 
 /// Web parity: `pages/khyanalt/tokhirgoo` — profile + org/branch settings.
@@ -43,7 +45,9 @@ IconData _posSettingsIcon(PosSettingsSection s) {
     case PosSettingsSection.personal:
       return Icons.person_outlined;
     case PosSettingsSection.baraa:
-      return Icons.inventory_2_outlined;
+      return Icons.tune_rounded;
+    case PosSettingsSection.khaalt:
+      return Icons.point_of_sale_rounded;
     case PosSettingsSection.categories:
       return Icons.category_outlined;
     case PosSettingsSection.notifications:
@@ -89,6 +93,7 @@ class PosSettingsHubScreen extends StatefulWidget {
 enum PosSettingsSection {
   personal,
   baraa,
+  khaalt,
   categories,
   notifications,
   ebarimt,
@@ -350,15 +355,20 @@ class _PosSettingsHubScreenState extends State<PosSettingsHubScreen> {
           salbariinId: pos.salbariinId,
           onSaved: _reload,
         );
+      case PosSettingsSection.khaalt:
+        // Кассын хаалт (вэб «Хаалт») — өмнө нь зөвхөн борлуулалтын дэлгэцийн
+        // дээд мөрөөс нээгддэг байсан.
+        return KhaaltScreen(showAppBar: false, onTokhirgooChanged: _reload);
       case PosSettingsSection.categories:
         return _CategoryPanel(
           l10n: l10n,
           baiguullagiinId: pos.baiguullagiinId,
         );
       case PosSettingsSection.notifications:
-        return _PlaceholderPanel(
-          title: l10n.tr('pos_settings_notify_title'),
-          body: l10n.tr('pos_settings_notify_hint'),
+        return _NotificationPanel(
+          baiguullaga: bg,
+          baiguullagiinId: pos.baiguullagiinId,
+          onSaved: _reload,
         );
       case PosSettingsSection.ebarimt:
         return _EbarimtBranchPanel(
@@ -390,6 +400,8 @@ String posSettingsSectionLabel(AppLocalizations l10n, PosSettingsSection s) {
       return l10n.tr('pos_settings_nav_personal');
     case PosSettingsSection.baraa:
       return 'Бусад тохиргоо';
+    case PosSettingsSection.khaalt:
+      return 'Хаалт хийх';
     case PosSettingsSection.categories:
       return l10n.tr('pos_settings_nav_categories');
     case PosSettingsSection.notifications:
@@ -505,55 +517,6 @@ class _RailTile extends StatelessWidget {
       ),
       onTap: onTap,
       selectedTileColor: colorScheme.primaryContainer.withValues(alpha: 0.4),
-    );
-  }
-}
-
-class _PlaceholderPanel extends StatelessWidget {
-  const _PlaceholderPanel({required this.title, required this.body});
-
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: colorScheme.primary,
-              ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          margin: EdgeInsets.zero,
-          elevation: 0,
-          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.info_outline_rounded,
-                  color: colorScheme.primary,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    body,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1015,7 +978,16 @@ class _CombinedBaraaBonusKhaaltPanelState
       ok ? l10n.tr('pos_settings_saved') : l10n.tr('pos_settings_save_failed'),
       variant: ok ? AppSnackVariant.success : AppSnackVariant.error,
     );
-    if (ok) await widget.onSaved();
+    if (ok) {
+      // Борлуулалтын дэлгэц тохиргоогоо зөвхөн нээгдэхдээ ачаалдаг тул
+      // «үнэ өөрчлөх»-ийг шууд тусгана (апп дахин нээх шаардлагагүй).
+      final sales = context.read<SalesModel>();
+      final ctx = sales.webTaxContext;
+      if (ctx != null) {
+        sales.setWebTaxContext(ctx.copyWith(baraaUneOorchlokh: _baraaUne));
+      }
+      await widget.onSaved();
+    }
   }
 
   @override
@@ -1037,6 +1009,8 @@ class _CombinedBaraaBonusKhaaltPanelState
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.tr('pos_settings_baraa_une')),
+          subtitle: const Text(
+              'Асаавал кассын сагсны мөр бүр дээр «Үнэ өөрчлөх» товч гарна'),
           value: _baraaUne,
           onChanged: (v) => setState(() => _baraaUne = v),
         ),
@@ -1048,6 +1022,8 @@ class _CombinedBaraaBonusKhaaltPanelState
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.tr('pos_settings_bonus_use')),
+          subtitle: const Text(
+              'Худалдан авалтын дүнгийн хувиар харилцагчид оноо хуримтлуулна'),
           value: _bonusAshiglakh,
           onChanged: (v) => setState(() => _bonusAshiglakh = v),
         ),
@@ -1068,6 +1044,8 @@ class _CombinedBaraaBonusKhaaltPanelState
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.tr('pos_settings_door_use')),
+          subtitle: const Text(
+              'Хаалт хийхдээ «Хаалт хийх» цэсийг ашиглана'),
           value: _khaalt,
           onChanged: (v) => setState(() => _khaalt = v),
         ),
@@ -2328,6 +2306,280 @@ class _EbarimtRegisteredCard extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+
+/// Мэдэгдэл — өдөр тутмын орлогын SMS хүлээн авах дугаар, цаг, төрөл.
+/// Вэбийн Тохиргоо → Мэдэгдэл (`UtasBurtgel.js`)-тэй ижил талбарууд,
+/// `/tokhirgooOruulya`-аар хадгална. SMS үйлчилгээний түлхүүр, и-мэйлийн
+/// нууц үг зэрэг нэвтрэх мэдээллийг вэбээс тохируулна.
+class _NotificationPanel extends StatefulWidget {
+  const _NotificationPanel({
+    required this.baiguullaga,
+    required this.baiguullagiinId,
+    required this.onSaved,
+  });
+
+  final Map<String, dynamic>? baiguullaga;
+  final String baiguullagiinId;
+  final Future<void> Function() onSaved;
+
+  @override
+  State<_NotificationPanel> createState() => _NotificationPanelState();
+}
+
+class _NotificationPanelState extends State<_NotificationPanel> {
+  static const _tsaguud = ['07:00', '09:00', '20:00', '22:00'];
+
+  final _utasCtrl = TextEditingController();
+  List<String> _dugaaruud = [];
+  String? _tsag;
+  bool _system = false;
+  bool _dans = false;
+  bool _saving = false;
+  bool _turshij = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(covariant _NotificationPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.baiguullaga != widget.baiguullaga) setState(_sync);
+  }
+
+  @override
+  void dispose() {
+    _utasCtrl.dispose();
+    super.dispose();
+  }
+
+  void _sync() {
+    final tok = widget.baiguullaga?['tokhirgoo'];
+    final t = tok is Map ? tok : const {};
+    final d = t['msgAvakhDugaar'];
+    _dugaaruud = d is List
+        ? d.map((e) => e.toString()).where((e) => e.isNotEmpty).toList()
+        : <String>[];
+    final ts = t['msgAvakhTsag']?.toString();
+    _tsag = _tsaguud.contains(ts) ? ts : null;
+    final turul = t['msgAvakhTurul']?.toString() ?? '';
+    _system = turul == 'bugd' || turul == 'system';
+    _dans = turul == 'bugd' || turul == 'dans';
+  }
+
+  String get _turul => _system && _dans
+      ? 'bugd'
+      : _system
+          ? 'system'
+          : _dans
+              ? 'dans'
+              : '';
+
+  void _dugaarNemekh() {
+    final v = _utasCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (v.length < 8) {
+      showAppSnackBar(context, 'Утасны дугаар буруу байна',
+          variant: AppSnackVariant.warning);
+      return;
+    }
+    if (_dugaaruud.contains(v)) {
+      showAppSnackBar(context, 'Энэ дугаар бүртгэгдсэн байна',
+          variant: AppSnackVariant.warning);
+      return;
+    }
+    setState(() {
+      _dugaaruud.add(v);
+      _utasCtrl.clear();
+    });
+  }
+
+  Future<void> _khadgalakh() async {
+    setState(() => _saving = true);
+    final ok = await posSettingsService.tokhirgooOruulya(
+      baiguullagiinId: widget.baiguullagiinId,
+      tokhirgooFields: {
+        'msgAvakhTurul': _turul,
+        'msgAvakhDugaar': _dugaaruud,
+        if (_tsag != null) 'msgAvakhTsag': _tsag,
+      },
+    );
+    if (!mounted) return;
+    setState(() => _saving = false);
+    showAppSnackBar(
+      context,
+      ok ? 'Амжилттай хадгаллаа' : 'Хадгалахад алдаа гарлаа',
+      variant: ok ? AppSnackVariant.success : AppSnackVariant.error,
+    );
+    if (ok) await widget.onSaved();
+  }
+
+  /// Орлогын SMS-ийг одоо туршиж илгээнэ (вэбийн «Туршиж илгээх»).
+  Future<void> _turshijIlgeekh() async {
+    setState(() => _turshij = true);
+    try {
+      final r = await posApiService.post<dynamic>(
+        '/orlogoMsgIlgeeye',
+        body: {'baiguullagiinId': widget.baiguullagiinId},
+        parser: (d) => d,
+      );
+      if (!mounted) return;
+      final data = r.data;
+      if (r.success && data is Map && data['amjilttai'] == true) {
+        final dugaar = (data['dugaaruud'] as List?)?.join(', ') ?? '';
+        showAppSnackBar(context, 'Орлогын мэдээ илгээлээ: $dugaar',
+            variant: AppSnackVariant.success);
+      } else {
+        showAppSnackBar(context, r.message ?? 'Илгээхэд алдаа гарлаа',
+            variant: AppSnackVariant.error);
+      }
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(context, e.toString(), variant: AppSnackVariant.error);
+      }
+    } finally {
+      if (mounted) setState(() => _turshij = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    if (widget.baiguullaga == null) {
+      return const Center(child: Text('Тохиргоо ачаалж чадсангүй'));
+    }
+    final khadgalsanDugaar = (() {
+      final tok = widget.baiguullaga?['tokhirgoo'];
+      final d = tok is Map ? tok['msgAvakhDugaar'] : null;
+      return d is List && d.isNotEmpty;
+    })();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      children: [
+        Text('Мэдэгдэл',
+            style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(
+          'Өдөр бүрийн орлогын мэдээг доорх дугааруудад SMS-ээр илгээнэ.',
+          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+        ),
+        const SizedBox(height: 16),
+        Text('Хүлээн авах дугаар',
+            style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        if (_dugaaruud.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text('Дугаар бүртгээгүй байна',
+                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+          ),
+        for (final d in _dugaaruud)
+          Card(
+            margin: const EdgeInsets.only(bottom: 6),
+            child: ListTile(
+              dense: true,
+              leading: const Icon(Icons.phone_iphone_rounded),
+              title: Text(d),
+              trailing: IconButton(
+                tooltip: 'Устгах',
+                icon: Icon(Icons.delete_outline, color: cs.error),
+                onPressed: () => setState(() => _dugaaruud.remove(d)),
+              ),
+            ),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _utasCtrl,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  hintText: 'Утасны дугаар',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onSubmitted: (_) => _dugaarNemekh(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonalIcon(
+              onPressed: _dugaarNemekh,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Нэмэх'),
+            ),
+          ],
+        ),
+        const Divider(height: 32),
+        Text('Хүлээн авах цаг',
+            style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final t in _tsaguud)
+              ChoiceChip(
+                label: Text(t),
+                selected: _tsag == t,
+                onSelected: (_) => setState(() => _tsag = t),
+              ),
+          ],
+        ),
+        const Divider(height: 32),
+        Text('Мэдээнд орох дүн',
+            style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Системд бүртгэгдсэн дүн'),
+          value: _system,
+          onChanged: (v) => setState(() => _system = v),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Дансанд орсон дүн'),
+          value: _dans,
+          onChanged: (v) => setState(() => _dans = v),
+        ),
+        const SizedBox(height: 16),
+        FilledButton(
+          onPressed: _saving ? null : _khadgalakh,
+          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+          child: _saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Хадгалах'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _turshij || !khadgalsanDugaar ? null : _turshijIlgeekh,
+          icon: _turshij
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.send_rounded),
+          label: const Text('Туршиж илгээх'),
+          style:
+              OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(44)),
+        ),
+        if (!khadgalsanDugaar)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Туршиж илгээхийн өмнө дугаараа хадгална уу.',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ),
+      ],
     );
   }
 }

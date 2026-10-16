@@ -233,7 +233,7 @@ class InventoryModel extends ChangeNotifier {
         _inventory.clear();
         _inventory.addAll(productResult.products.map((product) => InventoryItem(
               product: product,
-              currentStock: product.uldegdel ?? product.stock,
+              currentStock: product.sellableStock,
               minStockLevel: 10,
               costPrice: product.urtugUne,
               lastRestocked: product.createdAt,

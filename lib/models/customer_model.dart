@@ -34,6 +34,13 @@ class Customer {
   /// Вэбийн `khariltsagch.khunglukhKhuvi` (`Хувь` төрөлд).
   final double discountPercent;
 
+  /// Вэбийн `khariltsagch.onoo` — хуримтлагдсан бонус оноо.
+  final double bonus;
+
+  /// Серверийн анхны бичлэг — засах маягтыг (овог, нэр, регистр, бүх утас)
+  /// бүрэн утгаар нь дүүргэхэд.
+  final Map<String, dynamic> raw;
+
   static const String discountTypeAmount = 'Мөнгөн дүн';
   static const String discountTypePercent = 'Хувь';
 
@@ -54,6 +61,8 @@ class Customer {
     this.discountType = discountTypeAmount,
     this.discountAmount = 0.0,
     this.discountPercent = 0.0,
+    this.bonus = 0.0,
+    this.raw = const {},
   });
 
   Customer copyWith({
@@ -73,6 +82,8 @@ class Customer {
     String? discountType,
     double? discountAmount,
     double? discountPercent,
+    double? bonus,
+    Map<String, dynamic>? raw,
   }) {
     return Customer(
       id: id ?? this.id,
@@ -91,6 +102,8 @@ class Customer {
       discountType: discountType ?? this.discountType,
       discountAmount: discountAmount ?? this.discountAmount,
       discountPercent: discountPercent ?? this.discountPercent,
+      bonus: bonus ?? this.bonus,
+      raw: raw ?? this.raw,
     );
   }
 
@@ -198,6 +211,8 @@ class Customer {
           : discountTypeAmount,
       discountAmount: (m['khunglukhDun'] as num?)?.toDouble() ?? 0.0,
       discountPercent: (m['khunglukhKhuvi'] as num?)?.toDouble() ?? 0.0,
+      bonus: (m['onoo'] as num?)?.toDouble() ?? 0.0,
+      raw: Map<String, dynamic>.from(m),
     );
   }
 }
@@ -393,6 +408,30 @@ class CustomerModel extends ChangeNotifier {
       notifyListeners();
     }
     await refresh();
+    return null;
+  }
+
+  /// Харилцагчийн үндсэн мэдээллийг засна (`PUT /khariltsagch/<id>`).
+  /// Алдаагүй бол `null` буцаана.
+  Future<String?> updateCustomerInfo({
+    required String khariltsagchiinId,
+    required Map<String, dynamic> fields,
+  }) async {
+    final res = await _service.updateFields(
+      khariltsagchiinId: khariltsagchiinId,
+      fields: fields,
+    );
+    if (!res.success) return res.error ?? 'Хадгалахад алдаа гарлаа';
+    await refresh();
+    return null;
+  }
+
+  /// Харилцагчийг устгана (`DELETE /khariltsagch/<id>`, вэбтэй ижил).
+  Future<String?> deleteCustomerRemote(String khariltsagchiinId) async {
+    final res = await _service.ustgakh(khariltsagchiinId);
+    if (!res.success) return res.error ?? 'Устгахад алдаа гарлаа';
+    _customers.removeWhere((c) => c.id == khariltsagchiinId);
+    notifyListeners();
     return null;
   }
 

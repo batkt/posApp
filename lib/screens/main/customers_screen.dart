@@ -950,12 +950,41 @@ class _CustomerCard extends StatelessWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatBadge(
+                      icon: Icons.stars_rounded,
+                      label: 'Бонус',
+                      value: _onooText(customer.bonus),
+                      colorScheme: colorScheme,
+                      textTheme: textTheme,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _StatBadge(
+                      icon: Icons.local_offer_outlined,
+                      label: 'Хөнгөлөлт',
+                      value: customer.discountLabel,
+                      colorScheme: colorScheme,
+                      textTheme: textTheme,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+String _onooText(double v) {
+  final s = v % 1 == 0 ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+  return '$s оноо';
 }
 
 class _TypeChip extends StatelessWidget {
@@ -1206,6 +1235,16 @@ class CustomerDetailsSheet extends StatelessWidget {
                 ],
                 const SizedBox(height: 24),
 
+                // Бонус
+                _SectionTitle(title: 'Бонус'),
+                const SizedBox(height: 12),
+                _InfoRow(
+                  icon: Icons.stars_rounded,
+                  label: 'Хуримтлагдсан оноо',
+                  value: _onooText(customer.bonus),
+                ),
+                const SizedBox(height: 24),
+
                 // Хөнгөлөлт
                 _SectionTitle(title: 'Хөнгөлөлт'),
                 const SizedBox(height: 12),
@@ -1259,11 +1298,230 @@ class CustomerDetailsSheet extends StatelessWidget {
                     minimumSize: const Size(double.infinity, 48),
                   ),
                 ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _zasakh(context),
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Засах'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 48),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _ustgakh(context),
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Устгах'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 48),
+                          foregroundColor: colorScheme.error,
+                          side: BorderSide(color: colorScheme.error),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Future<void> _zasakh(BuildContext context) async {
+    final model = context.read<CustomerModel>();
+    final nav = Navigator.of(context);
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (ctx) => ChangeNotifierProvider<CustomerModel>.value(
+        value: model,
+        child: _CustomerEditSheet(customer: customer),
+      ),
+    );
+    if (ok == true) nav.pop();
+  }
+
+  Future<void> _ustgakh(BuildContext context) async {
+    final model = context.read<CustomerModel>();
+    final nav = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final batlakh = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Харилцагч устгах'),
+        content: Text('«${customer.name}» харилцагчийг устгах уу?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Үгүй'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Устгах'),
+          ),
+        ],
+      ),
+    );
+    if (batlakh != true) return;
+    final err = await model.deleteCustomerRemote(customer.id);
+    if (err != null) {
+      messenger.showSnackBar(SnackBar(content: Text(err)));
+      return;
+    }
+    nav.pop();
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Харилцагч устгагдлаа')),
+    );
+  }
+}
+
+/// Харилцагчийн үндсэн мэдээлэл засах (овог, нэр, утас, регистр, и-мэйл, хаяг).
+class _CustomerEditSheet extends StatefulWidget {
+  const _CustomerEditSheet({required this.customer});
+
+  final Customer customer;
+
+  @override
+  State<_CustomerEditSheet> createState() => _CustomerEditSheetState();
+}
+
+class _CustomerEditSheetState extends State<_CustomerEditSheet> {
+  late final TextEditingController _ovog;
+  late final TextEditingController _ner;
+  late final TextEditingController _utas;
+  late final TextEditingController _register;
+  late final TextEditingController _mail;
+  late final TextEditingController _khayag;
+  bool _khadgalj = false;
+
+  String _r(String k) => (widget.customer.raw[k] ?? '').toString().trim();
+
+  @override
+  void initState() {
+    super.initState();
+    final c = widget.customer;
+    _ovog = TextEditingController(text: _r('ovog'));
+    _ner = TextEditingController(
+        text: _r('ner').isNotEmpty ? _r('ner') : c.name);
+    _utas = TextEditingController(text: c.phone == '—' ? '' : c.phone);
+    _register = TextEditingController(text: _r('register'));
+    _mail = TextEditingController(text: c.email ?? '');
+    _khayag = TextEditingController(text: c.address ?? '');
+  }
+
+  @override
+  void dispose() {
+    for (final c in [_ovog, _ner, _utas, _register, _mail, _khayag]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _khadgalakh() async {
+    final ner = _ner.text.trim();
+    final utas = _utas.text.trim();
+    if (ner.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Нэр оруулна уу')),
+      );
+      return;
+    }
+    // Бусад утасны дугаарыг хадгалж, зөвхөн эхнийхийг солино.
+    final rawUtas = widget.customer.raw['utas'];
+    final utasJagsaalt = <String>[
+      if (utas.isNotEmpty) utas,
+      if (rawUtas is List)
+        ...rawUtas.skip(1).map((e) => e.toString()).where((e) => e.isNotEmpty),
+    ];
+    setState(() => _khadgalj = true);
+    final err = await context.read<CustomerModel>().updateCustomerInfo(
+      khariltsagchiinId: widget.customer.id,
+      fields: {
+        'ovog': _ovog.text.trim(),
+        'ner': ner,
+        'utas': utasJagsaalt,
+        'register': _register.text.trim(),
+        'mail': _mail.text.trim(),
+        'khayag': _khayag.text.trim(),
+      },
+    );
+    if (!mounted) return;
+    setState(() => _khadgalj = false);
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Амжилттай хадгаллаа')),
+    );
+    Navigator.pop(context, true);
+  }
+
+  Widget _field(TextEditingController c, String label,
+          {TextInputType? keyboard}) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: TextField(
+          controller: c,
+          keyboardType: keyboard,
+          decoration: InputDecoration(
+            labelText: label,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 0, 20, MediaQuery.viewInsetsOf(context).bottom + 20),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Харилцагч засах',
+              textAlign: TextAlign.center,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 16),
+            _field(_ovog, 'Овог'),
+            _field(_ner, 'Нэр'),
+            _field(_utas, 'Утас', keyboard: TextInputType.phone),
+            _field(_register, 'Регистр'),
+            _field(_mail, 'И-мэйл', keyboard: TextInputType.emailAddress),
+            _field(_khayag, 'Хаяг'),
+            FilledButton(
+              onPressed: _khadgalj ? null : _khadgalakh,
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+              child: _khadgalj
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Хадгалах'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

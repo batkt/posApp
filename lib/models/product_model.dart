@@ -142,7 +142,7 @@ class ProductModel extends ChangeNotifier {
     }).toList();
 
     bool shelfActive(Product p) {
-      final stock = p.uldegdel ?? p.stock;
+      final stock = p.sellableStock;
       return p.isAvailable && stock > 0;
     }
 

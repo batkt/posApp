@@ -23,8 +23,13 @@ abstract final class BuuniiUneHelper {
     final t = _sortedTiers(buuniiUneJagsaalt);
     if (t.isEmpty) return null;
 
+    // Ядаж нэг түвшинд хүрсэн (buuniiToo <= qty) үед л бөөний үнэ. Вэб нь
+    // `!!tempBuunii && tempBuunii.length < ...` — хоосон массив JS-д truthy
+    // тул зөвхөн уртыг шалгадаг. Өмнө нь энд `isNotEmpty` нэмж хуулснаас
+    // тоо ширхэг хамгийн дээд түвшинд хүрэх/давахад жижиглэнгийн үнэ рүү
+    // буцаж, ганц түвшинтэй бараанд бөөний үнэ ОГТ ажилладаггүй байв.
     final tempBuunii = t.where((e) => e.buuniiToo > qty).toList();
-    if (!(tempBuunii.isNotEmpty && tempBuunii.length < t.length)) {
+    if (tempBuunii.length >= t.length) {
       return null;
     }
 

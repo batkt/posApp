@@ -236,6 +236,9 @@ class PosSettingsService {
       // Вэбийн `useState(borluulaltNUAT)`-тай ижил: НӨАТ анхнаасаа
       // АСААЛТТАЙ, кассчин өөрөө унтраавал л дүнгээс хасагдана.
       baraaNUATModalOpen: borl,
+      // Салбарын тохиргоо (вэб `salbar.tokhirgoo.baraa.baraaHudaldahUne`).
+      baraaUneOorchlokh: branchTok?['baraa'] is Map &&
+          (branchTok!['baraa'] as Map)['baraaHudaldahUne'] == true,
     );
   }
 

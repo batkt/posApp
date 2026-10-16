@@ -309,8 +309,8 @@ class AppLocalizations {
       'pos_settings_bonus_percent': 'Points % of sale amount',
       'pos_settings_bonus_percent_required':
           'Enter a bonus percentage greater than 0.',
-      'pos_settings_door_head': 'Lock',
-      'pos_settings_door_use': 'Use lock (хаалт)',
+      'pos_settings_door_head': 'Cash closing',
+      'pos_settings_door_use': 'Use cash closing (хаалт)',
       'pos_settings_branches_head': 'Branches',
       'pos_settings_branches_hint':
           'Edit branch details on the web app; list refreshes here.',

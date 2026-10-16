@@ -766,10 +766,22 @@ class SalesModel extends ChangeNotifier {
       line.quantity++;
       _reapplyWholesaleForIndex(existingIndex);
     } else {
+      // Бүтэн нэг хайрцаг / кг-аас бага үлдсэн бол (жишээ нь 0.5 хайрцаг)
+      // мөрийг үлдсэн хэмжээгээр нь эхлүүлнэ — эс бөгөөс үлдэгдлээс илүү
+      // зарж, сервер "үлдэгдэл хүрэлцэхгүй" гэж буцаана.
+      final bodit = product.boditUldegdel;
+      final dutuu = bodit > 0 && bodit < 1;
+      final neg = (product.negKhairtsaganDahiShirhegiinToo ?? 1) < 1
+          ? 1
+          : (product.negKhairtsaganDahiShirhegiinToo ?? 1);
       _currentSale.add(SaleItem(
         product: product,
         unitPrice: retail,
         retailUnitPrice: retail,
+        boxPiecesSold:
+            dutuu && product.isBoxSaleUnit ? bodit * neg : null,
+        soldWeightKg:
+            dutuu && product.isWeightSaleUnit ? bodit : null,
       ));
       _reapplyWholesaleForIndex(_currentSale.length - 1);
     }
@@ -942,7 +954,8 @@ class SalesModel extends ChangeNotifier {
     final line = _currentSale[i];
     if (!line.product.isBoxSaleUnit) return;
     final neg = line.negPerBox;
-    final maxPieces = (line.product.uldegdel ?? line.product.stock) * neg;
+    final rawMax = line.product.boditUldegdel * neg;
+    final maxPieces = rawMax < 0.01 ? 0.01 : rawMax;
     final clamped = pieces.clamp(0.01, maxPieces);
     final newQty = (clamped / neg).ceil().clamp(1, 999999);
     final oldQty = line.quantity;
@@ -975,8 +988,7 @@ class SalesModel extends ChangeNotifier {
     if (i < 0) return;
     final line = _currentSale[i];
     if (!line.product.isWeightSaleUnit) return;
-    final maxKg =
-        (line.product.uldegdel ?? line.product.stock).toDouble();
+    final maxKg = line.product.boditUldegdel;
     final kg = (grams / 1000).clamp(0.001, maxKg <= 0 ? 0.001 : maxKg);
     final newQty = kg.ceil().clamp(1, 999999);
     final oldQty = line.quantity;

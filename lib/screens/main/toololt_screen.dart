@@ -485,7 +485,8 @@ class _ToololtScreenState extends State<ToololtScreen> {
               slivers: [
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    // Доод зай — хайлтын талбар доорх тооллогын картад наалдахгүй
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                     child: TextField(
                       controller: _searchController,
                       onChanged: (v) {
