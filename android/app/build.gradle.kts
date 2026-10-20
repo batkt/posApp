@@ -91,12 +91,12 @@ android {
         release {
             // Play Store requires a release-signed App Bundle — use android/key.properties
             // + upload-keystore.jks (see android/key.properties.example).
-            signingConfig =
-                signingConfigs.findByName("debug")
-                    ?: signingConfigs.getByName("release")
             // signingConfig =
-            //     signingConfigs.findByName("release")
-            //         ?: signingConfigs.getByName("debug")
+            //     signingConfigs.findByName("debug")
+            //         ?: signingConfigs.getByName("release")
+            signingConfig =
+                signingConfigs.findByName("release")
+                    ?: signingConfigs.getByName("debug")
             // When you enable isMinifyEnabled = true, PAX/Neptune needs these keeps (see proguard-rules.pro).
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
