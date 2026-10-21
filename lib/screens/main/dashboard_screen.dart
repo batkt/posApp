@@ -330,10 +330,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        TextButton(
-                          onPressed: () {},
-                          child: Text(l10n.tr('view_all')),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -410,10 +406,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           style: textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
-                        ),
-                        TextButton(
-                          onPressed: () {},
-                          child: Text(l10n.tr('view_all')),
                         ),
                       ],
                     ),
