@@ -548,6 +548,7 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
             )
           : null,
       body: CustomScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         slivers: [
           SliverAppBar(
             expandedHeight: 220,

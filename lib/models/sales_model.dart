@@ -547,9 +547,22 @@ class SalesModel extends ChangeNotifier {
       final undsen = row.containsKey('undsenZarakhUne')
           ? _rowNum(row['undsenZarakhUne'])
           : null;
-      final unitPrice = isGift ? 0.0 : _rowNum(row['niitUne']);
-
+      final rawNiitUne = _rowNum(row['niitUne']);
       final prior = previousById[product.id];
+      // Хайрцагтай бараанд `toUramshuulalRow` нь `shirkheg`-ийг ширхэгээр
+      // (жишээ нь 2 ш), `niitUne`-г нэг ширхэгийн үнээр (3500 / 5 = 700)
+      // сервер рүү илгээдэг. Серверийн хариуны `niitUne` нь ширхэгийн үнэ
+      // тул [SaleItem.unitPrice]-д (хайрцгийн үнэ) буцааж хөрвүүлэхдээ
+      // `neg`-ээр үржинэ — эс тэгвээс дараагийн тооцоонд [total] дахин `neg`-д
+      // хуваагдаж (700 / 5 = 140 → 280₮) үнэ олон дахин унадаг.
+      final neg = product.negKhairtsaganDahiShirhegiinToo ?? 1;
+      final effectiveNeg = neg < 1 ? 1.0 : neg.toDouble();
+      final unitPrice = isGift
+          ? 0.0
+          : ((prior != null && prior.forceRetailPricing)
+              ? prior.unitPrice
+              : (product.isBoxSaleUnit ? rawNiitUne * effectiveNeg : rawNiitUne));
+
       rebuilt.add(
         SaleItem(
           product: product,
@@ -559,14 +572,19 @@ class SalesModel extends ChangeNotifier {
           // [effectiveDiscount] бэлгийн дүнг хөнгөлөлт болгож тооцно.
           retailUnitPrice: isGift
               ? (undsen ?? 0)
-              : (prior?.retailUnitPrice ?? unitPrice),
+              : (prior?.retailUnitPrice ??
+                  (product.isBoxSaleUnit ? unitPrice : rawNiitUne)),
           uramshuulaliinId: isGift ? promoId : null,
           forceRetailPricing: isGift ? false : (prior?.forceRetailPricing ?? false),
-          // Серверийн буцаасан ширхэг нь эрх мэдэлтэй — бүхэлчилсэн
-          // `qtyUnits` дээр найдвал задалсан ширхэг (1.5 хайрцаг) алдагдана.
+          // Серверийн буцаасан ширхэг нь эрх мэдэлтэй — гэхдээ зөвхөн задгай
+          // ширхэгтэй үед л [boxPiecesSold]-д хадгална. Бүтэн хайрцагтай
+          // мөрийг [boxPiecesSold]-той болгож хувиргаж болохгүй.
           boxPiecesSold: isGift || !product.isBoxSaleUnit
               ? null
-              : (pieces > 0 ? pieces : prior?.boxPiecesSold),
+              : ((prior?.boxPiecesSold != null ||
+                      (effectiveNeg > 0 && (pieces % effectiveNeg).abs() > 0.001))
+                  ? (pieces > 0 ? pieces : prior?.boxPiecesSold)
+                  : null),
           soldWeightKg: isGift || !product.isWeightSaleUnit
               ? null
               : (pieces > 0 ? pieces : prior?.soldWeightKg),
@@ -834,6 +852,15 @@ class SalesModel extends ChangeNotifier {
   /// харагдаж, кассчин юу нэмснээ картаас мэдэхгүй байв. Жингийн бус
   /// бараанд `null` буцааж, картаа хэвийн "×N"-ээ хэвээр харуулна.
   String? saleQuantityLabel(Product product) {
+    if (product.isBoxSaleUnit) {
+      final pieces = _currentSale
+          .where((e) => e.product.id == product.id && !e.isGiftLine)
+          .fold<double>(0, (sum, e) => sum + (e.boxPiecesSold ?? 0));
+      if (pieces > 0) {
+        final pStr = pieces % 1 == 0 ? pieces.toInt().toString() : pieces.toStringAsFixed(2);
+        return '$pStr ш';
+      }
+    }
     if (!product.isWeightSaleUnit) return null;
     final kg = _currentSale
         .where((e) => e.product.id == product.id && !e.isGiftLine)

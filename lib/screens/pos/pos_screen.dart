@@ -1592,6 +1592,21 @@ class _POSScreenState extends State<POSScreen> {
           : null,
       onIncrement: () {
         final inventory = context.read<InventoryModel>();
+        if (item.product.isBoxSaleUnit && item.boxPiecesSold != null) {
+          final neg = item.negPerBox;
+          final maxPieces = item.product.boditUldegdel * neg;
+          if (item.boxPiecesSold! + 1 > maxPieces + 0.001) {
+            showAppSnackBar(context, 'Үлдэгдэл хүрэлцэхгүй байна',
+                variant: AppSnackVariant.error);
+            return;
+          }
+          sales.setBoxLinePieces(
+            item.product.id,
+            item.boxPiecesSold! + 1,
+            inventory: inventory,
+          );
+          return;
+        }
         // Үлдэгдлээс ИЛҮҮ зарахыг хориглоно — сагсны мөрөн дээрх "+" нь
         // картныхтай ижил дүрэмтэй байх ёстой, эс тэгвээс үлдэгдэл эндүүр
         // хасах утга руу орно.
@@ -1609,14 +1624,25 @@ class _POSScreenState extends State<POSScreen> {
       },
       onDecrement: () {
         final inventory = context.read<InventoryModel>();
+        if (item.product.isBoxSaleUnit && item.boxPiecesSold != null) {
+          if (item.boxPiecesSold! > 1) {
+            sales.setBoxLinePieces(
+              item.product.id,
+              item.boxPiecesSold! - 1,
+              inventory: inventory,
+            );
+          } else {
+            sales.removeLineRestoringStock(item.product.id, inventory: inventory);
+          }
+          return;
+        }
         if (sales.decrementSaleQuantity(item.product)) {
           inventory.restock(item.product.id, 1);
         }
       },
       onRemove: () {
         final inventory = context.read<InventoryModel>();
-        sales.removeFromSale(item.product.id);
-        inventory.restock(item.product.id, item.quantity);
+        sales.removeLineRestoringStock(item.product.id, inventory: inventory);
       },
     );
   }
@@ -1867,7 +1893,8 @@ class _POSScreenState extends State<POSScreen> {
           _buildSummaryRow(
             context: context,
             label: 'Дүн',
-            amount: sales.subtotal,
+            amount:
+                sales.lineGrossBase > 0 ? sales.lineGrossBase : sales.subtotal,
             isTotal: false,
           ),
           if (sales.effectiveDiscount > 0.009) ...[
@@ -2038,7 +2065,12 @@ class _POSScreenState extends State<POSScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              _sheetSummaryLine(context, 'Дүн', sales.subtotal, false),
+              _sheetSummaryLine(
+                context,
+                'Дүн',
+                sales.lineGrossBase > 0 ? sales.lineGrossBase : sales.subtotal,
+                false,
+              ),
               if (sales.excludedVat > 0.009) ...[
                 const SizedBox(height: 8),
                 _sheetSummaryLine(
@@ -2713,6 +2745,46 @@ class _SaleItemTile extends StatelessWidget {
     final dorvonNegPartiallyFree =
         dorvonNegFreeUnits > 0 && !dorvonNegFullyFree;
 
+    final bool isBoxBroken =
+        item.product.isBoxSaleUnit && item.boxPiecesSold != null;
+    final bool isWeightCustom =
+        item.product.isWeightSaleUnit && item.soldWeightKg != null;
+
+    final String stepperMainText;
+    final String stepperSubText;
+    if (isBoxBroken) {
+      final p = item.boxPiecesSold!;
+      stepperMainText =
+          p % 1 == 0 ? p.toInt().toString() : p.toStringAsFixed(2);
+      stepperSubText = 'ш';
+    } else if (isWeightCustom) {
+      final w = item.soldWeightKg!;
+      stepperMainText =
+          w % 1 == 0 ? w.toInt().toString() : w.toStringAsFixed(2);
+      stepperSubText = 'кг';
+    } else {
+      stepperMainText = '${item.quantity}';
+      stepperSubText = item.product.posStockQuantitySuffix;
+    }
+
+    final String priceQtyText;
+    if (isBoxBroken) {
+      final perPiece = item.unitPrice / item.negPerBox;
+      final p = item.boxPiecesSold!;
+      final pStr =
+          p % 1 == 0 ? p.toInt().toString() : p.toStringAsFixed(2);
+      priceQtyText = '${MntAmountFormatter.format(perPiece)} × $pStr ш';
+    } else if (isWeightCustom) {
+      final w = item.soldWeightKg!;
+      final wStr =
+          w % 1 == 0 ? w.toInt().toString() : w.toStringAsFixed(3);
+      priceQtyText = '${MntAmountFormatter.format(item.unitPrice)} × $wStr кг';
+    } else {
+      final suffix = item.product.isBoxSaleUnit ? ' хайрцаг' : '';
+      priceQtyText =
+          '${MntAmountFormatter.format(item.unitPrice)} × ${item.quantity}$suffix';
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final thumb = constraints.maxWidth < 360 ? 44.0 : 48.0;
@@ -2852,7 +2924,10 @@ class _SaleItemTile extends StatelessWidget {
                           color: colorScheme.onSecondaryContainer,
                         ),
                         label: Text(
-                          AppLocalizations.of(context).tr('pos_sale_box_pieces'),
+                          item.boxPiecesSold != null
+                              ? 'Ширхэглэсэн (${item.boxPiecesSold! % 1 == 0 ? item.boxPiecesSold!.toInt() : item.boxPiecesSold!.toStringAsFixed(2)} ш)'
+                              : AppLocalizations.of(context)
+                                  .tr('pos_sale_box_pieces'),
                         ),
                         style: FilledButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -2940,7 +3015,7 @@ class _SaleItemTile extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          '${MntAmountFormatter.format(item.unitPrice)} × ${item.quantity}',
+                          priceQtyText,
                           style: textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w600,
@@ -3014,29 +3089,31 @@ class _SaleItemTile extends StatelessWidget {
                             height: 22,
                             color: colorScheme.outlineVariant,
                           ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(minWidth: 36),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    '${item.quantity}',
-                                    textAlign: TextAlign.center,
-                                    style: textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w900,
-                                      fontFeatures: const [
-                                        FontFeature.tabularFigures(),
-                                      ],
-                                    ),
-                                  ),
-                                  if (item.product.isBoxSaleUnit)
+                          InkWell(
+                            onTap: onBoxPiecesTap,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(minWidth: 36),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
                                     Text(
-                                      item.product.posStockQuantitySuffix,
+                                      stepperMainText,
+                                      textAlign: TextAlign.center,
+                                      style: textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.w900,
+                                        fontFeatures: const [
+                                          FontFeature.tabularFigures(),
+                                        ],
+                                      ),
+                                    ),
+                                    Text(
+                                      stepperSubText,
                                       textAlign: TextAlign.center,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -3047,7 +3124,8 @@ class _SaleItemTile extends StatelessWidget {
                                         color: colorScheme.onSurfaceVariant,
                                       ),
                                     ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),

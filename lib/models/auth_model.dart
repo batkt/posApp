@@ -484,4 +484,11 @@ class AuthModel extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  @visibleForTesting
+  void setPosSessionForTesting(PosSession session, {String token = 'test-token'}) {
+    _posSession = session;
+    posApiService.setToken(token);
+    notifyListeners();
+  }
 }

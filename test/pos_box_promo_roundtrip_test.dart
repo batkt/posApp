@@ -61,21 +61,82 @@ void main() {
       expect(line.quantity, 2, reason: '1080 / 720 = 1.5 → дээш бүхэлчилнэ');
     });
 
-    test('энгийн бараанд өмнөх зан төлөв өөрчлөгдөхгүй', () {
-      final piece = Product(
-        id: 'y1', name: 'Ус', description: '', price: 2000,
-        category: '', imageUrl: '', code: '2001',
-        khemjikhNegj: 'ш', niitUne: 2000, uldegdel: 50,
+    test('хайрцагтай барааны ширхэглэсэн үнэ олон дахин унахгүй, үнэн зөв бодогдоно', () {
+      final drum = Product(
+        id: 'drum1',
+        name: 'Жазз бөмбөр',
+        description: '',
+        price: 3500,
+        category: '',
+        imageUrl: '',
+        code: '10157',
+        khemjikhNegj: 'хайрцаг',
+        shirkheglekhEsekh: true,
+        negKhairtsaganDahiShirhegiinToo: 5,
+        niitUne: 3500,
+        uldegdel: 20,
       );
-      final sales = SalesModel()..addToSale(piece);
-      sales.incrementSaleQuantity('y1');
+      final sales = SalesModel()..addToSale(drum);
+      // 5 ширхэгтэй хайрцагнаас 2 ширхэгийг зарна
+      sales.setBoxLinePieces('drum1', 2);
+
+      expect(sales.currentSaleItems.single.total, 1400.0);
+      expect(sales.currentSaleItems.single.unitPrice, 3500.0);
+      expect(sales.lineGrossBase, 1400.0);
+
+      // Сервер рүү хүсэлт илгээхэд
+      final sent1 = sales.currentSaleItems.single
+          .toUramshuulalRow(fallbackSalbariinId: 's1');
+      expect(sent1['shirkheg'], 2.0);
+      expect(sent1['niitUne'], 700.0); // 3500 / 5 = 700₮/ш
+
+      // Серверээс хариу ирэхэд
+      sales.applyUramshuulalResult(songogdsonEmnuud: [sent1]);
+
+      final lineAfter1 = sales.currentSaleItems.single;
+      expect(lineAfter1.unitPrice, 3500.0,
+          reason: 'Хайрцгийн нэгж үнэ 3500₮ хэвээр үлдэх ёстой (700₮ болж буурахгүй)');
+      expect(lineAfter1.total, 1400.0,
+          reason: '2 ширхэг × 700₮ = 1400₮ байх ёстой (280₮ биш)');
+      expect(sales.lineGrossBase, 1400.0);
+
+      // 2 дахь удаагаа синк хийгдэхэд (жишээ нь таймер эсвэл дараагийн дуудалт)
+      final sent2 = lineAfter1.toUramshuulalRow(fallbackSalbariinId: 's1');
+      expect(sent2['niitUne'], 700.0);
+      sales.applyUramshuulalResult(songogdsonEmnuud: [sent2]);
+
+      final lineAfter2 = sales.currentSaleItems.single;
+      expect(lineAfter2.unitPrice, 3500.0);
+      expect(lineAfter2.total, 1400.0);
+      expect(sales.lineGrossBase, 1400.0);
+    });
+
+    test('бүтэн хайрцаг зарах үед boxPiecesSold нь null хэвээр байна', () {
+      final drum = Product(
+        id: 'drum2',
+        name: 'Жазз бөмбөр',
+        description: '',
+        price: 3500,
+        category: '',
+        imageUrl: '',
+        code: '10157',
+        khemjikhNegj: 'хайрцаг',
+        shirkheglekhEsekh: true,
+        negKhairtsaganDahiShirhegiinToo: 5,
+        niitUne: 3500,
+        uldegdel: 20,
+      );
+      final sales = SalesModel()..addToSale(drum);
       final sent = sales.currentSaleItems.single
           .toUramshuulalRow(fallbackSalbariinId: 's1');
-      expect(sent['shirkheg'], 2.0);
-
       sales.applyUramshuulalResult(songogdsonEmnuud: [sent]);
 
-      expect(sales.currentSaleItems.single.quantity, 2);
+      final line = sales.currentSaleItems.single;
+      expect(line.boxPiecesSold, isNull,
+          reason: 'Бүтэн хайрцаг зарсан бол boxPiecesSold нь null байх ёстой');
+      expect(line.quantity, 1);
+      expect(line.unitPrice, 3500.0);
+      expect(line.total, 3500.0);
     });
   });
 }

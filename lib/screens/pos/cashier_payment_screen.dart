@@ -839,9 +839,11 @@ class _CashierBoxSaleLinesBar extends StatelessWidget {
                   ),
                   TextButton(
                     onPressed: () => showBoxLinePiecesSheet(context, item),
-                    child: const Text(
-                      'Хайрцаглах',
-                      style: TextStyle(fontWeight: FontWeight.w800),
+                    child: Text(
+                      item.boxPiecesSold != null
+                          ? 'Ширхэглэсэн (${item.boxPiecesSold! % 1 == 0 ? item.boxPiecesSold!.toInt() : item.boxPiecesSold!.toStringAsFixed(2)} ш)'
+                          : 'Хайрцаглах',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),
                 ],

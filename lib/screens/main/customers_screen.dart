@@ -1319,8 +1319,14 @@ class CustomerDetailsSheet extends StatelessWidget {
                         label: const Text('Устгах'),
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size(0, 48),
-                          foregroundColor: colorScheme.error,
-                          side: BorderSide(color: colorScheme.error),
+                          foregroundColor: _hasPurchasesOrTransactions
+                              ? colorScheme.outline
+                              : colorScheme.error,
+                          side: BorderSide(
+                            color: _hasPurchasesOrTransactions
+                                ? colorScheme.outlineVariant
+                                : colorScheme.error,
+                          ),
                         ),
                       ),
                     ),
@@ -1332,6 +1338,15 @@ class CustomerDetailsSheet extends StatelessWidget {
         );
       },
     );
+  }
+
+  bool get _hasPurchasesOrTransactions {
+    return customer.totalPurchases > 0 ||
+        customer.totalSpent > 0 ||
+        (customer.currentCredit ?? 0) != 0 ||
+        ((customer.raw['avlagaUldegdel'] as num?)?.toDouble() ?? 0) != 0 ||
+        ((customer.raw['uglugUldegdel'] as num?)?.toDouble() ?? 0) != 0 ||
+        customer.bonus > 0;
   }
 
   Future<void> _zasakh(BuildContext context) async {
@@ -1351,9 +1366,17 @@ class CustomerDetailsSheet extends StatelessWidget {
   }
 
   Future<void> _ustgakh(BuildContext context) async {
+    if (_hasPurchasesOrTransactions) {
+      showAppSnackBar(
+        context,
+        'Уучлаарай, худалдан авалт эсвэл гүйлгээ хийгдсэн харилцагчийг устгах боломжгүй!',
+        variant: AppSnackVariant.warning,
+      );
+      return;
+    }
+
     final model = context.read<CustomerModel>();
     final nav = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     final batlakh = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1377,13 +1400,19 @@ class CustomerDetailsSheet extends StatelessWidget {
     if (batlakh != true) return;
     final err = await model.deleteCustomerRemote(customer.id);
     if (err != null) {
-      messenger.showSnackBar(SnackBar(content: Text(err)));
+      if (context.mounted) {
+        showAppSnackBar(context, err, variant: AppSnackVariant.error);
+      }
       return;
     }
     nav.pop();
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Харилцагч устгагдлаа')),
-    );
+    if (context.mounted) {
+      showAppSnackBar(
+        context,
+        'Харилцагч устгагдлаа',
+        variant: AppSnackVariant.success,
+      );
+    }
   }
 }
 

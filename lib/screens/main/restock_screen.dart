@@ -143,59 +143,107 @@ class _RestockScreenState extends State<RestockScreen> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title), centerTitle: true),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: [
-          Material(
-            color: cs.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12),
-            child: ListTile(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              leading: const Icon(Icons.local_shipping_outlined),
-              title: Text(_niiluulegch == null
-                  ? 'Нийлүүлэгч сонгох'
-                  : _niiluulegchiinNer(_niiluulegch!)),
-              subtitle: _niiluulegch == null
-                  ? const Text('Заавал сонгоно')
-                  : Text((_niiluulegch!['utas'] ?? '').toString()),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _niiluulegchSongokh,
+      appBar: AppBar(
+        title: Text(widget.title),
+        centerTitle: true,
+        actions: [
+          if (keyboardOpen)
+            IconButton(
+              icon: const Icon(Icons.keyboard_hide_outlined),
+              tooltip: 'Гар хаах',
+              onPressed: () => FocusScope.of(context).unfocus(),
             ),
-          ),
-          const SizedBox(height: 12),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(
-                  value: 'belen',
-                  label: Text('Бэлэн'),
-                  icon: Icon(Icons.payments_outlined)),
-              ButtonSegment(
-                  value: 'zeel',
-                  label: Text('Зээл'),
-                  icon: Icon(Icons.schedule_outlined)),
-            ],
-            selected: {_khelber},
-            onSelectionChanged: (s) => setState(() => _khelber = s.first),
-          ),
-          const SizedBox(height: 16),
-          for (final m in _muruud) ...[
-            _OrlogoMurCard(
-              key: ObjectKey(m),
-              mur: m,
-              onChanged: () => setState(() {}),
-              onRemove: () => setState(() => _muruud.remove(m)),
-            ),
-            const SizedBox(height: 10),
-          ],
-          OutlinedButton.icon(
-            onPressed: _baraaNemekh,
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Бараа нэмэх'),
-          ),
         ],
+      ),
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                children: [
+                  Material(
+                    color: cs.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                    child: ListTile(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      leading: const Icon(Icons.local_shipping_outlined),
+                      title: Text(_niiluulegch == null
+                          ? 'Нийлүүлэгч сонгох'
+                          : _niiluulegchiinNer(_niiluulegch!)),
+                      subtitle: _niiluulegch == null
+                          ? const Text('Заавал сонгоно')
+                          : Text((_niiluulegch!['utas'] ?? '').toString()),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: _niiluulegchSongokh,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                          value: 'belen',
+                          label: Text('Бэлэн'),
+                          icon: Icon(Icons.payments_outlined)),
+                      ButtonSegment(
+                          value: 'zeel',
+                          label: Text('Зээл'),
+                          icon: Icon(Icons.schedule_outlined)),
+                    ],
+                    selected: {_khelber},
+                    onSelectionChanged: (s) => setState(() => _khelber = s.first),
+                  ),
+                  const SizedBox(height: 16),
+                  for (final m in _muruud) ...[
+                    _OrlogoMurCard(
+                      key: ObjectKey(m),
+                      mur: m,
+                      onChanged: () => setState(() {}),
+                      onRemove: () => setState(() => _muruud.remove(m)),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  OutlinedButton.icon(
+                    onPressed: _baraaNemekh,
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Бараа нэмэх'),
+                  ),
+                ],
+              ),
+            ),
+            if (keyboardOpen)
+              Container(
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest,
+                  border: Border(
+                    top: BorderSide(
+                      color: cs.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => FocusScope.of(context).unfocus(),
+                      icon: const Icon(Icons.keyboard_hide_outlined, size: 18),
+                      label: const Text('Болсон'),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
@@ -376,6 +424,9 @@ class _TooFieldState extends State<_TooField> {
     return TextField(
       controller: _ctrl,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      textInputAction: TextInputAction.done,
+      onTapOutside: (_) => FocusScope.of(context).unfocus(),
+      onSubmitted: (_) => FocusScope.of(context).unfocus(),
       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
       decoration: InputDecoration(
         labelText: widget.label,
@@ -455,6 +506,7 @@ class _NiiluulegchSongokhSheetState extends State<_NiiluulegchSongokhSheet> {
               child: TextField(
                 controller: _search,
                 autofocus: true,
+                onTapOutside: (_) => FocusScope.of(context).unfocus(),
                 decoration: const InputDecoration(
                   hintText: 'Нийлүүлэгч хайх',
                   prefixIcon: Icon(Icons.search_rounded),
@@ -477,6 +529,8 @@ class _NiiluulegchSongokhSheetState extends State<_NiiluulegchSongokhSheet> {
                           ? const Center(
                               child: Text('Нийлүүлэгч олдсонгүй'))
                           : ListView.separated(
+                              keyboardDismissBehavior:
+                                  ScrollViewKeyboardDismissBehavior.onDrag,
                               itemCount: _jagsaalt.length,
                               separatorBuilder: (_, __) =>
                                   const Divider(height: 1),
@@ -554,6 +608,7 @@ class _BaraaSongokhSheetState extends State<_BaraaSongokhSheet> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: TextField(
                 controller: _search,
+                onTapOutside: (_) => FocusScope.of(context).unfocus(),
                 decoration: const InputDecoration(
                   hintText: 'Нэр, код, баркодоор хайх',
                   prefixIcon: Icon(Icons.search_rounded),
@@ -567,6 +622,8 @@ class _BaraaSongokhSheetState extends State<_BaraaSongokhSheet> {
               child: products.isEmpty
                   ? const Center(child: Text('Бараа олдсонгүй'))
                   : ListView.builder(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
                       itemCount: products.length,
                       itemBuilder: (_, i) {
                         final p = products[i];

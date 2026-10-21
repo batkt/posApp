@@ -46,7 +46,7 @@ Future<void> showKhaaltModal(BuildContext context) {
     enableDrag: true,
     isScrollControlled: true,
     useSafeArea: true,
-    showDragHandle: true,
+    showDragHandle: false,
     backgroundColor: Colors.transparent,
     constraints: BoxConstraints(
       minWidth: width,
@@ -56,9 +56,11 @@ Future<void> showKhaaltModal(BuildContext context) {
       final theme = Theme.of(ctx);
       final m = MediaQuery.of(ctx);
       final kb = m.viewInsets.bottom;
-      // Space above keyboard (and safe area); avoid fixed 92% of full screen — that overflows when keyboard is up.
+      // Space above keyboard (and safe area); when keyboard is open, give full usable height.
       final usable = m.size.height - m.padding.top - m.padding.bottom - kb;
-      final sheetHeight = math.min(math.max(usable * 0.92, 200.0), usable);
+      final sheetHeight = kb > 0
+          ? usable
+          : math.min(math.max(usable * 0.92, 200.0), usable);
 
       return Padding(
         padding: EdgeInsets.only(bottom: kb),
@@ -201,7 +203,10 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
 
     if (!mounted) return;
 
-    final tokhirgoo = org?['tokhirgoo'];
+    final tokhirgoo = org?['tokhirgoo'] ??
+        (session.ajiltan['tokhirgoo'] is Map
+            ? session.ajiltan['tokhirgoo']
+            : null);
     // Web: `baiguullaga?.tokhirgoo?.khaaltAshiglakhEsekh` must be true to show Khaalt.
     final enabled =
         tokhirgoo is Map && tokhirgoo['khaaltAshiglakhEsekh'] == true;
@@ -222,7 +227,9 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
       _khaaltEnabled = enabled;
       _lastCloseLocalDay = lastDay;
       _selectedDay = initial;
-      if (org == null) _loadErrorKey = 'pos_settings_load_failed';
+      if (org == null && tokhirgoo == null) {
+        _loadErrorKey = 'pos_settings_load_failed';
+      }
     });
   }
 
@@ -328,10 +335,16 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
     BuildContext context,
     AppLocalizations l10n,
     ColorScheme colorScheme,
-    TextTheme textTheme,
-  ) {
+    TextTheme textTheme, {
+    bool isKeyboardOpen = false,
+  }) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        isKeyboardOpen ? 8 : 14,
+        8,
+        isKeyboardOpen ? 8 : 14,
+      ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -351,10 +364,10 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(isKeyboardOpen ? 8 : 12),
             decoration: BoxDecoration(
               color: colorScheme.primaryContainer.withValues(alpha: 0.95),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(isKeyboardOpen ? 12 : 16),
               boxShadow: [
                 BoxShadow(
                   color: colorScheme.primary.withValues(alpha: 0.12),
@@ -369,14 +382,14 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
             child: Icon(
               Icons.account_balance_wallet_rounded,
               color: colorScheme.primary,
-              size: 26,
+              size: isKeyboardOpen ? 20 : 26,
             ),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Text(
               l10n.tr('khaalt_title'),
-              style: textTheme.titleLarge?.copyWith(
+              style: (isKeyboardOpen ? textTheme.titleMedium : textTheme.titleLarge)?.copyWith(
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.4,
                 height: 1.15,
@@ -1014,10 +1027,14 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
     double maxWidth,
   ) {
     final padH = maxWidth >= 480 ? 20.0 : 14.0;
-    return ListView(
-      padding: EdgeInsets.fromLTRB(padH, 12, padH, 16),
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      children: _formFieldWidgets(l10n, colorScheme, textTheme, maxWidth),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(padH, 12, padH, 16),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        children: _formFieldWidgets(l10n, colorScheme, textTheme, maxWidth),
+      ),
     );
   }
 
@@ -1025,8 +1042,90 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
     AppLocalizations l10n,
     ColorScheme colorScheme,
     TextTheme textTheme,
-    double footerBottomInset,
-  ) {
+    double footerBottomInset, {
+    bool isKeyboardOpen = false,
+  }) {
+    final child = isKeyboardOpen
+        ? Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.summarize_rounded,
+                  color: colorScheme.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${l10n.tr('khaalt_total')}: ',
+                        style: textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      Flexible(
+                        child: Text(
+                          MntAmountFormatter.formatTugrik(_niitDun),
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: colorScheme.primary,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: _submitting ? null : () => _submit(l10n),
+                  style: FilledButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: _submitting
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.verified_rounded, size: 18),
+                  label: Text(
+                    l10n.tr('khaalt_submit'),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        : Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              14,
+              16,
+              14 + footerBottomInset,
+            ),
+            child: _totalAndSubmit(l10n, colorScheme, textTheme),
+          );
+
     return Material(
       color: colorScheme.surface,
       elevation: 0,
@@ -1046,15 +1145,7 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
             ),
           ],
         ),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            14,
-            16,
-            14 + footerBottomInset,
-          ),
-          child: _totalAndSubmit(l10n, colorScheme, textTheme),
-        ),
+        child: child,
       ),
     );
   }
@@ -1065,8 +1156,12 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final mq = MediaQuery.of(context);
-    final footerBottomInset =
-        mq.viewInsets.bottom > 0 ? mq.viewInsets.bottom : mq.padding.bottom;
+    final isKeyboardOpen = mq.viewInsets.bottom > 0;
+    // When embedded in modal (which is already padded above keyboard), or when keyboard is open,
+    // do not add extra bottom inset.
+    final footerBottomInset = (widget.embeddedDialog || isKeyboardOpen)
+        ? 0.0
+        : mq.padding.bottom;
 
     final mainContent = _loading
         ? _loadingState(colorScheme)
@@ -1076,13 +1171,20 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
             colorScheme,
             textTheme,
             footerBottomInset: footerBottomInset,
+            isKeyboardOpen: isKeyboardOpen,
           );
 
     if (widget.embeddedDialog) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _dialogChrome(context, l10n, colorScheme, textTheme),
+          _dialogChrome(
+            context,
+            l10n,
+            colorScheme,
+            textTheme,
+            isKeyboardOpen: isKeyboardOpen,
+          ),
           Expanded(child: mainContent),
         ],
       );
@@ -1114,6 +1216,7 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
     ColorScheme colorScheme,
     TextTheme textTheme, {
     double footerBottomInset = 0,
+    bool isKeyboardOpen = false,
   }) {
     if (_loadErrorKey != null) {
       return _messageState(
@@ -1187,6 +1290,7 @@ class _KhaaltScreenState extends State<KhaaltScreen> {
                 colorScheme,
                 textTheme,
                 footerBottomInset,
+                isKeyboardOpen: isKeyboardOpen,
               ),
             ],
           );
