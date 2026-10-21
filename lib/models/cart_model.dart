@@ -228,6 +228,7 @@ class Product {
       shirkheglekhEsekh: _asNullableBool(json['shirkheglekhEsekh']),
       noatBodohEsekh: json['noatBodohEsekh'],
       nhatBodohEsekh: json['nhatBodohEsekh'],
+      ajilUilchilgeeEsekh: _asNullableBool(json['ajilUilchilgeeEsekh']),
       ognooniiMedeelelBurtgekhEsekh: json['ognooniiMedeelelBurtgekhEsekh'],
       uldegdel: _asNullableInt(json['uldegdel']),
       uldegdelBodit: _asNullableDouble(json['uldegdel']),
@@ -302,6 +303,7 @@ class Product {
     bool? isAvailable,
     ProductUnit? unit,
     String? sku,
+    bool? ajilUilchilgeeEsekh,
   }) {
     return Product(
       id: id ?? this.id,
@@ -317,8 +319,12 @@ class Product {
       isAvailable: isAvailable ?? this.isAvailable,
       unit: unit ?? this.unit,
       sku: sku ?? this.sku,
+      ajilUilchilgeeEsekh: ajilUilchilgeeEsekh ?? this.ajilUilchilgeeEsekh,
     );
   }
+
+  /// Ажил үйлчилгээний бараа эсэх (үлдэгдэл тооцохгүй, "Ажил" гэж харагдана).
+  bool get isService => ajilUilchilgeeEsekh == true;
 
   String get unitLabel {
     switch (unit) {
@@ -415,6 +421,7 @@ class Product {
       'zurgiinId': zurgiinId,
       'noatBodohEsekh': noatBodohEsekh,
       'nhatBodohEsekh': nhatBodohEsekh,
+      'ajilUilchilgeeEsekh': ajilUilchilgeeEsekh,
       'ognooniiMedeelelBurtgekhEsekh': ognooniiMedeelelBurtgekhEsekh,
       'noatiinDun': noatiinDun,
       'nhatiinDun': nhatiinDun,

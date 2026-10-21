@@ -2266,9 +2266,12 @@ class _ProductCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final inCart = inSaleQuantity > 0;
     final multiInCart = inSaleQuantity >= 2;
+    final isService = item.product.ajilUilchilgeeEsekh == true;
     final stock = item.currentStock;
     final stockHealthy = stock > 20;
-    final stockColor = stockHealthy ? _stockPlentyGreen : _stockLowRed;
+    final stockColor = isService
+        ? colorScheme.primary
+        : (stockHealthy ? _stockPlentyGreen : _stockLowRed);
 
     // Үлдэгдэл ба үнийн шошго нь ИЖИЛ хэлбэртэй байх ёстой — доорх
     // хэмжээсүүдийг хоёул хуваалцана (өмнө нь радиус 100/10, доторх зай
@@ -2326,7 +2329,7 @@ class _ProductCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (item.isOutOfStock && !inCart)
+                  if (item.isOutOfStock && !inCart && !isService)
                     Container(
                       color: Colors.black54,
                       alignment: Alignment.center,
@@ -2515,8 +2518,10 @@ class _ProductCard extends StatelessWidget {
                           // "Үлдэгдэл: 2..." гэж тасардаг байв — одоо
                           // [FittedBox] дотор багтаж, бүтнээрээ харагдана.
                           Tooltip(
-                            message: item.product.boxPiecesPerBoxHint ??
-                                'Үлдэгдэл: $stock ${item.product.posStockQuantitySuffix}',
+                            message: isService
+                                ? 'Ажил үйлчилгээ'
+                                : (item.product.boxPiecesPerBoxHint ??
+                                    'Үлдэгдэл: $stock ${item.product.posStockQuantitySuffix}'),
                             child: Align(
                               alignment: Alignment.centerLeft,
                               child: FittedBox(
@@ -2530,8 +2535,9 @@ class _ProductCard extends StatelessWidget {
                                         BorderRadius.circular(badgeRadius),
                                   ),
                                   child: Text(
-                                    '$stock '
-                                    '${item.product.posStockQuantitySuffix}',
+                                    isService
+                                        ? 'Ажил'
+                                        : '$stock ${item.product.posStockQuantitySuffix}',
                                     maxLines: 1,
                                     softWrap: false,
                                     style: textTheme.labelSmall?.copyWith(
@@ -3109,6 +3115,13 @@ Future<void> _showUneOorchlokhDialog(BuildContext context, SaleItem item) async 
                     .textTheme
                     .titleSmall
                     ?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(
+              'Үндсэн үнэ: ${MntAmountFormatter.formatTugrik(item.product.price)}',
+              style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                  ),
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: ctrl,
@@ -3119,7 +3132,7 @@ Future<void> _showUneOorchlokhDialog(BuildContext context, SaleItem item) async 
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
               ],
               decoration: InputDecoration(
-                labelText: khairtsag ? 'Нэг хайрцгийн үнэ' : 'Нэгж үнэ',
+                labelText: khairtsag ? 'Нэг хайрцгийн зарах үнэ' : 'Зарах нэгж үнэ',
                 suffixText: '₮',
                 border: const OutlineInputBorder(),
               ),

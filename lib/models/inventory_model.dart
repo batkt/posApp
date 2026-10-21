@@ -29,11 +29,13 @@ class InventoryItem {
   /// Цөөн үлдсэн: үлдэгдэл 1…[minStockLevel] (жишээ нь 1–10 нь `minStockLevel == 10` үед).
   /// 0 үлдэгдэлтэй барааг энд оруулахгүй — тэдгээр нь [isOutOfStock].
   bool get isLowStock =>
+      product.ajilUilchilgeeEsekh != true &&
       currentStock > 0 &&
       minStockLevel > 0 &&
       currentStock <= minStockLevel;
 
-  bool get isOutOfStock => currentStock <= 0;
+  bool get isOutOfStock =>
+      product.ajilUilchilgeeEsekh != true && currentStock <= 0;
 
   double get stockValue => (costPrice ?? product.price * 0.6) * currentStock;
 
@@ -157,6 +159,7 @@ class InventoryModel extends ChangeNotifier {
       if (e.value <= 0) continue;
       final i = _inventory.indexWhere((x) => x.product.id == e.key);
       if (i < 0) continue;
+      if (_inventory[i].product.ajilUilchilgeeEsekh == true) continue;
       _inventory[i] = _inventory[i].copyWith(
         currentStock: _inventory[i].currentStock - e.value,
       );
@@ -480,6 +483,7 @@ class InventoryModel extends ChangeNotifier {
   void restock(String productId, int amount) {
     final index = _inventory.indexWhere((item) => item.product.id == productId);
     if (index >= 0) {
+      if (_inventory[index].product.ajilUilchilgeeEsekh == true) return;
       _inventory[index] = _inventory[index].copyWith(
         currentStock: _inventory[index].currentStock + amount,
         lastRestocked: DateTime.now(),
@@ -505,10 +509,12 @@ class InventoryModel extends ChangeNotifier {
   /// [deductStock] нь ЗОРИУДААР хасах утга руу оруулдаг (дээрх тэнцлийг
   /// хадгалахын тулд), тиймээс "үлдэгдлээс илүү зарахгүй" шийдвэрийг ЭНД,
   /// дуудагчийн талд гаргана. Дэлгэц "+"-ийг үүгээр хаана.
+  /// Ажил үйлчилгээний бараа нь үлдэгдэл тооцдоггүй тул үргэлж `true`.
   bool canSell(String productId, [int amount = 1]) {
     if (amount <= 0) return false;
     final index = _inventory.indexWhere((item) => item.product.id == productId);
     if (index < 0) return false;
+    if (_inventory[index].product.ajilUilchilgeeEsekh == true) return true;
     return _inventory[index].currentStock >= amount;
   }
 
@@ -516,6 +522,7 @@ class InventoryModel extends ChangeNotifier {
     if (amount <= 0) return true;
     final index = _inventory.indexWhere((item) => item.product.id == productId);
     if (index < 0) return false;
+    if (_inventory[index].product.ajilUilchilgeeEsekh == true) return true;
     _inventory[index] = _inventory[index].copyWith(
       currentStock: _inventory[index].currentStock - amount,
     );

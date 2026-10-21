@@ -51,6 +51,30 @@ class PosTransactionService {
     return _finiteDouble(value, fallback: fallback).toStringAsFixed(2);
   }
 
+  @visibleForTesting
+  Map<String, dynamic> buildSaleBaraaForTest({
+    required Product product,
+    required String fallbackSalbariinId,
+    required double unitPrice,
+    required double lineTotal,
+    required double lineQuantity,
+    String? uramshuulaliinId,
+    PosWebLineTax? webLineTax,
+    double? undsenZarakhUne,
+    bool dorvonNegGiftLine = false,
+  }) =>
+      _buildSaleBaraa(
+        product: product,
+        fallbackSalbariinId: fallbackSalbariinId,
+        unitPrice: unitPrice,
+        lineTotal: lineTotal,
+        lineQuantity: lineQuantity,
+        uramshuulaliinId: uramshuulaliinId,
+        webLineTax: webLineTax,
+        undsenZarakhUne: undsenZarakhUne,
+        dorvonNegGiftLine: dorvonNegGiftLine,
+      );
+
   Map<String, dynamic> _buildSaleBaraa({
     required Product product,
     required String fallbackSalbariinId,
@@ -92,7 +116,9 @@ class PosTransactionService {
       'salbariinId': product.salbariinId ?? fallbackSalbariinId,
       'angilal': product.angilal ?? product.category,
       'khemjikhNegj': product.khemjikhNegj,
-      'niitUne': _fixed2Num(unitPrice),
+      // Үндсэн үнэ (каталогийн суурь үнэ) — касс дээр үнэ өөрчилсөн ч
+      // үндсэн үнэ өөрчлөгдөхгүй, зөвхөн энэ борлуулалтын `zarakhUne`-д тусна.
+      'niitUne': _fixed2Num(product.niitUne ?? product.price),
       'zarakhUne': _fixed2Num(unitPrice),
       // posBack ebarimtShine builder uses this directly for totalAmount.
       'zarsanNiitUne':

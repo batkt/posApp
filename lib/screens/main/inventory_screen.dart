@@ -382,8 +382,11 @@ class _InventoryItemTile extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final product = item.product;
 
+    final isService = product.ajilUilchilgeeEsekh == true;
     Color stockColor;
-    if (item.isOutOfStock) {
+    if (isService) {
+      stockColor = colorScheme.primary;
+    } else if (item.isOutOfStock) {
       stockColor = AppColors.error;
     } else if (item.isLowStock) {
       stockColor = AppColors.warning;
@@ -442,7 +445,7 @@ class _InventoryItemTile extends StatelessWidget {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            'Үлдэгдэл: ${item.currentStock}',
+                            isService ? 'Ажил' : 'Үлдэгдэл: ${item.currentStock}',
                             style: textTheme.labelSmall?.copyWith(
                               color: stockColor,
                               fontWeight: FontWeight.w600,
