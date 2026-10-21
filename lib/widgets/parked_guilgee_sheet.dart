@@ -381,119 +381,134 @@ class _ParkedGuilgeeSheetShellState extends State<_ParkedGuilgeeSheetShell> {
                               color: cs.surfaceContainerLow,
                               elevation: 0,
                               borderRadius: BorderRadius.circular(16),
-                              // [stretch] + ListView unbounded height causes RenderFlex failures (Flutter web).
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Expanded(
-                                    child: InkWell(
-                                      borderRadius:
-                                          const BorderRadius.horizontal(
-                                        left: Radius.circular(16),
+                              clipBehavior: Clip.antiAlias,
+                              child: InkWell(
+                                onTap: () => _recallParkedSale(ctx, row),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          DecoratedBox(
+                                            decoration: BoxDecoration(
+                                              color: cs.primaryContainer
+                                                  .withValues(alpha: 0.55),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(8),
+                                              child: Icon(
+                                                Icons
+                                                    .pause_circle_filled_rounded,
+                                                color: cs.primary,
+                                                size: 22,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  row.guilgeeniiDugaar,
+                                                  style:
+                                                      tt.titleMedium?.copyWith(
+                                                    fontWeight:
+                                                        FontWeight.w800,
+                                                    letterSpacing: 0.2,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  whenStr,
+                                                  style:
+                                                      tt.bodySmall?.copyWith(
+                                                    color:
+                                                        cs.onSurfaceVariant,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          IconButton(
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            tooltip:
+                                                l10n.tr('pos_park_delete'),
+                                            icon: Icon(
+                                              Icons.delete_outline_rounded,
+                                              color: cs.error,
+                                              size: 22,
+                                            ),
+                                            onPressed: () =>
+                                                _confirmDeleteParked(ctx, row),
+                                          ),
+                                        ],
                                       ),
-                                      onTap: () => _recallParkedSale(ctx, row),
-                                      child: Padding(
+                                      const SizedBox(height: 10),
+                                      Container(
                                         padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 14,
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: cs.surfaceContainerHighest
+                                              .withValues(alpha: 0.45),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
                                         ),
                                         child: Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
                                           children: [
-                                            DecoratedBox(
-                                              decoration: BoxDecoration(
-                                                color: cs.primaryContainer
-                                                    .withValues(alpha: 0.55),
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                              child: Padding(
-                                                padding:
-                                                    const EdgeInsets.all(10),
-                                                child: Icon(
-                                                  Icons
-                                                      .pause_circle_filled_rounded,
-                                                  color: cs.primary,
-                                                  size: 26,
-                                                ),
+                                            Icon(
+                                              Icons.shopping_bag_outlined,
+                                              size: 16,
+                                              color: cs.onSurfaceVariant,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              l10n
+                                                  .tr('pos_park_line_count')
+                                                  .replaceAll(
+                                                    '{n}',
+                                                    '${row.lineCount}',
+                                                  ),
+                                              style: tt.bodyMedium?.copyWith(
+                                                fontWeight: FontWeight.w600,
+                                                color: cs.onSurface,
                                               ),
                                             ),
-                                            const SizedBox(width: 14),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    row.guilgeeniiDugaar,
-                                                    style: tt.titleMedium
-                                                        ?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      letterSpacing: 0.2,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    whenStr,
-                                                    style:
-                                                        tt.bodySmall?.copyWith(
-                                                      color:
-                                                          cs.onSurfaceVariant,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 6),
-                                                  Text(
-                                                    l10n
-                                                        .tr('pos_park_line_count')
-                                                        .replaceAll(
-                                                          '{n}',
-                                                          '${row.lineCount}',
-                                                        ),
-                                                    style:
-                                                        tt.bodyMedium?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    MntAmountFormatter
-                                                        .formatTugrikSpaced(
-                                                      row.niitUne,
-                                                    ),
-                                                    style: tt.titleMedium
-                                                        ?.copyWith(
-                                                      color: cs.primary,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                    ),
-                                                  ),
-                                                ],
+                                            const Spacer(),
+                                            Text(
+                                              MntAmountFormatter
+                                                  .formatTugrikSpaced(
+                                                row.niitUne,
+                                              ),
+                                              style:
+                                                  tt.titleMedium?.copyWith(
+                                                color: cs.primary,
+                                                fontWeight: FontWeight.w800,
                                               ),
                                             ),
+                                            const SizedBox(width: 4),
                                             Icon(
                                               Icons.chevron_right_rounded,
-                                              color: cs.onSurfaceVariant,
+                                              color: cs.primary,
+                                              size: 20,
                                             ),
                                           ],
                                         ),
                                       ),
-                                    ),
+                                    ],
                                   ),
-                                  Center(
-                                    child: IconButton(
-                                      tooltip: l10n.tr('pos_park_delete'),
-                                      icon: Icon(
-                                        Icons.delete_outline_rounded,
-                                        color: cs.error,
-                                      ),
-                                      onPressed: () =>
-                                          _confirmDeleteParked(ctx, row),
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
                           );

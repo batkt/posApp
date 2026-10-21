@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../utils/app_date_range_picker.dart';
 import '../utils/mongolian_date_formatter.dart';
 import '../models/locale_model.dart';
-import 'package:provider/provider.dart';
 
 /// Centered, full-width date range filter button used consistently on every
 /// screen (Орлого, Тайлан, Худалдан авалт, Тооллого, …).
@@ -171,6 +170,14 @@ class _DateRangeSheet extends StatelessWidget {
     );
   }
 
+  static DateTimeRange _thisYear() {
+    final n = DateTime.now();
+    return DateTimeRange(
+      start: DateTime(n.year, 1, 1),
+      end: DateTime(n.year, 12, 31, 23, 59, 59),
+    );
+  }
+
   bool _isActive(DateTimeRange r) {
     return _sameDay(r.start, current.start) && _sameDay(r.end, current.end);
   }
@@ -187,16 +194,20 @@ class _DateRangeSheet extends StatelessWidget {
     final presets = [
       ('Өнөөдөр', _today()),
       ('Өчигдөр', _yesterday()),
-      ('Энэ долоо хоног', _thisWeek()),
+      ('Энэ 7 хоног', _thisWeek()),
       ('Сүүлийн 7 хоног', _last7()),
       ('Энэ сар', _thisMonth()),
-      ('Сүүлийн 30 хоног', _last30()),
       ('Өмнөх сар', _lastMonth()),
+      ('Сүүлийн 30 хоног', _last30()),
+      ('Энэ жил', _thisYear()),
     ];
+
+    final isPresetActive = presets.any((p) => _isActive(p.$2));
+    final isCustomActive = !isPresetActive;
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -212,110 +223,197 @@ class _DateRangeSheet extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
-            // Title
-            Text(
-              l10n.tr('date_picker_range_help'),
-              style: textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-              textAlign: TextAlign.center,
+            // Header row
+            Row(
+              children: [
+                const SizedBox(width: 36),
+                Expanded(
+                  child: Text(
+                    'Хугацаа сонгох',
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip:
+                      MaterialLocalizations.of(context).closeButtonTooltip,
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
-            // Preset chips
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.center,
-              children: presets.map((p) {
+            // Preset grid (2 columns, balanced height)
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                mainAxisExtent: 42,
+              ),
+              itemCount: presets.length,
+              itemBuilder: (context, index) {
+                final p = presets[index];
                 final active = _isActive(p.$2);
-                return FilterChip(
-                  label: Text(p.$1),
-                  selected: active,
-                  onSelected: (_) => Navigator.pop(context, p.$2),
-                  labelStyle: textTheme.labelMedium?.copyWith(
-                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                    color: active
-                        ? colorScheme.onPrimary
-                        : colorScheme.onSurface,
-                  ),
-                  backgroundColor: colorScheme.surfaceContainerHighest,
-                  selectedColor: colorScheme.primary,
-                  checkmarkColor: colorScheme.onPrimary,
-                  showCheckmark: true,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 4),
-
-            // Custom range picker
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: colorScheme.secondaryContainer,
+                return Material(
+                  color: active
+                      ? colorScheme.primary
+                      : colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.55),
                   borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.edit_calendar_rounded,
-                  color: colorScheme.secondary,
-                  size: 20,
-                ),
-              ),
-              title: Text(
-                'Өдөр сонгох',
-                style: textTheme.bodyMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                MongolianDateFormatter.formatDateRangeCompact(
-                  current.start,
-                  current.end,
-                ),
-                style: textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () async {
-                final picked = await showAppDateRangePicker(
-                  context: context,
-                  initialDateRange: current,
-                  firstDate: DateTime(2018),
-                  lastDate: DateTime.now().add(const Duration(days: 365)),
-                  helpText: l10n.tr('date_picker_range_help'),
-                  cancelText: l10n.tr('date_picker_cancel'),
-                  confirmText: l10n.tr('date_picker_confirm'),
-                );
-                if (picked == null || !context.mounted) return;
-                final normalized = DateTimeRange(
-                  start: DateTime(
-                    picked.start.year,
-                    picked.start.month,
-                    picked.start.day,
-                  ),
-                  end: DateTime(
-                    picked.end.year,
-                    picked.end.month,
-                    picked.end.day,
-                    23,
-                    59,
-                    59,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => Navigator.pop(context, p.$2),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: active
+                              ? colorScheme.primary
+                              : colorScheme.outlineVariant
+                                  .withValues(alpha: 0.4),
+                          width: 1,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Text(
+                        p.$1,
+                        style: textTheme.labelLarge?.copyWith(
+                          fontWeight:
+                              active ? FontWeight.w700 : FontWeight.w500,
+                          color: active
+                              ? colorScheme.onPrimary
+                              : colorScheme.onSurface,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ),
                 );
-                if (context.mounted) Navigator.pop(context, normalized);
               },
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 14),
+
+            // Custom range picker card
+            Material(
+              color: isCustomActive
+                  ? colorScheme.primaryContainer.withValues(alpha: 0.35)
+                  : colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () async {
+                  final picked = await showAppDateRangePicker(
+                    context: context,
+                    initialDateRange: current,
+                    firstDate: DateTime(2018),
+                    lastDate:
+                        DateTime.now().add(const Duration(days: 365)),
+                    helpText: l10n.tr('date_picker_range_help'),
+                    cancelText: l10n.tr('date_picker_cancel'),
+                    confirmText: l10n.tr('date_picker_confirm'),
+                  );
+                  if (picked == null || !context.mounted) return;
+                  final normalized = DateTimeRange(
+                    start: DateTime(
+                      picked.start.year,
+                      picked.start.month,
+                      picked.start.day,
+                    ),
+                    end: DateTime(
+                      picked.end.year,
+                      picked.end.month,
+                      picked.end.day,
+                      23,
+                      59,
+                      59,
+                    ),
+                  );
+                  if (context.mounted) Navigator.pop(context, normalized);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isCustomActive
+                          ? colorScheme.primary
+                          : colorScheme.outlineVariant.withValues(alpha: 0.6),
+                      width: isCustomActive ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: isCustomActive
+                              ? colorScheme.primary
+                              : colorScheme.primaryContainer
+                                  .withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Icon(
+                            Icons.calendar_month_rounded,
+                            color: isCustomActive
+                                ? colorScheme.onPrimary
+                                : colorScheme.primary,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Өөр огноо сонгох',
+                              style: textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              MongolianDateFormatter.formatDateRangeCompact(
+                                current.start,
+                                current.end,
+                              ),
+                              style: textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures()
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: isCustomActive
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),

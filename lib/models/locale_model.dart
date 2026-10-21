@@ -342,7 +342,7 @@ class AppLocalizations {
       'pos_park_modal_subtitle':
           'Tap a row to load it into the POS cart. This removes it from the server queue (same as web).',
       'pos_park_refresh': 'Refresh',
-      'pos_park_line_count': '{n} line(s)',
+      'pos_park_line_count': '{n} item(s)',
       'pos_park_queue_banner_hint':
           'Open parked carts — load one into the register from here.',
       'pos_park_none': 'No parked sales for this branch.',
@@ -955,7 +955,7 @@ class AppLocalizations {
       'pos_park_modal_subtitle':
           'Мөр дээр дарж POS саг руу ачаална. Серверийн дарааллаас хасагдана (вэбтэй ижил).',
       'pos_park_refresh': 'Сэргээх',
-      'pos_park_line_count': '{n} мөр',
+      'pos_park_line_count': '{n} бараа',
       'pos_park_queue_banner_hint':
           'Түр хадгалсан сагуудыг эндээс нээнэ — сонгосноор POS саг руу орно.',
       'pos_park_none': 'Энэ салбарт түр хадгалсан захиалга байхгүй.',
