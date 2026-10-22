@@ -212,6 +212,11 @@ class AuthService {
             );
           }
 
+          final previousDevice =
+              response.data!['umnukhTukhuurumj'] as String?;
+          final previousDeviceNotice =
+              response.data!['umnukhTukhuurumjMsg'] as String?;
+
           return AuthResult.success(
             user: user,
             token: token,
@@ -220,6 +225,8 @@ class AuthService {
             posSession: posSession,
             staffAccess: staffAccess,
             branchOptions: branchOptions,
+            previousDevice: previousDevice,
+            previousDeviceNotice: previousDeviceNotice,
           );
         }
       }
@@ -459,6 +466,8 @@ class AuthResult {
   /// When the staff (or admin + org) has more than one салбар to pick, client shows
   /// [BranchSelectScreen] before POS.
   final List<BranchOption>? branchOptions;
+  final String? previousDevice;
+  final String? previousDeviceNotice;
 
   const AuthResult._({
     required this.success,
@@ -470,6 +479,8 @@ class AuthResult {
     this.posSession,
     this.staffAccess,
     this.branchOptions,
+    this.previousDevice,
+    this.previousDeviceNotice,
   });
 
   factory AuthResult.success({
@@ -480,6 +491,8 @@ class AuthResult {
     PosSession? posSession,
     StaffScreenAccess? staffAccess,
     List<BranchOption>? branchOptions,
+    String? previousDevice,
+    String? previousDeviceNotice,
   }) =>
       AuthResult._(
         success: true,
@@ -490,6 +503,8 @@ class AuthResult {
         posSession: posSession,
         staffAccess: staffAccess,
         branchOptions: branchOptions,
+        previousDevice: previousDevice,
+        previousDeviceNotice: previousDeviceNotice,
       );
 
   factory AuthResult.error(String error) => AuthResult._(

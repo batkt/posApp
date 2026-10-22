@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../models/auth_model.dart';
 import '../../models/locale_model.dart';
+import '../../theme/app_theme.dart';
 import '../../utils/app_snackbar.dart';
 import '../../utils/connectivity.dart';
 import 'forgot_password_screen.dart';
@@ -57,6 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
     FocusManager.instance.primaryFocus?.unfocus();
 
     if (!_formKey.currentState!.validate()) return;
+    context.read<AuthModel>().clearLogoutNotice();
 
     // Check network connectivity
     final isOnline = await Connectivity.isOnline();
@@ -247,7 +249,62 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
+
+                      // Өөр төхөөрөмжөөс нэвтэрснээр гарсан мэдэгдэл
+                      Consumer<AuthModel>(
+                        builder: (context, auth, _) {
+                          final notice = auth.logoutNotice;
+                          if (notice == null || notice.isEmpty) {
+                            return const SizedBox(height: 8);
+                          }
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 20),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.error.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.error.withValues(alpha: 0.35),
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: AppColors.error,
+                                  size: 22,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    notice,
+                                    style: const TextStyle(
+                                      color: AppColors.error,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                GestureDetector(
+                                  onTap: () => auth.clearLogoutNotice(),
+                                  child: const Icon(
+                                    Icons.close_rounded,
+                                    color: AppColors.error,
+                                    size: 18,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
 
                       // Username Field
                       TextFormField(
@@ -382,14 +439,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       Text(
                         'Powered by Zevtabs',
                         style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withOpacity(0.5),
+                          color: colorScheme.onSurface.withValues(alpha: 0.5),
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         _appVersion,
                         style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withOpacity(0.5),
+                          color: colorScheme.onSurface.withValues(alpha: 0.5),
                         ),
                       ),
                     ],

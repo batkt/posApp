@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import '../main.dart';
 import '../theme/app_theme.dart';
 
 /// Toast-style notification banner pinned at the top of the screen ABOVE all
@@ -29,8 +30,10 @@ void showAppSnackBar(
   _currentOverlayEntry = null;
 
   // Use rootOverlay: true so the toast renders above any open modal sheet or dialog.
+  // Fall back to navigatorKey's overlay if context has no ancestor Overlay.
   final overlay = Overlay.maybeOf(context, rootOverlay: true) ??
-      Overlay.maybeOf(context);
+      Overlay.maybeOf(context) ??
+      POSApp.navigatorKey.currentState?.overlay;
   if (overlay == null) return;
 
   final theme = Theme.of(context);

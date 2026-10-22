@@ -111,6 +111,18 @@ class SocketService {
           _tulburKhuseeltController.add(Map<String, dynamic>.from(data));
         }
       });
+      _socket!.on('sessKhuuchirsan', (data) {
+        if (data is Map) {
+          final targetId = data['ajiltniiId']?.toString();
+          final currentId =
+              (session.ajiltan['_id'] ?? session.ajiltan['id'])?.toString();
+          if (targetId != null && currentId != null && targetId == currentId) {
+            final aldaa = data['aldaa']?.toString() ??
+                'Таны эрхээр өөр төхөөрөмжөөс нэвтэрсэн тул энэ төхөөрөмжөөс гарлаа.';
+            ApiService.triggerSessionExpired(aldaa);
+          }
+        }
+      });
 
       _socket!.onDisconnect((_) {});
 

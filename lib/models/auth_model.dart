@@ -96,6 +96,31 @@ class AuthModel extends ChangeNotifier {
   String? _lastAuthError;
   String? get lastAuthError => _lastAuthError;
 
+  /// Өөр төхөөрөмжөөс нэвтэрснээр системээс гарсан үед LoginScreen дээр
+  /// харуулах анхааруулга/мэдэгдэл.
+  String? _logoutNotice;
+  String? get logoutNotice => _logoutNotice;
+
+  void setLogoutNotice(String? notice) {
+    _logoutNotice = notice;
+    notifyListeners();
+  }
+
+  void clearLogoutNotice() {
+    if (_logoutNotice != null) {
+      _logoutNotice = null;
+      notifyListeners();
+    }
+  }
+
+  /// Веб дээр нэвтэрсэн байхад апп дээр шинээр нэвтрэхэд харуулах мэдэгдэл.
+  String? _previousDeviceNotice;
+  String? get previousDeviceNotice => _previousDeviceNotice;
+
+  void clearPreviousDeviceNotice() {
+    _previousDeviceNotice = null;
+  }
+
   /// Persists credentials for biometric login. Must not block login indefinitely
   /// (secure storage can hang on some devices / keystore states).
   Future<void> _saveBiometricLoginCredentials(
@@ -309,6 +334,8 @@ class AuthModel extends ChangeNotifier {
 
     if (result.success) {
       _lastAuthError = null;
+      _logoutNotice = null;
+      _previousDeviceNotice = result.previousDeviceNotice;
       // Save credentials for future biometric login.
       // (Stored encrypted by OS via flutter_secure_storage).
       await _saveBiometricLoginCredentials(username.trim(), password);
@@ -416,6 +443,7 @@ class AuthModel extends ChangeNotifier {
     _pendingBranchOptions = null;
     _staffAccess = StaffScreenAccess.denied;
     _lastAuthError = null;
+    _previousDeviceNotice = null;
     _isAuthenticated = false;
     _requiresTwoFactor = false;
     _pending2FAUsername = '';

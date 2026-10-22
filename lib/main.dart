@@ -127,6 +127,12 @@ class _POSAppState extends State<POSApp> {
     if (!auth.isLoggedIn && !auth.isAuthenticated) return;
     _handlingSessionExpiry = true;
 
+    final displayMsg = ApiService.isBusadTukhuurumjMessage(message)
+        ? message
+        : 'Нэвтрэх хугацаа дууссан тул дахин нэвтэрнэ үү.';
+
+    auth.setLogoutNotice(displayMsg);
+
     // Хүсэлтийн хариу нь build-ийн дундаас ирж болзошгүй тул кадрын дараа.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
@@ -138,10 +144,40 @@ class _POSAppState extends State<POSApp> {
         if (ctx != null && ctx.mounted) {
           showAppSnackBar(
             ctx,
-            ApiService.isBusadTukhuurumjMessage(message)
-                ? 'Таны эрхээр өөр төхөөрөмжөөс нэвтэрсэн тул энэ төхөөрөмжөөс гарлаа.'
-                : 'Нэвтрэх хугацаа дууссан тул дахин нэвтэрнэ үү.',
+            displayMsg,
             variant: AppSnackVariant.error,
+            duration: const Duration(seconds: 6),
+          );
+          showDialog(
+            context: ctx,
+            barrierDismissible: true,
+            builder: (dCtx) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded,
+                      color: AppColors.error, size: 28),
+                  SizedBox(width: 10),
+                  Text('Анхааруулга',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: Text(
+                displayMsg,
+                style: const TextStyle(fontSize: 15, height: 1.4),
+              ),
+              actions: [
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                  ),
+                  onPressed: () => Navigator.of(dCtx).pop(),
+                  child: const Text('Ойлголоо'),
+                ),
+              ],
+            ),
           );
         }
       } finally {
@@ -324,6 +360,20 @@ class _AuthWrapperState extends State<AuthWrapper> {
   Widget build(BuildContext context) {
     return Consumer<AuthModel>(
       builder: (context, auth, child) {
+        if (auth.isLoggedIn && auth.previousDeviceNotice != null) {
+          final notice = auth.previousDeviceNotice!;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && auth.previousDeviceNotice != null) {
+              auth.clearPreviousDeviceNotice();
+              showAppSnackBar(
+                context,
+                notice,
+                variant: AppSnackVariant.warning,
+                duration: const Duration(seconds: 6),
+              );
+            }
+          });
+        }
         if (auth.requiresTwoFactor && !auth.isLoggedIn) {
           return const TwoFactorAuthScreen();
         }

@@ -284,8 +284,27 @@ class ApiService {
   /// Нэг эрхээр нэг төхөөрөмж: энэ эрхээр өөр төхөөрөмжөөс (вэб, апп,
   /// андройд пос) дараа нь нэвтэрсэн (posBack `middleware/sessShalgakh.js`,
   /// 401 + kod `BUSAD_TUKHUURUMJ`).
-  static bool isBusadTukhuurumjMessage(String? message) =>
-      message != null && message.contains('өөр төхөөрөмжөөс нэвтэрсэн');
+  static bool isBusadTukhuurumjMessage(String? message) {
+    if (message == null) return false;
+    final m = message.toLowerCase();
+    return m.contains('өөр төхөөрөмжөөс') ||
+        m.contains('өөр төхөөрөмжнөөс') ||
+        m.contains('вэб төхөөрөмж') ||
+        m.contains('веб төхөөрөмж') ||
+        m.contains('мобайл төхөөрөмж') ||
+        m.contains('терминал төхөөрөмж') ||
+        m.contains('төхөөрөмжөөс нэвтэрсэн') ||
+        m.contains('төхөөрөмжөөс гарлаа') ||
+        m.contains('төхөөрөмжнөөс нэвтэрсэн') ||
+        m.contains('төхөөрөмжнөөс гарлаа') ||
+        m.contains('төхөөрөмжнөөс орсон');
+  }
+
+  /// Гаднаас (жишээ нь Socket.io real-time эвентээс) сесс хүчингүй болсныг
+  /// шууд зарлахад дуудна.
+  static void triggerSessionExpired(String message) {
+    onSessionExpired?.call(message);
+  }
 
   /// Зөвхөн токентой байж байгаад унасан хүсэлтэд гаргана.
   ///
