@@ -23,6 +23,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'services/network_usage_service.dart';
 import 'services/background_watchdog_service.dart';
 import 'package:media_kit/media_kit.dart';
+import 'services/offline/offline_guilgee_queue.dart';
 
 
 void main() async {
@@ -47,6 +48,9 @@ void main() async {
   // No-op unless a terminal previously logged in (see TerminalSessionStore) —
   // lets a watchdog-triggered relaunch/reboot skip straight past LoginScreen.
   await authModel.tryRestoreTerminalSession();
+  // Интернэтгүй үед хийсэн борлуулалтыг холболт сэргэмэгц автоматаар
+  // илгээнэ (дараалал төхөөрөмж дээр хадгалагдсан).
+  OfflineGuilgeeQueue.instance.autoSinkEkhluulekh();
   // Cheap: only registers the headless entrypoint + boot flag, starts nothing.
   await BackgroundWatchdogService.instance.configure();
   runApp(POSApp(authModel: authModel));

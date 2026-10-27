@@ -171,8 +171,11 @@ class PosTransactionService {
     }
     if (value is String) {
       final t = value.trim().toLowerCase();
-      if (t == 'nan' || t == 'infinity' || t == '-infinity') return '0';
-      if (t.contains('nan') || t.contains('infinity')) return '0';
+      // Зөвхөн утга БҮХЭЛДЭЭ NaN/Infinity бол засна. Өмнө нь "nan"-г
+      // АГУУЛСАН ямар ч текстийг (жишээ нь "Banana" нэртэй бараа) "0" болгодог байв.
+      if (t == 'nan' || t == 'infinity' || t == '-infinity' || t == '+infinity') {
+        return '0';
+      }
       final parsed = double.tryParse(t);
       if (parsed != null && (!parsed.isFinite || parsed.isNaN)) return '0';
       return value;
@@ -268,7 +271,16 @@ class PosTransactionService {
     return baraanuud;
   }
 
-  Future<dynamic> _postGuilgeeniiTuukhKhadgalya(Map<String, dynamic> body) async {
+  /// Офлайн дарааллаас (эсвэл [submitGuilgeeniiTuukh]-ээс) бэлэн payload-ийг
+  /// илгээнэ. Серверт хүрч чадаагүй бол сүлжээний алдаа (Timeout/Socket),
+  /// сервер татгалзвал [PosTransactionException] шиднэ.
+  Future<dynamic> postGuilgeeBody(Map<String, dynamic> body) =>
+      _postGuilgeeniiTuukhKhadgalya(body, timeout: const Duration(seconds: 20));
+
+  Future<dynamic> _postGuilgeeniiTuukhKhadgalya(
+    Map<String, dynamic> body, {
+    Duration? timeout,
+  }) async {
     body.removeWhere((k, v) => v == null);
 
     final safeBody = _sanitizeJson(body);
@@ -286,7 +298,7 @@ class PosTransactionService {
     final uri = Uri.parse('${ApiConfig.posBaseUrl}/guilgeeniiTuukhKhadgalya');
     final res = await _http
         .post(uri, headers: _headers(), body: encodedBody)
-        .timeout(ApiConfig.timeout);
+        .timeout(timeout ?? ApiConfig.timeout);
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw PosTransactionException(
@@ -313,6 +325,48 @@ class PosTransactionService {
     required String guilgeeniiDugaar,
     bool baraaNUATModalOpen = false,
     Map<String, dynamic>? khariltsagch,
+    String? zeelKhariltsagchiinId,
+    PosWebTaxContext? webTaxContext,
+    double cashierDiscountMnt = 0,
+    String? clientGuilgeeniiId,
+  }) {
+    return _postGuilgeeniiTuukhKhadgalya(buildGuilgeeniiTuukhBody(
+      session: session,
+      sales: sales,
+      paymentTurul: paymentTurul,
+      niitUne: niitUne,
+      tulsunDun: tulsunDun,
+      hariult: hariult,
+      hungulsunDun: hungulsunDun,
+      noatiinDun: noatiinDun,
+      noatguiDun: noatguiDun,
+      nhatiinDun: nhatiinDun,
+      guilgeeniiDugaar: guilgeeniiDugaar,
+      baraaNUATModalOpen: baraaNUATModalOpen,
+      khariltsagch: khariltsagch,
+      zeelKhariltsagchiinId: zeelKhariltsagchiinId,
+      webTaxContext: webTaxContext,
+      cashierDiscountMnt: cashierDiscountMnt,
+      clientGuilgeeniiId: clientGuilgeeniiId,
+    ));
+  }
+
+  /// [submitGuilgeeniiTuukh]-ийн payload — офлайн дараалалд хадгалахад
+  /// ч ЯГ ижил хэлбэрээр ашиглана.
+  Map<String, dynamic> buildGuilgeeniiTuukhBody({
+    required PosSession session,
+    required SalesModel sales,
+    required String paymentTurul,
+    required double niitUne,
+    required double tulsunDun,
+    required double hariult,
+    required double hungulsunDun,
+    required double noatiinDun,
+    required double noatguiDun,
+    required double nhatiinDun,
+    required String guilgeeniiDugaar,
+    bool baraaNUATModalOpen = false,
+    Map<String, dynamic>? khariltsagch,
     /// Web `tulburTuluhModal`: `tulbur[]` with `turul: "zeel"` must include `khariltsagchiinId`
     /// for `guilgeeRoute` receivable (`avlagaGuilgeeKhadgalya`).
     String? zeelKhariltsagchiinId,
@@ -320,7 +374,10 @@ class PosTransactionService {
     /// When set (cashier POS), НӨАТ/НХАТ per line matches web `posSystem/index.js`.
     PosWebTaxContext? webTaxContext,
     double cashierDiscountMnt = 0,
-  }) async {
+
+    /// Нэг борлуулалтын давтагдашгүй ID — сервер давхар бүртгэхгүй.
+    String? clientGuilgeeniiId,
+  }) {
     final baraanuud = _buildGuilgeeBaraanuud(
       session: session,
       items: sales.currentSaleItems,
@@ -366,9 +423,11 @@ class PosTransactionService {
       'baraanuud': baraanuud,
       'tulbur': tulbur,
       'ajiltan': session.ajiltanPayload,
+      if (clientGuilgeeniiId != null && clientGuilgeeniiId.isNotEmpty)
+        'clientGuilgeeniiId': clientGuilgeeniiId,
     };
-
-    return _postGuilgeeniiTuukhKhadgalya(body);
+    body.removeWhere((k, v) => v == null);
+    return Map<String, dynamic>.from(_sanitizeJson(body) as Map);
   }
 
   /// Web POS `huleelgey()` → `POST /guilgeeniiTuukhKhadgalya` with `tulbur: []` so `tuluv` stays 0.

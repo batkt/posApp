@@ -402,6 +402,25 @@ class Product {
       ? ((price - costPrice!) / costPrice!) * 100
       : null;
 
+  /// Офлайн каталогийн кэшид хадгалах хэлбэр — [Product.fromJson]-оор буцааж
+  /// уншигдана.
+  Map<String, dynamic> toCacheJson() {
+    final map = <String, dynamic>{
+      ...toBaraaDocument(fallbackSalbariinId: salbariinId ?? ''),
+      '_id': id,
+      'uldegdel': uldegdelBodit ?? uldegdel ?? stock,
+      'idevkhteiEsekh': isAvailable,
+      'zurgiinId': zurgiinId,
+      if (olonBarCodeEsekh != null) 'olonBarCodeEsekh': olonBarCodeEsekh,
+      'olonBarCodeJagsaalt':
+          olonBarCodeJagsaalt.map((b) => {'barCode': b}).toList(),
+      if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+      if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
+    };
+    map.removeWhere((_, v) => v == null);
+    return map;
+  }
+
   /// Payload shape for POS API `baraa` (matches Next.js `tulburTuluhModal` / posBack).
   Map<String, dynamic> toBaraaDocument({required String fallbackSalbariinId}) {
     final map = <String, dynamic>{

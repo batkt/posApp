@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../payment/pos_payment_core.dart';
 import 'api_service.dart';
 
@@ -205,12 +207,34 @@ class PosSettingsService {
     required String salbariinId,
   }) async {
     final org = await fetchBaiguullaga(baiguullagiinId);
+    final salb = await fetchSalbaruud(baiguullagiinId);
+    final cacheKey = 'posTaxCtx:$baiguullagiinId|$salbariinId';
+
+    // Интернэтгүй үед серверээс авч чадахгүй — хамгийн сүүлд амжилттай
+    // авсан тохиргоогоор НӨАТ/НХАТ-ыг ижил бодно (эс тэгвээс офлайн
+    // борлуулалтын татвар буруу гарна).
+    if (org == null && salb.isEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString(cacheKey);
+        if (raw != null) {
+          final m = jsonDecode(raw) as Map<String, dynamic>;
+          return PosWebTaxContext(
+            borluulaltNUAT: m['borluulaltNUAT'] == true,
+            eBarimtShine: m['eBarimtShine'] == true,
+            isModalOpenTulbur: true,
+            baraaNUATModalOpen: m['borluulaltNUAT'] == true,
+            baraaUneOorchlokh: m['baraaUneOorchlokh'] == true,
+          );
+        }
+      } catch (_) {}
+    }
+
     final orgTok = org?['tokhirgoo'];
     final orgMap = orgTok is Map
         ? Map<String, dynamic>.from(orgTok)
         : <String, dynamic>{};
 
-    final salb = await fetchSalbaruud(baiguullagiinId);
     Map<String, dynamic>? branchTok;
     for (final s in salb) {
       if (s['_id']?.toString() == salbariinId) {
@@ -229,6 +253,22 @@ class PosSettingsService {
     // over from before POS API 3.0 was turned off can't strip VAT from totals.
     final borl = shine && merged['borluulaltNUAT'] == true;
 
+    final baraaUneOorchlokh = branchTok?['baraa'] is Map &&
+        (branchTok!['baraa'] as Map)['baraaHudaldahUne'] == true;
+    if (org != null || salb.isNotEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(
+          cacheKey,
+          jsonEncode({
+            'borluulaltNUAT': borl,
+            'eBarimtShine': shine,
+            'baraaUneOorchlokh': baraaUneOorchlokh,
+          }),
+        );
+      } catch (_) {}
+    }
+
     return PosWebTaxContext(
       borluulaltNUAT: borl,
       eBarimtShine: shine,
@@ -237,8 +277,7 @@ class PosSettingsService {
       // АСААЛТТАЙ, кассчин өөрөө унтраавал л дүнгээс хасагдана.
       baraaNUATModalOpen: borl,
       // Салбарын тохиргоо (вэб `salbar.tokhirgoo.baraa.baraaHudaldahUne`).
-      baraaUneOorchlokh: branchTok?['baraa'] is Map &&
-          (branchTok!['baraa'] as Map)['baraaHudaldahUne'] == true,
+      baraaUneOorchlokh: baraaUneOorchlokh,
     );
   }
 

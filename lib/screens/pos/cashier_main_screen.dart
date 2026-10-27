@@ -14,6 +14,7 @@ import '../../widgets/kiosk_terminal_pay_signal_listener.dart';
 import '../../widgets/kiosk_terminal_barimt_signal_listener.dart';
 import '../main/khaalt_screen.dart';
 import 'pos_screen.dart';
+import '../../widgets/offline_tuluv_chip.dart';
 
 /// Kiosk POS (`/khyanalt/kiosk`): same [POSScreen] as full app, plus drawer; electronic pay is **карт** (UniPOS CARD, not QPay).
 class CashierMainScreen extends StatefulWidget {
@@ -96,6 +97,7 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
           ],
         ),
         actions: [
+          const OfflineTuluvChip(),
           if (auth.canSubmitPosSales && auth.posSession != null)
             IconButton(
               tooltip: l10n.tr('pos_park_queue'),

@@ -8,6 +8,7 @@ import '../../widgets/kiosk_drawer.dart';
 import '../../widgets/parked_guilgee_sheet.dart';
 import '../main/khaalt_screen.dart';
 import '../pos/pos_screen.dart';
+import '../../widgets/offline_tuluv_chip.dart';
 
 /// Staff with only `/khyanalt/mobile` in `tsonkhniiTokhirgoo`: same sale flow as kiosk
 /// but no side drawer, two-step layout, and Бэлэн / **Карт** (UniPOS) / Данс.
@@ -70,6 +71,7 @@ class _MobilePosMainScreenState extends State<MobilePosMainScreen> {
           ],
         ),
         actions: [
+          const OfflineTuluvChip(),
           if (auth.canSubmitPosSales && auth.posSession != null)
             IconButton(
               tooltip: l10n.tr('pos_park_queue'),

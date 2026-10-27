@@ -1,8 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io' show File;
 
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/widgets.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'cart_model.dart';
+import '../services/offline/offline_guilgee_queue.dart';
+import '../services/offline/online_tuluv.dart';
 import '../services/product_service.dart';
 import '../services/socket_service.dart';
 import 'pos_session.dart';
@@ -108,10 +115,19 @@ class InventoryModel extends ChangeNotifier {
 
   InventoryModel({
     ProductService? productService,
-  }) : _productService = productService ?? ProductService();
+  }) : _productService = productService ?? ProductService() {
+    // Офлайн борлуулалт сервер рүү илгээгдсэний дараа серверийн үлдэгдлийг
+    // дахин ачаална (одоо тэдгээр нь сервер дээр хасагдсан).
+    _ilgeesenSub = OfflineGuilgeeQueue.instance.ilgeesen.listen((_) {
+      unawaited(refreshInventory(force: true));
+    });
+  }
+
+  StreamSubscription<int>? _ilgeesenSub;
 
   @override
   void dispose() {
+    _ilgeesenSub?.cancel();
     _pollTimer?.cancel();
     _uldegdelSub?.cancel();
     _detachLifecycle();
@@ -164,6 +180,86 @@ class InventoryModel extends ChangeNotifier {
         currentStock: _inventory[i].currentStock - e.value,
       );
     }
+  }
+
+  /// Синк хийгдээгүй офлайн борлуулалтуудыг (сервер/кэш дээр хараахан
+  /// хасагдаагүй) үлдэгдлээс хасна — офлайн үед ч үлдэгдлээс илүү зарахгүй.
+  void _applyOfflineQueue() {
+    final org = _baiguullagiinId;
+    final branch = _salbariinId;
+    if (org == null || branch == null) return;
+    final khasakh = OfflineGuilgeeQueue.instance
+        .uldegdelKhasakh(OfflineGuilgeeQueue.salbarKeyAvakh(org, branch));
+    for (final e in khasakh.entries) {
+      if (e.value <= 0) continue;
+      final i = _inventory.indexWhere((x) => x.product.id == e.key);
+      if (i < 0) continue;
+      if (_inventory[i].product.ajilUilchilgeeEsekh == true) continue;
+      _inventory[i] = _inventory[i].copyWith(
+        currentStock: _inventory[i].currentStock - e.value,
+      );
+    }
+  }
+
+  // ---------- Офлайн каталогийн кэш ----------
+
+  String _cacheNer(String org, String branch) =>
+      'pos_katalog_${org}_$branch.json'.replaceAll(RegExp(r'[^A-Za-z0-9_.]'), '_');
+
+  Future<void> _cacheKhadgalakh(
+      String org, String branch, List<Product> products) async {
+    try {
+      final raw = jsonEncode(products.map((p) => p.toCacheJson()).toList());
+      if (kIsWeb) {
+        await (await SharedPreferences.getInstance())
+            .setString(_cacheNer(org, branch), raw);
+        return;
+      }
+      final dir = await getApplicationSupportDirectory();
+      final f = File('${dir.path}/${_cacheNer(org, branch)}');
+      final tmp = File('${f.path}.tmp');
+      await tmp.writeAsString(raw, flush: true);
+      await tmp.rename(f.path);
+    } catch (e) {
+      debugPrint('[InventoryModel] каталог хадгалах алдаа: $e');
+    }
+  }
+
+  Future<List<Product>?> _cacheUnshikh(String org, String branch) async {
+    try {
+      String? raw;
+      if (kIsWeb) {
+        raw = (await SharedPreferences.getInstance())
+            .getString(_cacheNer(org, branch));
+      } else {
+        final dir = await getApplicationSupportDirectory();
+        final f = File('${dir.path}/${_cacheNer(org, branch)}');
+        if (await f.exists()) raw = await f.readAsString();
+      }
+      if (raw == null || raw.isEmpty) return null;
+      return (jsonDecode(raw) as List<dynamic>)
+          .whereType<Map>()
+          .map((m) => Product.fromJson(Map<String, dynamic>.from(m)))
+          .toList();
+    } catch (e) {
+      debugPrint('[InventoryModel] каталог унших алдаа: $e');
+      return null;
+    }
+  }
+
+  void _baraanuudOruulakh(List<Product> products) {
+    _inventory.clear();
+    _inventory.addAll(products.map((product) => InventoryItem(
+          product: product,
+          currentStock: product.sellableStock,
+          minStockLevel: 10,
+          costPrice: product.urtugUne,
+          lastRestocked: product.createdAt,
+        )));
+    // Сагсанд аль хэдийн авсан, мөн синк хийгдээгүй офлайн борлуулалтын
+    // барааг дахин хасна.
+    _applyReservations();
+    _applyOfflineQueue();
   }
 
   /// Called from [ChangeNotifierProxyProvider] when [PosSession] changes after login.
@@ -227,35 +323,50 @@ class InventoryModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final productResult = await _productService.getAllProductsForBranch(
-        baiguullagiinId: org,
-        salbariinId: branch,
-      );
+      await OfflineGuilgeeQueue.instance.achaalakh();
+      final productResult = OnlineTuluv.instance.online
+          ? await _productService.getAllProductsForBranch(
+              baiguullagiinId: org,
+              salbariinId: branch,
+            )
+          : ProductResult.failure(error: 'Интернэт холболтгүй');
 
       if (productResult.success) {
-        _inventory.clear();
-        _inventory.addAll(productResult.products.map((product) => InventoryItem(
-              product: product,
-              currentStock: product.sellableStock,
-              minStockLevel: 10,
-              costPrice: product.urtugUne,
-              lastRestocked: product.createdAt,
-            )));
-        // Сагсанд аль хэдийн авсан барааг серверийн үлдэгдлээс дахин хасна.
-        _applyReservations();
+        _baraanuudOruulakh(productResult.products);
         _lastLoadedAt = DateTime.now();
         _error = null;
+        unawaited(_cacheKhadgalakh(org, branch, productResult.products));
       } else {
-        _inventory.clear();
-        _error = productResult.error ?? 'Бараа ачаалахад алдаа';
+        await _achaalaltBolomjgui(
+            org, branch, productResult.error ?? 'Бараа ачаалахад алдаа');
       }
     } catch (e) {
-      _inventory.clear();
-      _error = e.toString();
+      await _achaalaltBolomjgui(org, branch, e.toString());
     } finally {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Серверээс ачаалж чадаагүй үед: санах ойд жагсаалт байвал ХЭВЭЭР нь
+  /// үлдээнэ (тэр нь сагс, офлайн борлуулалтыг аль хэдийн тусгасан); хоосон
+  /// бол төхөөрөмж дээрх кэшээс сэргээнэ.
+  Future<void> _achaalaltBolomjgui(
+      String org, String branch, String aldaa) async {
+    if (OnlineTuluv.holboltiinAldaaEsekh(aldaa)) {
+      OnlineTuluv.instance.holboltTasarsan();
+    }
+    if (_inventory.isNotEmpty) {
+      _error = null;
+      return;
+    }
+    final cache = await _cacheUnshikh(org, branch);
+    if (cache != null && cache.isNotEmpty) {
+      _baraanuudOruulakh(cache);
+      _error = null;
+      return;
+    }
+    _error = aldaa;
   }
 
   /// Гараар / давтамжаар / апп сэргэхэд дуудагдана.

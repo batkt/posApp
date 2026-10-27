@@ -15,6 +15,8 @@ import '../../services/pos_settings_service.dart';
 import '../../services/pos_transaction_service.dart';
 import '../../services/qpay_service.dart';
 import '../../services/unipos_service.dart';
+import '../../services/offline/offline_guilgee_queue.dart';
+import '../../services/offline/online_tuluv.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/khariltsagch_promo_discount.dart';
 import '../../utils/mnt_amount_formatter.dart';
@@ -66,6 +68,17 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
 
   /// Blocks double-submit before the next frame applies [_busy].
   bool _submitInFlight = false;
+
+  /// Нэг борлуулалтын (баримтын дугаар) давтагдашгүй ID — дахин оролдоход
+  /// ижил хэвээр үлдэж, сервер давхар бүртгэхгүй.
+  String? _clientId;
+  String? _clientIdDugaar;
+
+  bool get _online => OnlineTuluv.instance.online;
+
+  void _offlineSanuulakh(String text) {
+    showAppSnackBar(context, text, variant: AppSnackVariant.error);
+  }
 
   late final String _orderPreview;
   late final TextEditingController _discountInput;
@@ -191,6 +204,11 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     final auth = context.read<AuthModel>();
     final s = auth.posSession;
     if (s == null) return;
+    if (!_online) {
+      _offlineSanuulakh(
+          'Интернэтгүй үед харилцагчийн хөнгөлөлт, бонус ашиглах боломжгүй');
+      return;
+    }
     final r = await showModalBottomSheet<_KhariltsagchPromoSheetResult>(
       context: context,
       isScrollControlled: true,
@@ -235,6 +253,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         sales.guilgeeniiDugaar != null) {
       return;
     }
+    // Офлайн үед дугаарыг төлбөр хадгалах үед төхөөрөмж дээр үүсгэнэ.
+    if (!_online) return;
     try {
       final d = await PosTransactionService().fetchZakhialgiinDugaar(
         baiguullagiinId: auth.posSession!.baiguullagiinId,
@@ -243,7 +263,27 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         sales.setGuilgeeniiDugaar(d);
         setState(() {});
       }
-    } catch (_) {}
+    } catch (e) {
+      if (OnlineTuluv.holboltiinAldaaEsekh(e)) {
+        OnlineTuluv.instance.holboltTasarsan();
+      }
+    }
+  }
+
+  /// Баримтын дугаар: онлайн бол серверээс, интернэтгүй бол төхөөрөмж дээр
+  /// давтагдашгүй офлайн дугаар (ОФ...).
+  Future<String> _dugaarAvakh(PosTransactionService svc, String baiguullagiinId) async {
+    if (_online) {
+      try {
+        final d = await svc.fetchZakhialgiinDugaar(baiguullagiinId: baiguullagiinId);
+        if (d != null && d.isNotEmpty) return d;
+      } catch (e) {
+        if (!OnlineTuluv.holboltiinAldaaEsekh(e)) rethrow;
+        OnlineTuluv.instance.holboltTasarsan();
+      }
+    }
+    if (!_online) return OfflineGuilgeeQueue.offlineDugaarUusgekh();
+    throw PosTransactionException('Захиалгын дугаар авах боломжгүй');
   }
 
   String _methodId(_PayKind k) {
@@ -294,14 +334,13 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     var orderNo = sales.guilgeeniiDugaar;
     String? guilgeeMongoId;
     if (orderNo == null || orderNo.isEmpty) {
-      final d = await svc.fetchZakhialgiinDugaar(
-        baiguullagiinId: session.baiguullagiinId,
-      );
-      if (d == null || d.isEmpty) {
-        throw PosTransactionException('Захиалгын дугаар авах боломжгүй');
-      }
+      final d = await _dugaarAvakh(svc, session.baiguullagiinId);
       orderNo = d;
       sales.setGuilgeeniiDugaar(d);
+    }
+    if (_clientIdDugaar != orderNo || _clientId == null) {
+      _clientIdDugaar = orderNo;
+      _clientId = OfflineGuilgeeQueue.clientIdUusgekh();
     }
 
     // Вэб `tulburTuluhModal.onFinish`-тэй ижил: урамшууллаар үнэгүй өгсөн
@@ -311,7 +350,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     final hungulsunDun =
         totals.cappedDiscount + sales.uramshuulaliinBelegniiDun;
 
-    final saveResp = await svc.submitGuilgeeniiTuukh(
+    final body = svc.buildGuilgeeniiTuukhBody(
       session: session,
       sales: sales,
       paymentTurul:
@@ -329,10 +368,45 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       webTaxContext: _taxCtx,
       baraaNUATModalOpen: _taxCtx.baraaNUATModalOpen,
       cashierDiscountMnt: totals.cappedDiscount,
+      clientGuilgeeniiId: _clientId,
     );
 
-    guilgeeMongoId =
-        PosTransactionService.parseGuilgeeniiMongoIdFromSaveResponse(saveResp);
+    var offlineKhadgalakh = !_online;
+    if (!offlineKhadgalakh) {
+      try {
+        final saveResp = await svc.postGuilgeeBody(body);
+        guilgeeMongoId =
+            PosTransactionService.parseGuilgeeniiMongoIdFromSaveResponse(saveResp);
+      } catch (e) {
+        // Серверт хүрч чадаагүй — офлайн дараалалд хийнэ. Хүсэлт серверт
+        // хүрсэн байсан ч clientGuilgeeniiId-аар давхардал шүүгдэнэ.
+        if (!OnlineTuluv.holboltiinAldaaEsekh(e)) rethrow;
+        OnlineTuluv.instance.holboltTasarsan();
+        offlineKhadgalakh = true;
+      }
+    }
+    if (offlineKhadgalakh) {
+      body['offlineEsekh'] = true;
+      body['ognoo'] = DateTime.now().toUtc().toIso8601String();
+      try {
+        await OfflineGuilgeeQueue.instance.nemekh(
+          payload: body,
+          uldegdelKhasakh: sales.reservedQtyByProductId,
+        );
+      } catch (_) {
+        throw PosTransactionException(
+          'Интернэт тасарсан бөгөөд борлуулалтыг төхөөрөмж дээр хадгалж чадсангүй',
+        );
+      }
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Интернэтгүй тул төхөөрөмж дээр хадгаллаа. Холболт сэргэхэд автоматаар илгээгдэнэ.',
+        );
+      }
+    }
+    _clientId = null;
+    _clientIdDugaar = null;
 
     if (!mounted) return;
     final completed = sales.completeCashierSale(
@@ -358,6 +432,11 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     final auth = context.read<AuthModel>();
     if (!auth.canSubmitPosSales) {
       await _submit(sales, tender, totals: totals);
+      return;
+    }
+    if (!_online) {
+      _offlineSanuulakh(
+          'Интернэтгүй үед QPay ашиглах боломжгүй. Бэлэн, карт эсвэл дансаар төлнө үү.');
       return;
     }
 
@@ -549,6 +628,11 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
 
     if (_kind == _PayKind.zeel) {
       if (!mounted) return;
+      if (!_online) {
+        _offlineSanuulakh(
+            'Интернэтгүй үед зээлээр төлөх боломжгүй. Бэлэн, карт эсвэл дансаар төлнө үү.');
+        return;
+      }
       final session = context.read<AuthModel>().posSession;
       if (session == null) {
         showAppSnackBar(context, 'POS сесс олдсонгүй');
