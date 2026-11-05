@@ -382,6 +382,18 @@ class Product {
     return units.contains(k);
   }
 
+  /// Бутархай тоо хэмжээгээр зардаг бараа: жин (кг/гр) болон метр, литр.
+  /// Сагсны мөр нь бодит бутархай хэмжээг ([SaleItem.soldWeightKg]) хадгалж,
+  /// үнэ/баримт/API нь түүнийг ашиглана; үлдэгдлийн нөөцлөлт бүхэл тоогоор.
+  bool get isFractionalSaleUnit {
+    if (isBoxSaleUnit) return false;
+    if (isWeightSaleUnit) return true;
+    final k = khemjikhNegj?.trim().toLowerCase();
+    if (k == null || k.isEmpty) return false;
+    const units = {'м', 'м.', 'метр', 'm', 'meter', 'л', 'л.', 'литр', 'l', 'liter'};
+    return units.contains(k);
+  }
+
   /// Suffix after stock / quantity on POS (web `posSystem`: "хайрцаг" vs "ш").
   String get posStockQuantitySuffix {
     if (isBoxSaleUnit) return 'хайрцаг';

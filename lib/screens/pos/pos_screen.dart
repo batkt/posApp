@@ -72,7 +72,8 @@ Future<void> _openQuantitySheet(
   }
 }
 
-/// Картыг удаан дарах эсвэл "×N" дээр дарахад тоо ширхэгийг гараар бичнэ.
+/// Картыг удаан дарах эсвэл "×N" дээр дарахад тоо хэмжээг гараар бичнэ.
+/// Ширхэгийн бараанд бүхэл тоо, метр/литрийн бараанд бутархай (2.5) бичнэ.
 /// Үлдэгдлийг зөрүүгээр нь хасаж/буцааж нэмнэ — "сагс + үлдэгдэл == анхны
 /// үлдэгдэл" тэнцэл хадгалагдана. Хайрцаг/жингийн бараанд өөрийн цонх нээгдэнэ.
 Future<void> _openTypeQuantityDialog(
@@ -81,85 +82,161 @@ Future<void> _openTypeQuantityDialog(
   SalesModel sales,
   InventoryItem item,
 ) async {
-  if (item.product.isBoxSaleUnit || item.product.isWeightSaleUnit) {
+  final product = item.product;
+  if (product.isBoxSaleUnit || product.isWeightSaleUnit) {
     return _openQuantitySheet(context, inventory, sales, item);
   }
-  final productId = item.product.id;
+  final productId = product.id;
+  final butarkhai = product.isFractionalSaleUnit;
   final line = sales.currentSaleItems
       .where((e) => e.product.id == productId && !e.isGiftLine)
       .firstOrNull;
-  final current = line?.quantity ?? 0;
-  final controller = TextEditingController(text: current > 0 ? '$current' : '');
-  controller.selection =
-      TextSelection(baseOffset: 0, extentOffset: controller.text.length);
+  final current = line == null ? 0.0 : line.effectivePieces;
+  final reserved = line?.quantity ?? 0;
+  final isService = product.ajilUilchilgeeEsekh == true;
+  final bolomjtoi = item.currentStock + reserved;
 
-  final shine = await showDialog<int>(
+  final shine = await showDialog<double>(
     context: context,
-    builder: (ctx) {
-      void batlakh() {
-        final v = int.tryParse(controller.text.trim());
-        if (v == null || v < 0) return;
-        Navigator.of(ctx).pop(v);
-      }
-
-      return AlertDialog(
-        title: Text(
-          item.product.name,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
-          decoration: InputDecoration(
-            labelText: 'Тоо ширхэг',
-            helperText: item.product.ajilUilchilgeeEsekh == true
-                ? null
-                : 'Үлдэгдэл: ${item.currentStock + current}',
-          ),
-          onSubmitted: (_) => batlakh(),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Болих'),
-          ),
-          FilledButton(onPressed: batlakh, child: const Text('Хадгалах')),
-        ],
-      );
-    },
+    builder: (ctx) => _QuantityInputDialog(
+      title: product.name,
+      initial: current,
+      butarkhai: butarkhai,
+      unit: product.posStockQuantitySuffix,
+      uldegdel: isService ? null : bolomjtoi,
+    ),
   );
-  controller.dispose();
-  if (shine == null || shine == current || !context.mounted) return;
+  if (shine == null || !context.mounted) return;
+  if ((shine - current).abs() < 0.0005) return;
 
-  if (shine == 0) {
+  if (shine <= 0) {
     sales.removeLineRestoringStock(productId, inventory: inventory);
     return;
   }
-  final zuruu = shine - current;
-  if (zuruu > 0) {
-    if (!inventory.canSell(productId, zuruu)) {
-      showAppSnackBar(
-        context,
-        'Үлдэгдэл хүрэлцэхгүй (боломжтой: ${item.currentStock + current})',
-        variant: AppSnackVariant.error,
-      );
-      return;
-    }
-    if (!inventory.deductStock(productId, zuruu)) {
+  final shineNuuts = shine.ceil();
+  if (!isService && shineNuuts > bolomjtoi) {
+    showAppSnackBar(
+      context,
+      'Үлдэгдэл хүрэлцэхгүй (боломжтой: $bolomjtoi ${product.posStockQuantitySuffix})',
+      variant: AppSnackVariant.error,
+    );
+    return;
+  }
+
+  // Сагсанд байхгүй бол эхлээд 1-ийг нэмнэ (үлдэгдлээс 1 хасна).
+  if (line == null) {
+    if (!inventory.deductStock(productId, 1)) {
       showAppSnackBar(context, 'Барааны үлдэгдэл олдсонгүй',
           variant: AppSnackVariant.error);
       return;
     }
-    if (current == 0) sales.addToSale(item.product);
-    sales.updateSaleQuantity(productId, shine);
-  } else {
-    sales.updateSaleQuantity(productId, shine);
+    sales.addToSale(product);
+  }
+
+  if (butarkhai) {
+    sales.setFractionalLineQty(productId, shine, inventory: inventory);
+    return;
+  }
+  final umnukh = line == null ? 1 : reserved;
+  final shineToo = shine.round();
+  final zuruu = shineToo - umnukh;
+  if (zuruu > 0) {
+    inventory.deductStock(productId, zuruu);
+  } else if (zuruu < 0) {
     inventory.restock(productId, -zuruu);
+  }
+  sales.updateSaleQuantity(productId, shineToo);
+}
+
+/// Тоо хэмжээ бичих цонх. TextEditingController-оо ӨӨРӨӨ эзэмшинэ — цонх
+/// хаагдах анимейшн дууссаны дараа л устгагдана. (Өмнө нь showDialog-ийн
+/// дараа шууд dispose хийдэг байсан тул "_dependents.isEmpty" алдаагаар
+/// апп унадаг байв.)
+class _QuantityInputDialog extends StatefulWidget {
+  const _QuantityInputDialog({
+    required this.title,
+    required this.initial,
+    required this.butarkhai,
+    required this.unit,
+    this.uldegdel,
+  });
+
+  final String title;
+  final double initial;
+  final bool butarkhai;
+  final String unit;
+  final int? uldegdel;
+
+  @override
+  State<_QuantityInputDialog> createState() => _QuantityInputDialogState();
+}
+
+class _QuantityInputDialogState extends State<_QuantityInputDialog> {
+  late final TextEditingController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    final v = widget.initial;
+    _c = TextEditingController(text: v > 0 ? fmtButarkhai(v) : '');
+    _c.selection = TextSelection(baseOffset: 0, extentOffset: _c.text.length);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  double? get _utga {
+    final t = _c.text.trim().replaceAll(',', '.');
+    if (t.isEmpty) return null;
+    final v = double.tryParse(t);
+    if (v == null || v < 0 || !v.isFinite) return null;
+    return widget.butarkhai ? v : v.roundToDouble();
+  }
+
+  void _batlakh() {
+    final v = _utga;
+    if (v == null) return;
+    Navigator.of(context).pop(v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+      content: TextField(
+        controller: _c,
+        autofocus: true,
+        keyboardType: TextInputType.numberWithOptions(decimal: widget.butarkhai),
+        inputFormatters: [
+          widget.butarkhai
+              ? FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d{0,3}'))
+              : FilteringTextInputFormatter.digitsOnly,
+        ],
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+        decoration: InputDecoration(
+          labelText: widget.butarkhai ? 'Тоо хэмжээ (${widget.unit})' : 'Тоо ширхэг',
+          helperText: widget.uldegdel == null
+              ? null
+              : 'Үлдэгдэл: ${widget.uldegdel} ${widget.unit}',
+        ),
+        onChanged: (_) => setState(() {}),
+        onSubmitted: (_) => _batlakh(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Болих'),
+        ),
+        FilledButton(
+          onPressed: _utga == null ? null : _batlakh,
+          child: const Text('Хадгалах'),
+        ),
+      ],
+    );
   }
 }
 
@@ -2855,7 +2932,9 @@ class _SaleItemTile extends StatelessWidget {
     final bool isBoxBroken =
         item.product.isBoxSaleUnit && item.boxPiecesSold != null;
     final bool isWeightCustom =
-        item.product.isWeightSaleUnit && item.soldWeightKg != null;
+        item.product.isFractionalSaleUnit && item.soldWeightKg != null;
+    final String butarkhaiNegj =
+        item.product.isWeightSaleUnit ? 'кг' : item.product.posStockQuantitySuffix;
 
     final String stepperMainText;
     final String stepperSubText;
@@ -2868,7 +2947,7 @@ class _SaleItemTile extends StatelessWidget {
       final w = item.soldWeightKg!;
       stepperMainText =
           w % 1 == 0 ? w.toInt().toString() : w.toStringAsFixed(2);
-      stepperSubText = 'кг';
+      stepperSubText = butarkhaiNegj;
     } else {
       stepperMainText = '${item.quantity}';
       stepperSubText = item.product.posStockQuantitySuffix;
@@ -2885,7 +2964,7 @@ class _SaleItemTile extends StatelessWidget {
       final w = item.soldWeightKg!;
       final wStr =
           w % 1 == 0 ? w.toInt().toString() : w.toStringAsFixed(3);
-      priceQtyText = '${MntAmountFormatter.format(item.unitPrice)} × $wStr кг';
+      priceQtyText = '${MntAmountFormatter.format(item.unitPrice)} × $wStr $butarkhaiNegj';
     } else {
       final suffix = item.product.isBoxSaleUnit ? ' хайрцаг' : '';
       priceQtyText =

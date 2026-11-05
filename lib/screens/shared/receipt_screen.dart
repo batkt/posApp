@@ -88,8 +88,8 @@ List<ReceiptLine> buildReceiptLines(List<SaleItem> items) {
             ? '${i.apiTooUnits.toStringAsFixed(i.apiTooUnits % 1 == 0 ? 0 : 2)}\nхайрцаг'
             // Жингийн бараанд `quantity` нь нөөцөлсөн БҮХЭЛ кг тул баримт
             // дээр бичвэл дүнтэйгээ зөрнө (250 гр → "1" ш, гэвч 1/4 үнэ).
-            : i.product.isWeightSaleUnit
-                ? '${i.effectivePieces.toStringAsFixed(i.effectivePieces % 1 == 0 ? 0 : 3)}\nкг'
+            : i.product.isFractionalSaleUnit
+                ? '${fmtButarkhai(i.effectivePieces)}\n${i.product.isWeightSaleUnit ? 'кг' : i.product.posStockQuantitySuffix}'
                 : '${i.quantity}',
         unitPrice: i.product.isBoxSaleUnit
             ? (i.negPerBox > 0 ? i.unitPrice / i.negPerBox : i.unitPrice)

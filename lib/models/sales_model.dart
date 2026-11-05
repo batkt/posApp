@@ -85,7 +85,7 @@ class SaleItem {
     if (product.isBoxSaleUnit) {
       return boxPiecesSold ?? (quantity * _negPerBox);
     }
-    if (product.isWeightSaleUnit) {
+    if (product.isFractionalSaleUnit) {
       return soldWeightKg ?? quantity.toDouble();
     }
     return quantity.toDouble();
@@ -96,7 +96,7 @@ class SaleItem {
     if (product.isBoxSaleUnit) {
       return effectivePieces / _negPerBox;
     }
-    if (product.isWeightSaleUnit) {
+    if (product.isFractionalSaleUnit) {
       return effectivePieces;
     }
     return quantity.toDouble();
@@ -108,7 +108,7 @@ class SaleItem {
       return perPiece * effectivePieces;
     }
     // `unitPrice` нь 1 кг-ийн үнэ тул бутархай кг-д шууд үржинэ.
-    if (product.isWeightSaleUnit) {
+    if (product.isFractionalSaleUnit) {
       return unitPrice * effectivePieces;
     }
     return unitPrice * quantity;
@@ -536,7 +536,7 @@ class SalesModel extends ChangeNotifier {
       if (product.isBoxSaleUnit) {
         final neg = product.negKhairtsaganDahiShirhegiinToo ?? 1;
         qtyUnits = (pieces / (neg < 1 ? 1 : neg)).ceil();
-      } else if (product.isWeightSaleUnit) {
+      } else if (product.isFractionalSaleUnit) {
         qtyUnits = pieces.ceil();
       } else {
         qtyUnits = pieces.round();
@@ -585,7 +585,7 @@ class SalesModel extends ChangeNotifier {
                       (effectiveNeg > 0 && (pieces % effectiveNeg).abs() > 0.001))
                   ? (pieces > 0 ? pieces : prior?.boxPiecesSold)
                   : null),
-          soldWeightKg: isGift || !product.isWeightSaleUnit
+          soldWeightKg: isGift || !product.isFractionalSaleUnit
               ? null
               : (pieces > 0 ? pieces : prior?.soldWeightKg),
           serverRow: row,
@@ -799,7 +799,7 @@ class SalesModel extends ChangeNotifier {
         boxPiecesSold:
             dutuu && product.isBoxSaleUnit ? bodit * neg : null,
         soldWeightKg:
-            dutuu && product.isWeightSaleUnit ? bodit : null,
+            dutuu && product.isFractionalSaleUnit ? bodit : null,
       ));
       _reapplyWholesaleForIndex(_currentSale.length - 1);
     }
@@ -860,6 +860,15 @@ class SalesModel extends ChangeNotifier {
         final pStr = pieces % 1 == 0 ? pieces.toInt().toString() : pieces.toStringAsFixed(2);
         return '$pStr ш';
       }
+    }
+    // Метр, литр: бутархай хэмжээ оруулсан бол "2.5 м" гэж харуулна.
+    if (product.isFractionalSaleUnit && !product.isWeightSaleUnit) {
+      final lines = _currentSale
+          .where((e) => e.product.id == product.id && !e.isGiftLine);
+      if (!lines.any((e) => e.soldWeightKg != null)) return null;
+      final v = lines.fold<double>(0, (sum, e) => sum + e.effectivePieces);
+      if (v <= 0) return null;
+      return '${fmtButarkhai(v)} ${product.posStockQuantitySuffix}';
     }
     if (!product.isWeightSaleUnit) return null;
     final kg = _currentSale
@@ -1033,6 +1042,36 @@ class SalesModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Метр, литр зэрэг бутархай хэмжээтэй мөрийн тоог гараар тохируулна
+  /// (жишээ нь 2.5 м). Үлдэгдлийн нөөцлөлт нь [setWeightLineGrams]-тэй адил
+  /// бүхэл тоогоор (дээш тоймлон) явна.
+  void setFractionalLineQty(
+    String productId,
+    double qty, {
+    InventoryModel? inventory,
+  }) {
+    final i = _currentSale.indexWhere((e) => e.product.id == productId);
+    if (i < 0) return;
+    final line = _currentSale[i];
+    if (!line.product.isFractionalSaleUnit) return;
+    final v = qty <= 0 ? 0.001 : qty;
+    final newQty = v.ceil().clamp(1, 999999);
+    final oldQty = line.quantity;
+    line.boxPiecesSold = null;
+    line.soldWeightKg = (v % 1 == 0) ? null : v;
+    line.quantity = newQty;
+    if (inventory != null && oldQty != newQty) {
+      if (oldQty > newQty) {
+        inventory.restock(productId, oldQty - newQty);
+      } else {
+        inventory.deductStock(productId, newQty - oldQty);
+      }
+    }
+    _reapplyWholesaleForIndex(i);
+    _pruneStaleDorvonNegPicks();
+    notifyListeners();
+  }
+
   void clearBoxLinePiecesOverride(String productId) {
     final i = _currentSale.indexWhere((e) => e.product.id == productId);
     if (i < 0) return;
@@ -1138,3 +1177,10 @@ class SalesModel extends ChangeNotifier {
     return sale;
   }
 }
+
+
+/// 2.5 -> "2.5", 2.0 -> "2", 2.125 -> "2.125" (илүү тэггүй).
+String fmtButarkhai(double v) => v
+    .toStringAsFixed(3)
+    .replaceFirst(RegExp(r'0+$'), '')
+    .replaceFirst(RegExp(r'\.$'), '');
