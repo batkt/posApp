@@ -148,6 +148,39 @@ Future<void> _openTypeQuantityDialog(
   sales.updateSaleQuantity(productId, shineToo);
 }
 
+/// Зөвхөн тоо, нэг бутархайн тэмдэг ("." эсвэл ","), түүний ард 3 хүртэл
+/// орон. Үсэг болон бусад тэмдгийг үл тооно — "1.5", "1,8" хоёулаа болно.
+class _ButarkhaiToonFormatter extends TextInputFormatter {
+  const _ButarkhaiToonFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final buf = StringBuffer();
+    var tasgaltai = false;
+    var butarkhaiOron = 0;
+    for (final ch in newValue.text.split('')) {
+      final isDigit = ch.codeUnitAt(0) >= 48 && ch.codeUnitAt(0) <= 57;
+      if (isDigit) {
+        if (tasgaltai) {
+          if (butarkhaiOron >= 3) continue;
+          butarkhaiOron++;
+        }
+        buf.write(ch);
+      } else if ((ch == '.' || ch == ',') && !tasgaltai) {
+        tasgaltai = true;
+        buf.write(ch);
+      }
+    }
+    final text = buf.toString();
+    if (text == newValue.text) return newValue;
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
+
 /// Тоо хэмжээ бичих цонх. TextEditingController-оо ӨӨРӨӨ эзэмшинэ — цонх
 /// хаагдах анимейшн дууссаны дараа л устгагдана. (Өмнө нь showDialog-ийн
 /// дараа шууд dispose хийдэг байсан тул "_dependents.isEmpty" алдаагаар
@@ -209,14 +242,16 @@ class _QuantityInputDialogState extends State<_QuantityInputDialog> {
       content: TextField(
         controller: _c,
         autofocus: true,
-        // `signed: true` — зарим Android (Samsung, PAX) гар decimal:true-д
-        // цэг харуулдаггүй; signed горимд цэг/таслалтай товчлуур гарна.
+        // Бутархай: зарим Android гарын тоон горимд "." "," товч байдаггүй тул
+        // ЭНГИЙН гар нээнэ; үсгийг доорх шүүлтүүр хаана (зөвхөн тоо , .).
         keyboardType: widget.butarkhai
-            ? const TextInputType.numberWithOptions(decimal: true, signed: true)
+            ? TextInputType.text
             : TextInputType.number,
+        autocorrect: false,
+        enableSuggestions: false,
         inputFormatters: [
           widget.butarkhai
-              ? FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d{0,3}'))
+              ? const _ButarkhaiToonFormatter()
               : FilteringTextInputFormatter.digitsOnly,
         ],
         textAlign: TextAlign.center,
