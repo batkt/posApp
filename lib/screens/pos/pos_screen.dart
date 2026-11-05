@@ -209,7 +209,11 @@ class _QuantityInputDialogState extends State<_QuantityInputDialog> {
       content: TextField(
         controller: _c,
         autofocus: true,
-        keyboardType: TextInputType.numberWithOptions(decimal: widget.butarkhai),
+        // `signed: true` — зарим Android (Samsung, PAX) гар decimal:true-д
+        // цэг харуулдаггүй; signed горимд цэг/таслалтай товчлуур гарна.
+        keyboardType: widget.butarkhai
+            ? const TextInputType.numberWithOptions(decimal: true, signed: true)
+            : TextInputType.number,
         inputFormatters: [
           widget.butarkhai
               ? FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d{0,3}'))

@@ -388,10 +388,15 @@ class Product {
   bool get isFractionalSaleUnit {
     if (isBoxSaleUnit) return false;
     if (isWeightSaleUnit) return true;
-    final k = khemjikhNegj?.trim().toLowerCase();
+    // Ширхэгээр тоолдог нэгжээс бусад бүх нэгж (метр, литр, ...) бутархай
+    // зөвшөөрнө — нэгжийн бичиглэл ("Метр", "метр.", "m" г.м) зөрсөн ч ажиллана.
+    final k = khemjikhNegj?.trim().toLowerCase().replaceAll('.', '');
     if (k == null || k.isEmpty) return false;
-    const units = {'м', 'м.', 'метр', 'm', 'meter', 'л', 'л.', 'литр', 'l', 'liter'};
-    return units.contains(k);
+    const shirkhegNegj = {
+      'ш', 'шир', 'ширхэг', 'ширх', 'pcs', 'pc', 'ш/х', 'хос', 'багц',
+      'боодол', 'уут', 'лааз', 'шил', 'хайрцаг', 'ком', 'комплект', 'хувь',
+    };
+    return !shirkhegNegj.contains(k);
   }
 
   /// Suffix after stock / quantity on POS (web `posSystem`: "хайрцаг" vs "ш").
