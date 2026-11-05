@@ -8,10 +8,14 @@ import 'package:http/http.dart' as http;
 import 'network_usage_service.dart';
 
 class ApiConfig {
-  // Production
-  static const String baseUrl = 'https://pos.zevtabs.mn/api';
-  static const String posBaseUrl = 'https://pos.zevtabs.mn/api';
-  static const String socketUrl = 'wss://pos.zevtabs.mn/';
+  // Сервер: анхдагч нь production. Туршилтын (devpos) build:
+  //   flutter run   --dart-define=POS_HOST=devpos.zevtabs.mn
+  //   flutter build apk --dart-define=POS_HOST=devpos.zevtabs.mn
+  static const String posHost =
+      String.fromEnvironment('POS_HOST', defaultValue: 'pos.zevtabs.mn');
+  static const String baseUrl = 'https://$posHost/api';
+  static const String posBaseUrl = 'https://$posHost/api';
+  static const String socketUrl = 'wss://$posHost/';
 
   /// Socket.IO uses http(s) origin; path is `/api/socket.io` (see [SocketService]).
   static String get socketIoHttpRoot {
