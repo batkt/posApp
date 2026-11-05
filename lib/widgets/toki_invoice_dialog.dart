@@ -140,6 +140,7 @@ class _TokiInvoiceDialogState extends State<TokiInvoiceDialog> {
     final utasIlgeesen = n != null && n['turul'] == 'utas';
     final khuleejBaigaa =
         _orderId != null && (_utasaar ? utasIlgeesen : qrText != null);
+    final utasIlgeekhUe = _utasaar && !utasIlgeesen;
 
     return Dialog(
       clipBehavior: Clip.antiAlias,
@@ -164,16 +165,11 @@ class _TokiInvoiceDialogState extends State<TokiInvoiceDialog> {
                     Row(
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(7),
+                          borderRadius: BorderRadius.circular(9),
                           child: Image.asset('assets/images/toki_logo.png',
-                              width: 28, height: 28),
+                              width: 36, height: 36),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text('Toki-гоор төлөх',
-                              style: tt.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700)),
-                        ),
+                        const Spacer(),
                         IconButton(
                           onPressed: _khaay,
                           tooltip: 'Хаах',
@@ -319,24 +315,6 @@ class _TokiInvoiceDialogState extends State<TokiInvoiceDialog> {
                             ],
                           ),
                         )
-                      else
-                        FilledButton(
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                            backgroundColor: cs.onSurface,
-                            foregroundColor: cs.surface,
-                          ),
-                          onPressed: _loading || _utas.text.length != 8
-                              ? null
-                              : () => _uusgey(utas: _utas.text),
-                          child: _loading
-                              ? SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: cs.surface))
-                              : const Text('Хүсэлт илгээх'),
-                        ),
                     ],
                     if (khuleejBaigaa) ...[
                       const SizedBox(height: 14),
@@ -358,35 +336,28 @@ class _TokiInvoiceDialogState extends State<TokiInvoiceDialog> {
                       ),
                     ],
                     const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                              minimumSize: const Size(0, 48)),
-                          onPressed: _khaay,
-                          child: const Text('Болих'),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: FilledButton(
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size.fromHeight(48),
-                              backgroundColor: cs.onSurface,
-                              foregroundColor: cs.surface,
-                            ),
-                            onPressed: _orderId == null || _checking
-                                ? null
-                                : () => _shalgay(true),
-                            child: _checking
-                                ? SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2, color: cs.surface))
-                                : const Text('Төлөлт шалгах'),
-                          ),
-                        ),
-                      ],
+                    // Нэг үндсэн товч: утасны хүсэлт илгээгээгүй бол "илгээх",
+                    // бусад үед "шалгах". Хаах нь ✕.
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(50),
+                        backgroundColor: cs.onSurface,
+                        foregroundColor: cs.surface,
+                      ),
+                      onPressed: utasIlgeekhUe
+                          ? (_loading || _utas.text.length != 8
+                              ? null
+                              : () => _uusgey(utas: _utas.text))
+                          : (_orderId == null || _checking || _loading
+                              ? null
+                              : () => _shalgay(true)),
+                      child: (_loading || _checking)
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: cs.surface))
+                          : Text(utasIlgeekhUe ? 'Хүсэлт илгээх' : 'Төлөлт шалгах'),
                     ),
                   ],
                 ),
