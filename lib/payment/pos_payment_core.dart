@@ -127,6 +127,8 @@ abstract final class PosPaymentCore {
   static const String methodCard = 'card';
   /// Same as web `tulbur[].turul === "qpay"` (QuickQpay / merchant QR, not UniPOS).
   static const String methodQpay = 'qpay';
+  /// TokiPay (QR / утасны дугаараар) — `tulbur[].turul === "toki"`.
+  static const String methodToki = 'toki';
   static const String methodAccount = 'account';
   static const String methodCredit = 'credit';
   static const String methodMobile = 'mobile';

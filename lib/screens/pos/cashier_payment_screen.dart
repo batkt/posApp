@@ -14,6 +14,7 @@ import '../../services/khariltsagch_service.dart';
 import '../../services/pos_settings_service.dart';
 import '../../services/pos_transaction_service.dart';
 import '../../services/qpay_service.dart';
+import '../../services/toki_service.dart';
 import '../../services/unipos_service.dart';
 import '../../services/offline/offline_guilgee_queue.dart';
 import '../../services/offline/online_tuluv.dart';
@@ -22,6 +23,7 @@ import '../../utils/khariltsagch_promo_discount.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/tender_amount_input.dart';
 import '../../widgets/qpay_invoice_dialog.dart';
+import '../../widgets/toki_invoice_dialog.dart';
 import '../../widgets/box_line_pieces_sheet.dart';
 import '../shared/receipt_screen.dart';
 import '../../utils/app_snackbar.dart';
@@ -50,7 +52,7 @@ class CashierPaymentScreen extends StatefulWidget {
   State<CashierPaymentScreen> createState() => _CashierPaymentScreenState();
 }
 
-enum _PayKind { cash, card, dans, zeel }
+enum _PayKind { cash, card, dans, zeel, toki }
 
 String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
 
@@ -298,6 +300,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         return PosPaymentCore.methodAccount;
       case _PayKind.zeel:
         return PosPaymentCore.methodCredit;
+      case _PayKind.toki:
+        return PosPaymentCore.methodToki;
     }
   }
 
@@ -313,6 +317,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         return 'Данс';
       case _PayKind.zeel:
         return 'Зээл';
+      case _PayKind.toki:
+        return 'Toki';
     }
   }
 
@@ -322,6 +328,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     double tender,
     CashierTotals totals, {
     String? zeelKhariltsagchiinId,
+    String? tokiOrderId,
   }) async {
     final due = totals.total;
     final isCash = _kind == _PayKind.cash;
@@ -369,6 +376,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       baraaNUATModalOpen: _taxCtx.baraaNUATModalOpen,
       cashierDiscountMnt: totals.cappedDiscount,
       clientGuilgeeniiId: _clientId,
+      tokiOrderId: tokiOrderId,
     );
 
     var offlineKhadgalakh = !_online;
@@ -491,6 +499,59 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     } catch (e) {
       if (mounted) {
         showAppSnackBar(context, posPaymentErrorUserMessage(e), variant: AppSnackVariant.error);
+      }
+    } finally {
+      _submitInFlight = false;
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// TokiPay: QR / утасны хүсэлт → төлөгдсөний дараа гүйлгээ хадгална.
+  Future<void> _runTokiFlow(SalesModel sales, CashierTotals totals) async {
+    if (sales.isSaleEmpty || _busy || _submitInFlight) return;
+    if (!_online) {
+      _offlineSanuulakh(
+          'Интернэтгүй үед Toki ашиглах боломжгүй. Бэлэн, карт эсвэл дансаар төлнө үү.');
+      return;
+    }
+    final auth = context.read<AuthModel>();
+    final session = auth.posSession;
+    if (session == null || !auth.canSubmitPosSales) {
+      showAppSnackBar(context, 'POS сесс олдсонгүй');
+      return;
+    }
+    final due = totals.total;
+    _submitInFlight = true;
+    setState(() => _busy = true);
+    try {
+      var orderNo = sales.guilgeeniiDugaar;
+      if (orderNo == null || orderNo.isEmpty) {
+        final d = await PosTransactionService()
+            .fetchZakhialgiinDugaar(baiguullagiinId: session.baiguullagiinId);
+        if (d == null || d.isEmpty) {
+          throw PosTransactionException('Захиалгын дугаар авах боломжгүй');
+        }
+        orderNo = d;
+        if (mounted) sales.setGuilgeeniiDugaar(d);
+      }
+      if (!mounted) return;
+      final tokiOrderId = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => TokiInvoiceDialog(
+          amountMnt: due,
+          baiguullagiinId: session.baiguullagiinId,
+          salbariinId: session.salbariinId,
+          guilgeeniiDugaar: orderNo!,
+        ),
+      );
+      if (tokiOrderId == null || !mounted) return;
+      // Мөнгө Toki дээр татагдсан — хадгалалт амжилтгүй бол кассчинд мэдэгдэнэ.
+      await _finalizeApiSale(sales, due, totals, tokiOrderId: tokiOrderId);
+    } catch (e) {
+      if (mounted) {
+        showAppSnackBar(context, posPaymentErrorUserMessage(e),
+            variant: AppSnackVariant.error);
       }
     } finally {
       _submitInFlight = false;
@@ -670,6 +731,11 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       return;
     }
 
+    if (_kind == _PayKind.toki) {
+      await _runTokiFlow(sales, totals);
+      return;
+    }
+
     if (!mounted) return;
     if (widget.terminalMode == CashierTerminalPaymentMode.qpayOnly &&
         _kind == _PayKind.card) {
@@ -684,6 +750,9 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     final auth = context.watch<AuthModel>();
     final usePosBackend = auth.canSubmitPosSales;
     final showZeelOption = true;
+    // TokiPay одоогоор зөвхөн "Pos1" нэвтрэх нэртэй ажилтанд (сервер мөн шалгана).
+    final showTokiOption =
+        usePosBackend && auth.currentUser?.username == TokiService.erkhtei;
 
     return Scaffold(
       appBar: AppBar(
@@ -828,6 +897,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                 kind: _kind,
                 terminalMode: widget.terminalMode,
                 showZeelOption: showZeelOption,
+                showTokiOption: showTokiOption,
                 dueFormatted: _fmtMnt(due),
                 onKind: (k) => setState(() => _kind = k),
                 onCancel: () => Navigator.pop(context),
@@ -1325,6 +1395,7 @@ class _PaymentPanel extends StatelessWidget {
     required this.kind,
     required this.terminalMode,
     required this.showZeelOption,
+    this.showTokiOption = false,
     required this.dueFormatted,
     required this.onKind,
     required this.onCancel,
@@ -1337,6 +1408,7 @@ class _PaymentPanel extends StatelessWidget {
   final _PayKind kind;
   final CashierTerminalPaymentMode terminalMode;
   final bool showZeelOption;
+  final bool showTokiOption;
   final String dueFormatted;
   final ValueChanged<_PayKind> onKind;
   final VoidCallback onCancel;
@@ -1368,6 +1440,10 @@ class _PaymentPanel extends StatelessWidget {
     ];
     if (showZeelOption) {
       methods.add((_PayKind.zeel, 'Зээл', Icons.schedule_outlined));
+    }
+    if (showTokiOption) {
+      methods.add(
+          (_PayKind.toki, 'Toki', Icons.account_balance_wallet_outlined));
     }
 
     return Container(
@@ -1416,49 +1492,32 @@ class _PaymentPanel extends StatelessWidget {
           else
             Column(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _methodTile(
-                        context,
-                        methods[0].$1,
-                        methods[0].$2,
-                        methods[0].$3,
+                for (var r = 0; r < methods.length; r += 2) ...[
+                  if (r > 0) const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _methodTile(
+                          context,
+                          methods[r].$1,
+                          methods[r].$2,
+                          methods[r].$3,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _methodTile(
-                        context,
-                        methods[1].$1,
-                        methods[1].$2,
-                        methods[1].$3,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: r + 1 < methods.length
+                            ? _methodTile(
+                                context,
+                                methods[r + 1].$1,
+                                methods[r + 1].$2,
+                                methods[r + 1].$3,
+                              )
+                            : const SizedBox.shrink(),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _methodTile(
-                        context,
-                        methods[2].$1,
-                        methods[2].$2,
-                        methods[2].$3,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _methodTile(
-                        context,
-                        methods[3].$1,
-                        methods[3].$2,
-                        methods[3].$3,
-                      ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ],
             ),
           // Вэбийн `tulburTuluhModal`-тай ижил "НӨАТ ашиглах эсэх" унтраалга —
@@ -1597,11 +1656,18 @@ class _PaymentPanel extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 22,
-                color: sel ? cs.primary : cs.onSurfaceVariant,
-              ),
+              if (k == _PayKind.toki)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(5),
+                  child: Image.asset('assets/images/toki_logo.png',
+                      width: 22, height: 22),
+                )
+              else
+                Icon(
+                  icon,
+                  size: 22,
+                  color: sel ? cs.primary : cs.onSurfaceVariant,
+                ),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(

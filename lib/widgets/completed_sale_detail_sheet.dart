@@ -480,6 +480,8 @@ class _PaymentChip extends StatelessWidget {
         return Icons.credit_card_outlined;
       case 'qpay':
         return Icons.qr_code_2_outlined;
+      case 'toki':
+        return Icons.account_balance_wallet_outlined;
       case 'account':
         return Icons.account_balance_outlined;
       case 'credit':
@@ -499,6 +501,8 @@ class _PaymentChip extends StatelessWidget {
         return 'Карт';
       case 'qpay':
         return 'QPay';
+      case 'toki':
+        return 'Toki';
       case 'account':
         return 'Дансаар';
       case 'credit':
@@ -518,6 +522,8 @@ class _PaymentChip extends StatelessWidget {
         return 'Card';
       case 'qpay':
         return 'QPay';
+      case 'toki':
+        return 'Toki';
       case 'account':
         return 'Bank transfer';
       case 'credit':

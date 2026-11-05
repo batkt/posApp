@@ -309,6 +309,8 @@ class _PurchaseDetailSheet extends StatelessWidget {
         return 'Карт';
       case 'qpay':
         return 'QPay';
+      case 'toki':
+        return 'Toki';
       default:
         return k ?? 'Бэлэн';
     }

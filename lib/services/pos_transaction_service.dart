@@ -377,6 +377,9 @@ class PosTransactionService {
 
     /// Нэг борлуулалтын давтагдашгүй ID — сервер давхар бүртгэхгүй.
     String? clientGuilgeeniiId,
+
+    /// TokiPay-ийн төлөгдсөн нэхэмжлэх — сервер Toki дээр төлөгдсөнийг шалгана.
+    String? tokiOrderId,
   }) {
     final baraanuud = _buildGuilgeeBaraanuud(
       session: session,
@@ -403,6 +406,9 @@ class PosTransactionService {
     final zTrim = zeelKhariltsagchiinId?.trim();
     if (paymentTurul == 'zeel' && zTrim != null && zTrim.isNotEmpty) {
       tulburLine['khariltsagchiinId'] = zTrim;
+    }
+    if (paymentTurul == 'toki' && tokiOrderId != null && tokiOrderId.isNotEmpty) {
+      tulburLine['tokiOrderId'] = tokiOrderId;
     }
     final tulbur = [tulburLine];
 
@@ -600,6 +606,8 @@ class PosTransactionService {
         return 'cart';
       case 'qpay':
         return 'qpay';
+      case 'toki':
+        return 'toki';
       case 'account':
         return 'khariltsakh';
       case 'credit':

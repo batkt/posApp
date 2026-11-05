@@ -12,6 +12,7 @@ const _turliinNer = {
   'khariltsakh': 'Дансаар',
   'zeel': 'Зээл',
   'qpay': 'QPay',
+  'toki': 'Toki',
 };
 
 /// AppBar-т: офлайн эсэх, синк хийгдээгүй борлуулалтын тоо. Онлайн, дараалал

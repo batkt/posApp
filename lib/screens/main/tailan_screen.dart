@@ -250,6 +250,8 @@ class _NegtgelPaymentList extends StatelessWidget {
           return l10n.tr('tailan_pay_cart');
         case 'qpay':
           return l10n.tr('tailan_pay_qpay');
+        case 'toki':
+          return 'Toki';
         case 'khariltsakh':
           return l10n.tr('tailan_pay_khariltsakh');
         case 'zeel':

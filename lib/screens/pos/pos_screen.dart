@@ -72,6 +72,97 @@ Future<void> _openQuantitySheet(
   }
 }
 
+/// Картыг удаан дарах эсвэл "×N" дээр дарахад тоо ширхэгийг гараар бичнэ.
+/// Үлдэгдлийг зөрүүгээр нь хасаж/буцааж нэмнэ — "сагс + үлдэгдэл == анхны
+/// үлдэгдэл" тэнцэл хадгалагдана. Хайрцаг/жингийн бараанд өөрийн цонх нээгдэнэ.
+Future<void> _openTypeQuantityDialog(
+  BuildContext context,
+  InventoryModel inventory,
+  SalesModel sales,
+  InventoryItem item,
+) async {
+  if (item.product.isBoxSaleUnit || item.product.isWeightSaleUnit) {
+    return _openQuantitySheet(context, inventory, sales, item);
+  }
+  final productId = item.product.id;
+  final line = sales.currentSaleItems
+      .where((e) => e.product.id == productId && !e.isGiftLine)
+      .firstOrNull;
+  final current = line?.quantity ?? 0;
+  final controller = TextEditingController(text: current > 0 ? '$current' : '');
+  controller.selection =
+      TextSelection(baseOffset: 0, extentOffset: controller.text.length);
+
+  final shine = await showDialog<int>(
+    context: context,
+    builder: (ctx) {
+      void batlakh() {
+        final v = int.tryParse(controller.text.trim());
+        if (v == null || v < 0) return;
+        Navigator.of(ctx).pop(v);
+      }
+
+      return AlertDialog(
+        title: Text(
+          item.product.name,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+          decoration: InputDecoration(
+            labelText: 'Тоо ширхэг',
+            helperText: item.product.ajilUilchilgeeEsekh == true
+                ? null
+                : 'Үлдэгдэл: ${item.currentStock + current}',
+          ),
+          onSubmitted: (_) => batlakh(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Болих'),
+          ),
+          FilledButton(onPressed: batlakh, child: const Text('Хадгалах')),
+        ],
+      );
+    },
+  );
+  controller.dispose();
+  if (shine == null || shine == current || !context.mounted) return;
+
+  if (shine == 0) {
+    sales.removeLineRestoringStock(productId, inventory: inventory);
+    return;
+  }
+  final zuruu = shine - current;
+  if (zuruu > 0) {
+    if (!inventory.canSell(productId, zuruu)) {
+      showAppSnackBar(
+        context,
+        'Үлдэгдэл хүрэлцэхгүй (боломжтой: ${item.currentStock + current})',
+        variant: AppSnackVariant.error,
+      );
+      return;
+    }
+    if (!inventory.deductStock(productId, zuruu)) {
+      showAppSnackBar(context, 'Барааны үлдэгдэл олдсонгүй',
+          variant: AppSnackVariant.error);
+      return;
+    }
+    if (current == 0) sales.addToSale(item.product);
+    sales.updateSaleQuantity(productId, shine);
+  } else {
+    sales.updateSaleQuantity(productId, shine);
+    inventory.restock(productId, -zuruu);
+  }
+}
+
 class POSScreen extends StatefulWidget {
   const POSScreen({
     super.key,
@@ -1544,6 +1635,10 @@ class _POSScreenState extends State<POSScreen> {
                       item.product.isWeightSaleUnit)
                   ? () => _openQuantitySheet(context, inventory, sales, item)
                   : null,
+              onTypeQuantity: () {
+                FocusScope.of(context).unfocus();
+                _openTypeQuantityDialog(context, inventory, sales, item);
+              },
             );
           },
           ),
@@ -2263,6 +2358,9 @@ class _ProductCard extends StatelessWidget {
   /// Сагсанд орсон тоог харуулах шошго — жингийн бараанд "250гр" гэх мэт.
   final String? saleQuantityLabel;
 
+  /// Тоо ширхэгийг гараар бичих (картыг удаан дарах / "×N" дээр дарах).
+  final VoidCallback? onTypeQuantity;
+
   const _ProductCard({
     super.key,
     required this.item,
@@ -2272,6 +2370,7 @@ class _ProductCard extends StatelessWidget {
     this.onRemoveLineFromSale,
     this.onEditQuantity,
     this.saleQuantityLabel,
+    this.onTypeQuantity,
   });
 
   static const Color _stockPlentyGreen = Color(0xFF16A34A);
@@ -2331,8 +2430,11 @@ class _ProductCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       // Тоо ширхэгийг ЗӨВХӨН зураг дээрх +/− товчоор өөрчилнө. Урьд нь
       // хайрцаг дээр дарахад нэмэгдэж, удаан дарахад хасагддаг байсан тул
-      // санамсаргүй хүрэхэд тоо өөрчлөгддөг байв.
-      child: Column(
+      // санамсаргүй хүрэхэд тоо өөрчлөгддөг байв. Удаан дарахад (санаатай
+      // үйлдэл) тоо бичих цонх нээгдэнэ.
+      child: GestureDetector(
+        onLongPress: onTypeQuantity,
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
@@ -2394,7 +2496,10 @@ class _ProductCard extends StatelessWidget {
                     Positioned(
                       top: 6,
                       right: 6,
-                      child: Container(
+                      child: GestureDetector(
+                        onTap: onTypeQuantity,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
                         padding: EdgeInsets.symmetric(
                           horizontal: multiInCart ? 10 : 8,
                           vertical: 5,
@@ -2428,6 +2533,7 @@ class _ProductCard extends StatelessWidget {
                             ],
                           ),
                         ),
+                      ),
                       ),
                     ),
                   if (inCart && onRemoveLineFromSale != null)
@@ -2630,6 +2736,7 @@ class _ProductCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
       ),
     );
   }

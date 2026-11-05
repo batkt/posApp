@@ -392,6 +392,9 @@ String _paymentMethodFromTulbur(List<dynamic>? tulbur) {
   if (turul == 'qpay' || turul.contains('qpay')) {
     return PosPaymentCore.methodQpay;
   }
+  if (turul == 'toki') {
+    return PosPaymentCore.methodToki;
+  }
   if (turul == 'khariltsakh' ||
       turul.contains('khariltsakh') ||
       turul.contains('dans') ||

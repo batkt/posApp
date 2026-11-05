@@ -688,6 +688,8 @@ class _SaleCard extends StatelessWidget {
         return const Color(0xFF1E637C);
       case 'qpay':
         return const Color(0xFFF59E0B);
+      case 'toki':
+        return const Color(0xFFE6C200);
       case 'account':
         return const Color(0xFF1E637C);
       case 'credit':
