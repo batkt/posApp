@@ -18,7 +18,7 @@ class ImageService {
 
   /// Get authenticated image URL with JWT token
   String getAuthenticatedImageUrl(String imagePath) {
-    return 'https://pos.zevtabs.mn/api/file?path=$imagePath';
+    return '${ApiConfig.baseUrl}/file?path=$imagePath';
   }
 
   /// Download image with JWT authentication

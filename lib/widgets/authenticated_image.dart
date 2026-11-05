@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 import '../services/image_service.dart';
 
 String _normalizeImagePath(String imageUrl) {
-  if (imageUrl.contains('https://pos.zevtabs.mn/api/file?path=') ||
+  if (imageUrl.contains('${ApiConfig.baseUrl}/file?path=') ||
+      imageUrl.contains('https://pos.zevtabs.mn/api/file?path=') ||
       imageUrl.startsWith('baraa/')) {
     if (imageUrl.startsWith('baraa/')) {
       return 'baraa/${imageUrl.split('baraa/').last}';

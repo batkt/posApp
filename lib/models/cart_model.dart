@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../services/api_service.dart';
 
 enum ProductUnit { piece, kg, liter, meter, box }
 
@@ -208,7 +209,7 @@ class Product {
       costPrice: _asDouble(json['urtugUne']),
       category: json['angilal'] ?? '',
       imageUrl: json['zurgiinId'] != null
-          ? 'https://pos.zevtabs.mn/api/file?path=baraa/${json['zurgiinId']}'
+          ? '${ApiConfig.baseUrl}/file?path=baraa/${json['zurgiinId']}'
           : 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=400&fit=crop',
       barcode: barCodeStr,
       stock: _asInt(json['uldegdel']),
