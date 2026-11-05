@@ -133,111 +133,268 @@ class _TokiInvoiceDialogState extends State<TokiInvoiceDialog> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     final n = _nekhemjlekh;
-    final String? qrText = (n != null && n['turul'] == 'qr') ? n['qrText']?.toString() : null;
+    final String? qrText =
+        (n != null && n['turul'] == 'qr') ? n['qrText']?.toString() : null;
+    final utasIlgeesen = n != null && n['turul'] == 'utas';
+    final khuleejBaigaa =
+        _orderId != null && (_utasaar ? utasIlgeesen : qrText != null);
 
-    return AlertDialog(
-      title: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: Image.asset('assets/images/toki_logo.png', width: 28, height: 28),
-          ),
-          const SizedBox(width: 10),
-          const Text('TokiPay'),
-        ],
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: false, label: Text('QR')),
-                ButtonSegment(value: true, label: Text('Утсаар')),
-              ],
-              selected: {_utasaar},
-              onSelectionChanged: _loading
-                  ? null
-                  : (v) {
-                      final shine = v.first;
-                      if (shine == _utasaar) return;
-                      setState(() => _utasaar = shine);
-                      if (!shine) _uusgey();
-                    },
-            ),
-            const SizedBox(height: 16),
-            if (!_utasaar)
-              SizedBox(
-                width: 220,
-                height: 220,
-                child: qrText != null && qrText.isNotEmpty
-                    ? Container(
-                        color: Colors.white,
-                        padding: const EdgeInsets.all(8),
-                        child: QrImageView(data: qrText, size: 204),
-                      )
-                    : Center(
-                        child: _loading
-                            ? const CircularProgressIndicator()
-                            : Icon(Icons.qr_code_2_rounded,
-                                size: 80, color: cs.outline),
-                      ),
-              )
-            else
-              Column(
-                children: [
-                  TextField(
-                    controller: _utas,
-                    keyboardType: TextInputType.phone,
-                    maxLength: 8,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      labelText: 'Хэрэглэгчийн утасны дугаар',
-                      hintText: '99112233',
+    return Dialog(
+      clipBehavior: Clip.antiAlias,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Толгой: лого + төлөх дүн (системийн өнгө, dark mode дагана)
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 16, 8, 18),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(7),
+                          child: Image.asset('assets/images/toki_logo.png',
+                              width: 28, height: 28),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text('Toki-гоор төлөх',
+                              style: tt.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700)),
+                        ),
+                        IconButton(
+                          onPressed: _khaay,
+                          tooltip: 'Хаах',
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
                     ),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  FilledButton.tonal(
-                    onPressed: _loading || _utas.text.length != 8
-                        ? null
-                        : () => _uusgey(utas: _utas.text),
-                    child: _loading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Хүсэлт илгээх'),
-                  ),
-                  if (_nekhemjlekh?['turul'] == 'utas')
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        'Хүсэлт илгээгдсэн. Хэрэглэгч Toki апп-аас батална.',
-                        style: TextStyle(color: cs.primary, fontSize: 12),
-                        textAlign: TextAlign.center,
+                    const SizedBox(height: 12),
+                    Text(
+                      MntAmountFormatter.formatTugrik(widget.amountMnt),
+                      style: tt.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
-                ],
+                    const SizedBox(height: 4),
+                    Text('Захиалга #${widget.guilgeeniiDugaar}',
+                        style: tt.bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant)),
+                  ],
+                ),
               ),
-            const SizedBox(height: 12),
-            Text(
-              MntAmountFormatter.formatTugrik(widget.amountMnt),
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.w800),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SegmentedButton<bool>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(
+                            value: false,
+                            icon: Icon(Icons.qr_code_2_rounded),
+                            label: Text('QR код')),
+                        ButtonSegment(
+                            value: true,
+                            icon: Icon(Icons.phone_iphone_rounded),
+                            label: Text('Утасны дугаар')),
+                      ],
+                      selected: {_utasaar},
+                      onSelectionChanged: _loading
+                          ? null
+                          : (v) {
+                              final shine = v.first;
+                              if (shine == _utasaar) return;
+                              setState(() => _utasaar = shine);
+                              if (!shine) _uusgey();
+                            },
+                    ),
+                    const SizedBox(height: 18),
+                    if (!_utasaar) ...[
+                      Center(
+                        child: Container(
+                          width: 232,
+                          height: 232,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            // QR-ыг уншихад цагаан дэвсгэр хэрэгтэй (dark mode-д ч).
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: cs.outlineVariant),
+                          ),
+                          child: qrText != null && qrText.isNotEmpty
+                              ? QrImageView(
+                                  data: qrText,
+                                  size: 208,
+                                  eyeStyle: const QrEyeStyle(
+                                      eyeShape: QrEyeShape.square,
+                                      color: Color(0xFF101318)),
+                                  dataModuleStyle: const QrDataModuleStyle(
+                                      dataModuleShape: QrDataModuleShape.square,
+                                      color: Color(0xFF101318)),
+                                )
+                              : _loading
+                                  ? const Center(
+                                      child: CircularProgressIndicator())
+                                  : Center(
+                                      child: TextButton.icon(
+                                        onPressed: () => _uusgey(),
+                                        icon: const Icon(Icons.refresh_rounded),
+                                        label: const Text('Дахин үүсгэх'),
+                                      ),
+                                    ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Хэрэглэгч Toki апп-аараа уншуулж төлнө.',
+                        textAlign: TextAlign.center,
+                        style:
+                            tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                      ),
+                    ] else ...[
+                      TextField(
+                        controller: _utas,
+                        autofocus: true,
+                        keyboardType: TextInputType.phone,
+                        maxLength: 8,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        style: tt.titleLarge?.copyWith(letterSpacing: 1.2),
+                        decoration: InputDecoration(
+                          prefixText: '+976  ',
+                          hintText: 'Утасны дугаар',
+                          counterText: '',
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                        onSubmitted: (_) {
+                          if (_utas.text.length == 8 && !_loading) {
+                            _uusgey(utas: _utas.text);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      if (utasIlgeesen)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_rounded,
+                                  size: 18, color: Colors.green),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${_utas.text} дугаарт хүсэлт очсон. Хэрэглэгч Toki апп-аас баталгаажуулна.',
+                                  style: tt.bodySmall,
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: _loading || _utas.text.length != 8
+                                    ? null
+                                    : () => _uusgey(utas: _utas.text),
+                                child: const Text('Дахин'),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                            backgroundColor: cs.onSurface,
+                            foregroundColor: cs.surface,
+                          ),
+                          onPressed: _loading || _utas.text.length != 8
+                              ? null
+                              : () => _uusgey(utas: _utas.text),
+                          child: _loading
+                              ? SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: cs.surface))
+                              : const Text('Хүсэлт илгээх'),
+                        ),
+                    ],
+                    if (khuleejBaigaa) ...[
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                                color: Color(0xFFE6C200),
+                                shape: BoxShape.circle),
+                          ),
+                          const SizedBox(width: 8),
+                          Text('Төлбөр хүлээж байна',
+                              style: tt.bodySmall
+                                  ?.copyWith(color: cs.onSurfaceVariant)),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(0, 48)),
+                          onPressed: _khaay,
+                          child: const Text('Болих'),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                              backgroundColor: cs.onSurface,
+                              foregroundColor: cs.surface,
+                            ),
+                            onPressed: _orderId == null || _checking
+                                ? null
+                                : () => _shalgay(true),
+                            child: _checking
+                                ? SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: cs.surface))
+                                : const Text('Төлөлт шалгах'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-      actions: [
-        TextButton(onPressed: _khaay, child: const Text('Болих')),
-        FilledButton(
-          onPressed: _orderId == null || _checking ? null : () => _shalgay(true),
-          child: const Text('Шалгах'),
-        ),
-      ],
     );
   }
 }
