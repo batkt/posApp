@@ -2,14 +2,11 @@ import 'api_service.dart';
 import 'pos_transaction_service.dart';
 
 /// TokiPay — вэбийн `components/modalBody/toki`-тай ижил серверийн endpoint-ууд.
-/// Нэвтрэх мэдээлэл зөвхөн сервер дээр (env) байна.
+/// Нэвтрэх мэдээлэл байгууллага бүрийн тохиргоонд, зөвхөн сервер дээр.
 class TokiService {
   TokiService({ApiService? api}) : _api = api ?? posApiService;
 
   final ApiService _api;
-
-  /// TokiPay одоогоор зөвхөн энэ нэвтрэх нэртэй ажилтанд (сервер мөн шалгана).
-  static const String erkhtei = 'Pos1';
 
   Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) async {
     final resp = await _api.post<dynamic>(path, body: body, parser: (json) => json);

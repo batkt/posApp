@@ -14,7 +14,6 @@ import '../../services/khariltsagch_service.dart';
 import '../../services/pos_settings_service.dart';
 import '../../services/pos_transaction_service.dart';
 import '../../services/qpay_service.dart';
-import '../../services/toki_service.dart';
 import '../../services/unipos_service.dart';
 import '../../services/offline/offline_guilgee_queue.dart';
 import '../../services/offline/online_tuluv.dart';
@@ -64,6 +63,9 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   /// Web `posSystem/index.js` tax flags (`borluulaltNUAT`, `eBarimtShine`, …).
   PosWebTaxContext _taxCtx = PosWebTaxContext.paymentDefault;
 
+  /// Байгууллагын `tokhirgoo.toki.ashiglakh` — асаалттай үед л Toki харагдана.
+  bool _tokiAshiglakh = false;
+
   /// Web `posKhariltsagchModal` — сонгосон харилцагчийн мөр (`/khariltsagch`); хөнгөлөлт эндээс тооцогдоно.
   Map<String, dynamic>? _khariltsagchRawRow;
   double _promoBonusAshiglasan = 0;
@@ -95,6 +97,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _primeOrderNumber();
       _loadPosWebTaxContext();
+      _loadTokiTokhirgoo();
     });
   }
 
@@ -108,6 +111,17 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         salbariinId: s.salbariinId,
       );
       if (mounted) setState(() => _taxCtx = ctx);
+    } catch (_) {}
+  }
+
+  Future<void> _loadTokiTokhirgoo() async {
+    final s = context.read<AuthModel>().posSession;
+    if (s == null) return;
+    try {
+      final org = await posSettingsService.fetchBaiguullaga(s.baiguullagiinId);
+      final toki = (org?['tokhirgoo'] as Map?)?['toki'];
+      final on = toki is Map && toki['ashiglakh'] == true;
+      if (mounted && on != _tokiAshiglakh) setState(() => _tokiAshiglakh = on);
     } catch (_) {}
   }
 
@@ -750,9 +764,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     final auth = context.watch<AuthModel>();
     final usePosBackend = auth.canSubmitPosSales;
     final showZeelOption = true;
-    // TokiPay одоогоор зөвхөн "Pos1" нэвтрэх нэртэй ажилтанд (сервер мөн шалгана).
-    final showTokiOption =
-        usePosBackend && auth.currentUser?.username == TokiService.erkhtei;
+    // Байгууллагын тохиргоонд Toki асаалттай үед л харагдана.
+    final showTokiOption = usePosBackend && _tokiAshiglakh;
 
     return Scaffold(
       appBar: AppBar(
