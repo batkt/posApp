@@ -12,6 +12,9 @@ import '../utils/mnt_amount_formatter.dart';
 /// TokiPay: QR уншуулах эсвэл утасны дугаар руу хүсэлт илгээнэ.
 /// Төлөгдвөл `orderId`-г буцаана (гүйлгээний `tulbur[].tokiOrderId`), болих бол null.
 /// Төлөгдөөгүй хаавал нэхэмжлэхийг цуцална.
+/// "95393408" -> "9539 3408" (уншихад хялбар).
+String _utasKharuulakh(String u) => u.length == 8 ? '${u.substring(0, 4)} ${u.substring(4)}' : u;
+
 class TokiInvoiceDialog extends StatefulWidget {
   const TokiInvoiceDialog({
     super.key,
@@ -289,32 +292,56 @@ class _TokiInvoiceDialogState extends State<TokiInvoiceDialog> {
                       const SizedBox(height: 10),
                       if (utasIlgeesen)
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.green.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.green.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                                color: Colors.green.withValues(alpha: 0.35)),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.check_rounded,
-                                  size: 18, color: Colors.green),
-                              const SizedBox(width: 8),
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: const BoxDecoration(
+                                    color: Colors.green, shape: BoxShape.circle),
+                                child: const Icon(Icons.check_rounded,
+                                    size: 20, color: Colors.white),
+                              ),
+                              const SizedBox(width: 12),
                               Expanded(
-                                child: Text(
-                                  '${_utas.text} дугаарт хүсэлт очсон. Хэрэглэгч Toki апп-аас баталгаажуулна.',
-                                  style: tt.bodySmall,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Хүсэлт илгээгдлээ',
+                                        style: tt.bodyMedium?.copyWith(
+                                            fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${_utasKharuulakh(_utas.text)} дугаарын Toki апп-аас баталгаажуулна',
+                                      style: tt.bodySmall?.copyWith(
+                                          color: cs.onSurfaceVariant),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              TextButton(
+                              const SizedBox(width: 8),
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10),
+                                ),
                                 onPressed: _loading || _utas.text.length != 8
                                     ? null
                                     : () => _uusgey(utas: _utas.text),
-                                child: const Text('Дахин'),
+                                icon: const Icon(Icons.refresh_rounded, size: 16),
+                                label: const Text('Дахин'),
                               ),
                             ],
                           ),
-                        )
+                        ),
                     ],
                     if (khuleejBaigaa) ...[
                       const SizedBox(height: 14),
