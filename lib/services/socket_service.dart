@@ -25,6 +25,26 @@ class SocketService {
   final StreamController<Map<String, dynamic>> _tulburKhuseeltController =
       StreamController<Map<String, dynamic>>.broadcast();
 
+  final StreamController<void> _zakhialgaController =
+      StreamController<void>.broadcast();
+  final StreamController<void> _shireeniiZakhialgaController =
+      StreamController<void>.broadcast();
+
+  /// Киоск/KDS захиалгын дараалал өөрчлөгдсөн (`zakhialga`) — энэ салбарынх.
+  Stream<void> get zakhialgaChanged => _zakhialgaController.stream;
+
+  /// Ширээний захиалга хадгалагдсан/төлөгдсөн/шилжсэн (`shireeniiZakhialga`).
+  Stream<void> get shireeniiZakhialgaChanged =>
+      _shireeniiZakhialgaController.stream;
+
+  /// Server emits to every client; keep only events for this branch (or ones
+  /// without `salbariinId`, e.g. QPay callback).
+  bool _enSalbarynEsekh(dynamic data, PosSession session) {
+    if (data is! Map) return true;
+    final sid = data['salbariinId']?.toString() ?? '';
+    return sid.isEmpty || sid == session.salbariinId;
+  }
+
   /// Debounced pulses when warehouse stock (`uldegdel`) changed for this branch.
   Stream<void> get uldegdelChanged => _uldegdelController.stream;
 
@@ -101,6 +121,17 @@ class SocketService {
       _socket!.onConnect((_) => joinRoom());
 
       _socket!.on('uldegdelChanged', (_) => _pulseDebounced());
+      _socket!.on('zakhialga', (data) {
+        if (_enSalbarynEsekh(data, session) && !_zakhialgaController.isClosed) {
+          _zakhialgaController.add(null);
+        }
+      });
+      _socket!.on('shireeniiZakhialga', (data) {
+        if (_enSalbarynEsekh(data, session) &&
+            !_shireeniiZakhialgaController.isClosed) {
+          _shireeniiZakhialgaController.add(null);
+        }
+      });
       _socket!.on('terminalBarimtKhuseelt', (data) {
         if (data is Map && !_barimtKhuseeltController.isClosed) {
           _barimtKhuseeltController.add(Map<String, dynamic>.from(data));

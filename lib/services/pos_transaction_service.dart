@@ -431,6 +431,10 @@ class PosTransactionService {
       'ajiltan': session.ajiltanPayload,
       if (clientGuilgeeniiId != null && clientGuilgeeniiId.isNotEmpty)
         'clientGuilgeeniiId': clientGuilgeeniiId,
+      // Ширээний захиалгыг төлөхөд сервер ижил баримтын дугаартай нээлттэй
+      // ширээний захиалгыг хааж, аль ширээнээс зарагдсаныг үлдээнэ.
+      if (sales.shireeTeiEsekh) 'shiree': sales.shiree,
+      if (sales.kdsRuuIlgeekh) 'kdsRuuIlgeekh': true,
     };
     body.removeWhere((k, v) => v == null);
     return Map<String, dynamic>.from(_sanitizeJson(body) as Map);
@@ -474,6 +478,10 @@ class PosTransactionService {
       'baraanuud': baraanuud,
       'tulbur': <Map<String, dynamic>>[],
       'ajiltan': session.ajiltanPayload,
+      // Вэб `huleelgey()`: ширээ сонгосон бол ширээнд хадгална (сервер тухайн
+      // ширээний өмнөх нээлттэй захиалгыг энэ бичлэгээр солино).
+      if (sales.shireeTeiEsekh) 'shiree': sales.shiree,
+      if (sales.kdsRuuIlgeekh) 'kdsRuuIlgeekh': true,
     };
 
     return _postGuilgeeniiTuukhKhadgalya(body);

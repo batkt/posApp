@@ -25,9 +25,12 @@ import '../../services/terminal_tulbur_signal_service.dart';
 import '../../services/pos_transaction_service.dart';
 import '../../services/pos_settings_service.dart';
 import '../../services/uramshuulal_service.dart';
+import '../../services/shiree_zakhialga_service.dart';
 import '../../payment/pos_payment_core.dart';
 import '../../utils/clean_barcode.dart';
 import '../../utils/app_snackbar.dart';
+import 'shiree_screen.dart';
+import 'zakhialga_daraalal_screen.dart';
 
 /// How many of this product are in the current sale (0 = not in cart).
 /// Урамшууллын бэлэг мөрийг нь оруулж НИЙЛБЭРЛЭНЭ — [SalesModel.qtyForProduct].
@@ -284,7 +287,12 @@ class POSScreen extends StatefulWidget {
     super.key,
     this.cashierMode = false,
     this.mobileStaffMode = false,
+    this.shireeguiGorim = false,
   });
+
+  /// "Ширээгүй худалдах" цонх — ширээний зураглалыг үндсэн болгохгүй, шууд
+  /// бараа харуулна (авч явах / хурдан борлуулалт).
+  final bool shireeguiGorim;
 
   /// When true, embedded under kiosk [CashierMainScreen] or mobile [MobilePosMainScreen] (no scaffold).
   final bool cashierMode;
@@ -323,6 +331,13 @@ class _POSScreenState extends State<POSScreen> {
   static const Duration _terminalTuluvInterval = Duration(seconds: 3);
   static const Duration _terminalTuluvMax = Duration(minutes: 20);
 
+  /// "ПОС дээр харуулах" (Тохиргоо → Объект) идэвхтэй объект салбарт бий эсэх.
+  /// Бий бол вэбтэй адил ширээний зураглал ПОС-ын ҮНДСЭН харагдац болно.
+  bool _objektTeiEsekh = false;
+
+  /// Утасны тооцооны хэсэгт задаргаа (Дүн, НӨАТ) нээлттэй эсэх.
+  bool _tootsooDelgerengui = false;
+
   @override
   void initState() {
     super.initState();
@@ -332,6 +347,43 @@ class _POSScreenState extends State<POSScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadTaxContext());
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadDorvonNegPromo());
     WidgetsBinding.instance.addPostFrameCallback((_) => _attachPromoSync());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _objektShalgakh());
+  }
+
+  /// Идэвхтэй объект байгаа эсэхийг шалгана ("Ширээгүй худалдах" цонхонд биш).
+  Future<void> _objektShalgakh() async {
+    if (!mounted || widget.shireeguiGorim) return;
+    final auth = context.read<AuthModel>();
+    final session = auth.posSession;
+    if (!auth.canSubmitPosSales || session == null) return;
+    try {
+      final objektuud = await shireeZakhialgaService.idevkhteiObjektuud(
+        baiguullagiinId: session.baiguullagiinId,
+        salbariinId: session.salbariinId,
+      );
+      final tei = objektuud.any((o) => o.shireenuud.isNotEmpty);
+      if (mounted && tei != _objektTeiEsekh) {
+        setState(() => _objektTeiEsekh = tei);
+      }
+    } catch (_) {
+      // Сүлжээгүй г.м — ердийн барааны харагдацаар үргэлжилнэ.
+    }
+  }
+
+  /// Вэбийн ПОС шиг: идэвхтэй объекттой салбарт ширээ сонгоогүй үед барааны
+  /// оронд ширээний зураглал (үндсэн харагдац). Ширээ сонгоход бараа руу
+  /// шилжинэ; "Ширээгүй худалдах" нь үндсэнийг солихгүй, тусдаа цонх нээнэ.
+  Widget _baraaEsvelShiree(BuildContext context, Widget baraa) {
+    if (!_objektTeiEsekh || widget.shireeguiGorim) return baraa;
+    return Consumer<SalesModel>(
+      builder: (context, sales, _) {
+        if (sales.shireeTeiEsekh) return baraa;
+        return ShireeScreen(
+          embedded: true,
+          onShireeguiKhudaldakh: () => _shireeguiKhudaldakhNeekh(context),
+        );
+      },
+    );
   }
 
   void _attachPromoSync() {
@@ -645,23 +697,160 @@ class _POSScreenState extends State<POSScreen> {
     }
   }
 
-  Widget _buildParkSaleActions(BuildContext context, SalesModel sales) {
+  /// "Ширээгүй худалдах" — ширээний зураглал үндсэн хэвээр, бараа сонгох +
+  /// төлөх ПОС-ыг тусдаа бүтэн дэлгэцийн цонхонд нээнэ.
+  Future<void> _shireeguiKhudaldakhNeekh(BuildContext context) {
+    final pos = POSScreen(
+      cashierMode: widget.cashierMode,
+      mobileStaffMode: widget.mobileStaffMode,
+      shireeguiGorim: true,
+    );
+    return Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        // Касс горимд POSScreen өөрөө Scaffold-гүй тул гарчигтай Scaffold-д
+        // ороож хаах (✕) товч өгнө; бусад горимд өөрийн AppBar-тай.
+        builder: (_) => widget.cashierMode
+            ? Scaffold(
+                appBar: AppBar(title: const Text('Ширээгүй худалдах')),
+                body: pos,
+              )
+            : pos,
+      ),
+    );
+  }
+
+  /// Сагсны үйлдлүүд — нэг мөрөнд: Хүлээлгэ/Ширээнд хадгалах · Захиалга
+  /// (· терминал руу картын хүсэлт). Ширээ сонгосон бол дээр нь ширээний шошго.
+  /// Утасны тооцооны хэсэг өндөр болж барааны жагсаалтыг дардаг байсан тул
+  /// товчнуудыг нэг мөрөнд, намхан хэлбэрээр байрлуулна.
+  Widget _buildParkSaleActions(
+    BuildContext context,
+    SalesModel sales, {
+    VoidCallback? onTerminal,
+  }) {
     final auth = context.read<AuthModel>();
     if (!auth.canSubmitPosSales) return const SizedBox.shrink();
     final l10n = AppLocalizations.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: sales.isSaleEmpty ? null : () => _parkCurrentSale(context),
-          icon: const Icon(Icons.pause_circle_outline_rounded, size: 22),
-          label: Text(
-            l10n.tr('pos_park_put'),
-            style: const TextStyle(fontWeight: FontWeight.w700),
+    final cs = Theme.of(context).colorScheme;
+    final shireeniiNer = sales.shiree?['shireeniiNer']?.toString() ?? '';
+
+    final kompaktStyle = OutlinedButton.styleFrom(
+      minimumSize: const Size(0, 42),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      visualDensity: VisualDensity.compact,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+    Widget tovch({
+      required IconData icon,
+      required String label,
+      required VoidCallback? onPressed,
+    }) =>
+        Expanded(
+          child: OutlinedButton.icon(
+            style: kompaktStyle,
+            onPressed: onPressed,
+            icon: Icon(icon, size: 18),
+            label: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+            ),
           ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (sales.shireeTeiEsekh) ...[
+          Container(
+            padding: const EdgeInsets.fromLTRB(10, 0, 0, 0),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.table_restaurant_rounded, size: 16, color: cs.primary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '${sales.shiree?['objektiinNer'] ?? ''} · $shireeniiNer',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 13),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Ширээнээс салгах',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  // Ширээнээс гарна. Сагстай бол цэвэрлэнэ — ширээний
+                  // хадгалсан захиалга серверт хэвээр үлдэх тул сагсыг
+                  // ширээгүйгээр хадгалж/төлж давхардуулахгүй.
+                  onPressed: () async {
+                    if (sales.isSaleEmpty) {
+                      sales.setShiree(null);
+                      return;
+                    }
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (d) => AlertDialog(
+                        title: const Text('Ширээнээс гарах уу?'),
+                        content: const Text(
+                            'Сагс цэвэрлэгдэнэ. Ширээнд хадгалсан захиалга хэвээр үлдэнэ.'),
+                        actions: [
+                          TextButton(
+                              onPressed: () => Navigator.pop(d, false),
+                              child: const Text('Болих')),
+                          FilledButton(
+                              onPressed: () => Navigator.pop(d, true),
+                              child: const Text('Гарах')),
+                        ],
+                      ),
+                    );
+                    if (ok == true && context.mounted) {
+                      _clearSaleAndRestock(context, sales);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        Row(
+          children: [
+            tovch(
+              icon: sales.shireeTeiEsekh
+                  ? Icons.save_rounded
+                  : Icons.pause_circle_outline_rounded,
+              label: sales.shireeTeiEsekh
+                  ? 'Ширээнд хадгалах'
+                  : l10n.tr('pos_park_put'),
+              onPressed:
+                  sales.isSaleEmpty ? null : () => _parkCurrentSale(context),
+            ),
+            const SizedBox(width: 8),
+            // Захиалга (KDS-ээс дууссан) — ширээгүй салбарт ч хэрэгтэй.
+            tovch(
+              icon: Icons.soup_kitchen_rounded,
+              label: 'Захиалга',
+              onPressed: () => ZakhialgaDaraalalScreen.open(context),
+            ),
+            if (onTerminal != null) ...[
+              const SizedBox(width: 8),
+              tovch(
+                icon: Icons.point_of_sale_rounded,
+                label: 'Касс руу',
+                onPressed: sales.isSaleEmpty ? null : onTerminal,
+              ),
+            ],
+          ],
         ),
-      ),
+      ],
     );
   }
 
@@ -1098,13 +1287,22 @@ class _POSScreenState extends State<POSScreen> {
     final cartFlex = widget.cashierMode ? 4 : 2;
     return Column(
       children: [
-        _buildSearchAndCategories(context),
         Expanded(
           flex: gridFlex,
-          child: _buildProductsGrid(
+          child: _baraaEsvelShiree(
             context,
-            gridCrossAxisCount: context.isMobile ? 2 : null,
-            gridChildAspectRatio: context.isMobile ? 0.74 : null,
+            Column(
+              children: [
+                _buildSearchAndCategories(context),
+                Expanded(
+                  child: _buildProductsGrid(
+                    context,
+                    gridCrossAxisCount: context.isMobile ? 2 : null,
+                    gridChildAspectRatio: context.isMobile ? 0.74 : null,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         Expanded(
@@ -1145,12 +1343,21 @@ class _POSScreenState extends State<POSScreen> {
               children: [
                 Column(
                   children: [
-                    _buildSearchAndCategories(context),
                     Expanded(
-                      child: _buildProductsGrid(
+                      child: _baraaEsvelShiree(
                         context,
-                        gridCrossAxisCount: 2,
-                        gridChildAspectRatio: 0.74,
+                        Column(
+                          children: [
+                            _buildSearchAndCategories(context),
+                            Expanded(
+                              child: _buildProductsGrid(
+                                context,
+                                gridCrossAxisCount: 2,
+                                gridChildAspectRatio: 0.74,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -1398,11 +1605,14 @@ class _POSScreenState extends State<POSScreen> {
         // Products panel - 70% width
         Expanded(
           flex: 7,
-          child: Column(
-            children: [
-              _buildSearchAndCategories(context),
-              Expanded(child: _buildProductsGrid(context)),
-            ],
+          child: _baraaEsvelShiree(
+            context,
+            Column(
+              children: [
+                _buildSearchAndCategories(context),
+                Expanded(child: _buildProductsGrid(context)),
+              ],
+            ),
           ),
         ),
         // Sale panel - 30% width
@@ -1431,11 +1641,14 @@ class _POSScreenState extends State<POSScreen> {
         // Products panel - 65% width
         Expanded(
           flex: 13,
-          child: Column(
-            children: [
-              _buildSearchAndCategories(context),
-              Expanded(child: _buildProductsGrid(context)),
-            ],
+          child: _baraaEsvelShiree(
+            context,
+            Column(
+              children: [
+                _buildSearchAndCategories(context),
+                Expanded(child: _buildProductsGrid(context)),
+              ],
+            ),
           ),
         ),
         // Sale panel - 35% width
@@ -1464,11 +1677,14 @@ class _POSScreenState extends State<POSScreen> {
         // Products panel - 60% width
         Expanded(
           flex: 6,
-          child: Column(
-            children: [
-              _buildSearchAndCategories(context),
-              Expanded(child: _buildProductsGrid(context)),
-            ],
+          child: _baraaEsvelShiree(
+            context,
+            Column(
+              children: [
+                _buildSearchAndCategories(context),
+                Expanded(child: _buildProductsGrid(context)),
+              ],
+            ),
           ),
         ),
         // Sale panel - 40% width
@@ -1611,7 +1827,9 @@ class _POSScreenState extends State<POSScreen> {
     double? gridChildAspectRatio,
   }) {
     final crossCount = gridCrossAxisCount ?? context.gridColumns;
-    final aspect = gridChildAspectRatio ?? 1.0;
+    // Таблет/Z Fold дээр 1.0 (дөрвөлжин) байхад зургийн хэсэг маш намхан
+    // болж −/тоо/+ товчнууд давхцдаг байв — утастай ижил өндөр карт.
+    final aspect = gridChildAspectRatio ?? 0.72;
 
     return Consumer2<InventoryModel, SalesModel>(
       builder: (context, inventory, sales, child) {
@@ -1691,12 +1909,22 @@ class _POSScreenState extends State<POSScreen> {
           onRefresh: () => inventory.refreshInventory(force: true),
           child: GridView.builder(
           padding: context.responsivePadding,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossCount,
-            childAspectRatio: aspect,
-            crossAxisSpacing: context.spacing,
-            mainAxisSpacing: context.spacing,
-          ),
+          // Баганын тоог тогтоогоогүй үед (таблет/десктоп) дэлгэцийн биш, энэ
+          // хэсгийн бодит өргөнөөр (карт ≤170px) — хажууд сагсны самбартай
+          // тул нээлттэй Z Fold дээр 4 багана хэт нарийн карт болдог байв.
+          gridDelegate: gridCrossAxisCount != null
+              ? SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossCount,
+                  childAspectRatio: aspect,
+                  crossAxisSpacing: context.spacing,
+                  mainAxisSpacing: context.spacing,
+                )
+              : SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 170,
+                  childAspectRatio: aspect,
+                  crossAxisSpacing: context.spacing,
+                  mainAxisSpacing: context.spacing,
+                ),
           cacheExtent: 280,
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
@@ -1890,59 +2118,80 @@ class _POSScreenState extends State<POSScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    Icons.shopping_bag_rounded,
-                    color: colorScheme.primary,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _staffSalePanelTitle(context),
-                    style: textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      fontSize: context.responsiveFontSize(17),
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ),
-                if (!sales.isSaleEmpty) ...[
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '${sales.saleItemCount} бараа',
-                      style: textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.w800,
+            // Нарийн самбарт (Z Fold нээлттэй, босоо таблет — дэлгэцийн 30%)
+            // багтахаар: гарчиг таслагдана, шошго жижгэрнэ, дүрс нуугдана.
+            LayoutBuilder(
+              builder: (context, c) {
+                final narii = c.maxWidth < 220;
+                return Row(
+                  children: [
+                    if (!narii) ...[
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primaryContainer
+                              .withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.shopping_bag_rounded,
+                          color: colorScheme.primary,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                      child: Text(
+                        _staffSalePanelTitle(context),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          fontSize: context.responsiveFontSize(17),
+                          letterSpacing: 0.2,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  IconButton(
-                    tooltip: 'Цэвэрлэх',
-                    onPressed: () => _clearSaleAndRestock(context, sales),
-                    icon: const Icon(
-                      Icons.delete_outline_rounded,
-                      size: 20,
-                      color: AppColors.error,
-                    ),
-                  ),
-                ],
-              ],
+                    if (!sales.isSaleEmpty) ...[
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '${sales.saleItemCount} бараа',
+                              style: textTheme.labelSmall?.copyWith(
+                                color: colorScheme.onPrimaryContainer,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      IconButton(
+                        tooltip: 'Цэвэрлэх',
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints:
+                            const BoxConstraints(minWidth: 36, minHeight: 36),
+                        onPressed: () => _clearSaleAndRestock(context, sales),
+                        icon: const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 20,
+                          color: AppColors.error,
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
             if (sales.dorvonNegPromo != null &&
                 sales.dorvonNegCalc.freeCount > 0) ...[
@@ -2153,20 +2402,33 @@ class _POSScreenState extends State<POSScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Нийт төлөх',
-                style: textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
+              Flexible(
+                flex: 2,
+                child: Text(
+                  'Нийт төлөх',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
                 ),
               ),
-              Text(
-                MntAmountFormatter.formatTugrikSpaced(sales.payableTotal),
-                style: textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: colorScheme.primary,
-                  fontSize: 22,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+              const SizedBox(width: 8),
+              Flexible(
+                flex: 3,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    MntAmountFormatter.formatTugrikSpaced(sales.payableTotal),
+                    style: textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: colorScheme.primary,
+                      fontSize: 22,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -2241,87 +2503,109 @@ class _POSScreenState extends State<POSScreen> {
     );
   }
 
+  /// Утасны "Борлуулалт ба төлбөр" хуудасны доод хэсэг — намхан: Нийт төлөх
+  /// (дарахад задаргаа), нэг мөр үйлдэл, Төлбөр төлөх. Өмнө нь "Тооцоо" карт,
+  /// задаргааны мөрүүд, 4-5 товч дэлгэцийн тал хувийг эзэлж барааны
+  /// жагсаалт бараг харагддаггүй байв.
   Widget _buildSheetSaleSummary(BuildContext context, SalesModel sales) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final auth = context.watch<AuthModel>();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-      child: Material(
-        color: cs.surfaceContainerLow,
-        elevation: 0,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: cs.outlineVariant),
-            boxShadow: [
-              BoxShadow(
-                color: cs.shadow.withValues(alpha: 0.06),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+    final terminalKharuulakh = widget.mobileStaffMode ||
+        auth.staffAccess.allowsMobile ||
+        auth.staffAccess.allowsPosSystem ||
+        auth.canSubmitPosSales;
+    final zadargaaTei = sales.excludedVat > 0.009 || sales.tax > 0;
+
+    return Material(
+      color: cs.surface,
+      elevation: 8,
+      shadowColor: Colors.black26,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Тооцоо',
-                style: tt.labelLarge?.copyWith(
-                  color: cs.onSurfaceVariant,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.4,
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: zadargaaTei
+                    ? () => setState(
+                        () => _tootsooDelgerengui = !_tootsooDelgerengui)
+                    : null,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Нийт төлөх',
+                        style: tt.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (zadargaaTei)
+                        Icon(
+                          _tootsooDelgerengui
+                              ? Icons.expand_less_rounded
+                              : Icons.expand_more_rounded,
+                          size: 20,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            MntAmountFormatter.formatTugrikSpaced(
+                                sales.payableTotal),
+                            style: tt.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: cs.primary,
+                              fontSize: 20,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures()
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 12),
-              _sheetSummaryLine(
-                context,
-                'Дүн',
-                sales.lineGrossBase > 0 ? sales.lineGrossBase : sales.subtotal,
-                false,
-              ),
-              if (sales.excludedVat > 0.009) ...[
-                const SizedBox(height: 8),
+              if (_tootsooDelgerengui && zadargaaTei) ...[
+                const SizedBox(height: 4),
                 _sheetSummaryLine(
-                    context, 'НӨАТ (хасагдсан)', -sales.excludedVat, false),
-              ],
-              // НӨАТ-гүй дүн → НӨАТ → нийт төлөх (дээрх самбартай ижил).
-              if (sales.tax > 0) ...[
-                const SizedBox(height: 8),
-                _sheetSummaryLine(
-                    context, 'НӨАТ-гүй дүн', sales.netTotal, false),
-                const SizedBox(height: 8),
-                _sheetSummaryLine(context, 'НӨАТ (10%)', sales.tax, false),
-              ],
-              const SizedBox(height: 12),
-              Divider(height: 1, color: cs.outlineVariant),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Нийт төлөх',
-                    style: tt.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 17,
-                    ),
-                  ),
-                  Text(
-                    MntAmountFormatter.formatTugrikSpaced(sales.payableTotal),
-                    style: tt.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: cs.primary,
-                      fontSize: 22,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
+                  context,
+                  'Дүн',
+                  sales.lineGrossBase > 0 ? sales.lineGrossBase : sales.subtotal,
+                  false,
+                ),
+                if (sales.excludedVat > 0.009) ...[
+                  const SizedBox(height: 4),
+                  _sheetSummaryLine(
+                      context, 'НӨАТ (хасагдсан)', -sales.excludedVat, false),
                 ],
+                if (sales.tax > 0) ...[
+                  const SizedBox(height: 4),
+                  _sheetSummaryLine(
+                      context, 'НӨАТ-гүй дүн', sales.netTotal, false),
+                  const SizedBox(height: 4),
+                  _sheetSummaryLine(context, 'НӨАТ (10%)', sales.tax, false),
+                ],
+              ],
+              const SizedBox(height: 8),
+              _buildParkSaleActions(
+                context,
+                sales,
+                onTerminal: terminalKharuulakh
+                    ? () => _sendTerminalCardSignal(context, sales)
+                    : null,
               ),
-              const SizedBox(height: 18),
-              _buildParkSaleActions(context, sales),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               FilledButton.icon(
                 onPressed: sales.isSaleEmpty
                     ? null
@@ -2329,51 +2613,15 @@ class _POSScreenState extends State<POSScreen> {
                 icon: const Icon(Icons.payments_rounded, size: 22),
                 label: const Text(
                   'Төлбөр төлөх',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                 ),
                 style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  minimumSize: const Size(0, 50),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
               ),
-              if (widget.mobileStaffMode ||
-                  auth.staffAccess.allowsMobile ||
-                  auth.staffAccess.allowsPosSystem ||
-                  auth.canSubmitPosSales) ...[
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  onPressed: sales.isSaleEmpty
-                      ? null
-                      : () => _sendTerminalCardSignal(context, sales),
-                  icon: const Icon(Icons.point_of_sale_rounded, size: 20),
-                  label: Text(
-                    AppLocalizations.of(context)
-                        .tr('terminal_signal_send_kiosk'),
-                    maxLines: 2,
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      height: 1.15,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 14,
-                      horizontal: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -2392,18 +2640,31 @@ class _POSScreenState extends State<POSScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: tt.bodyLarge?.copyWith(
-            color: cs.onSurfaceVariant,
-            fontWeight: FontWeight.w500,
+        Flexible(
+          flex: 2,
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: tt.bodyLarge?.copyWith(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
-        Text(
-          MntAmountFormatter.formatTugrikSpaced(amount),
-          style: tt.bodyLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            fontFeatures: const [FontFeature.tabularFigures()],
+        const SizedBox(width: 8),
+        Flexible(
+          flex: 3,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(
+              MntAmountFormatter.formatTugrikSpaced(amount),
+              style: tt.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
           ),
         ),
       ],
@@ -2422,8 +2683,12 @@ class _POSScreenState extends State<POSScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
+        Flexible(
+          flex: 2,
+          child: Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: isTotal
               ? textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w600,
@@ -2434,18 +2699,27 @@ class _POSScreenState extends State<POSScreen> {
                   fontSize: context.responsiveFontSize(14),
                 ),
         ),
-        Text(
-          'MNT ${MntAmountFormatter.format(amount)}',
-          style: isTotal
-              ? textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: colorScheme.primary,
-                  fontSize: context.responsiveFontSize(18),
-                )
-              : textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontSize: context.responsiveFontSize(14),
-                ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          flex: 3,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(
+              'MNT ${MntAmountFormatter.format(amount)}',
+              style: isTotal
+                  ? textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: colorScheme.primary,
+                      fontSize: context.responsiveFontSize(18),
+                    )
+                  : textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontSize: context.responsiveFontSize(14),
+                    ),
+            ),
+          ),
         ),
       ],
     );
@@ -2533,6 +2807,8 @@ class _ProductCard extends StatelessWidget {
         inCart ? colorScheme.primary : colorScheme.outlineVariant;
     final borderWidth = inCart ? 2.5 : 1.0;
 
+    return LayoutBuilder(builder: (context, constraints) {
+    final kompakt = constraints.maxWidth < 150;
     return Material(
       color: inCart
           ? colorScheme.primaryContainer.withValues(alpha: 0.35)
@@ -2544,11 +2820,11 @@ class _ProductCard extends StatelessWidget {
         side: BorderSide(color: borderColor, width: borderWidth),
       ),
       clipBehavior: Clip.antiAlias,
-      // Тоо ширхэгийг ЗӨВХӨН зураг дээрх +/− товчоор өөрчилнө. Урьд нь
-      // хайрцаг дээр дарахад нэмэгдэж, удаан дарахад хасагддаг байсан тул
-      // санамсаргүй хүрэхэд тоо өөрчлөгддөг байв. Удаан дарахад (санаатай
-      // үйлдэл) тоо бичих цонх нээгдэнэ.
+      // Карт дээр дарахад 1-ээр нэмнэ ("+"-тэй ижил). Зүүн/баруун талын
+      // төвд −/+ товч, голд нь тоо ширхэг. Удаан дарахад тоо бичих цонх.
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
         onLongPress: onTypeQuantity,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2608,17 +2884,17 @@ class _ProductCard extends StatelessWidget {
                         ],
                       ),
                     ),
+                  // Тоо ширхэг — зургийн ГОЛД (дарахад тоо бичих цонх).
                   if (inCart)
-                    Positioned(
-                      top: 6,
-                      right: 6,
+                    Positioned.fill(
+                      child: Center(
                       child: GestureDetector(
                         onTap: onTypeQuantity,
                         behavior: HitTestBehavior.opaque,
                         child: Container(
                         padding: EdgeInsets.symmetric(
-                          horizontal: multiInCart ? 10 : 8,
-                          vertical: 5,
+                          horizontal: kompakt ? 7 : (multiInCart ? 12 : 10),
+                          vertical: kompakt ? 4 : 7,
                         ),
                         decoration: BoxDecoration(
                           color: multiInCart
@@ -2638,11 +2914,11 @@ class _ProductCard extends StatelessWidget {
                           ],
                         ),
                         child: Text(
-                          saleQuantityLabel ?? '×$inSaleQuantity',
+                          saleQuantityLabel ?? '$inSaleQuantity',
                           style: textTheme.labelLarge?.copyWith(
                             color: colorScheme.onPrimary,
                             fontWeight: FontWeight.w900,
-                            fontSize: multiInCart ? 15 : 13,
+                            fontSize: kompakt ? 14 : 18,
                             height: 1,
                             fontFeatures: const [
                               FontFeature.tabularFigures(),
@@ -2651,60 +2927,68 @@ class _ProductCard extends StatelessWidget {
                         ),
                       ),
                       ),
+                      ),
                     ),
                   if (inCart && onRemoveLineFromSale != null)
                     Positioned(
                       left: 0,
                       top: 0,
                       child: _ImageStepperButton(
+                        kompakt: kompakt,
                         icon: Icons.close_rounded,
                         tooltip: 'Сагснаас хасах',
                         negative: true,
                         onTap: onRemoveLineFromSale,
                       ),
                     ),
+                  // "−" — зүүн ирмэгийн босоо төвд
                   if (inCart && onRemoveOneFromSale != null)
                     Positioned(
                       left: 0,
+                      top: 0,
                       bottom: 0,
-                      child: _ImageStepperButton(
-                        icon: Icons.remove_rounded,
-                        tooltip: 'Нэгээр хасах',
-                        negative: true,
-                        onTap: onRemoveOneFromSale,
-                      ),
-                    ),
-                  // Хайрцаг задлах / жин оруулах — АВТОМАТААР гарахгүй,
-                  // зөвхөн энэ товчоор нээгдэнэ.
-                  //
-                  // Зурагны ТӨВД байрлана, доод ирмэг дээр БИШ: гар утсанд
-                  // сараалж 3 баганатай (карт ~115px) тул доод ирмэг дээрх
-                  // гурван 46px товч давхцаж, энэ товч нь "−"-ийн дээр
-                  // будагдан түүний даралтыг залгидаг байв.
-                  if (onEditQuantity != null)
-                    Positioned.fill(
                       child: Center(
                         child: _ImageStepperButton(
-                          icon: item.product.isWeightSaleUnit
-                              ? Icons.scale_rounded
-                              : Icons.inventory_2_outlined,
-                          tooltip: item.product.isWeightSaleUnit
-                              ? 'Жин оруулах'
-                              : 'Хайрцаг задлах',
-                          onTap: onEditQuantity,
+                        kompakt: kompakt,
+                          icon: Icons.remove_rounded,
+                          tooltip: 'Нэгээр хасах',
+                          negative: true,
+                          onTap: onRemoveOneFromSale,
                         ),
                       ),
                     ),
-                  // "+" нь сагсанд байгаа эсэхээс үл хамааран ҮРГЭЛЖ
-                  // харагдана — хайрцаг дээр дарж нэмэхийг хассан тул
-                  // бараа нэмэх цорын ганц зам энэ.
+                  // Хайрцаг задлах / жин оруулах — АВТОМАТААР гарахгүй,
+                  // зөвхөн энэ товчоор нээгдэнэ. Голд нь тоо ширхэг, хоёр
+                  // талын төвд −/+ байрлах тул баруун ДЭЭД буланд.
+                  if (onEditQuantity != null)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: _ImageStepperButton(
+                        kompakt: kompakt,
+                        icon: item.product.isWeightSaleUnit
+                            ? Icons.scale_rounded
+                            : Icons.inventory_2_outlined,
+                        tooltip: item.product.isWeightSaleUnit
+                            ? 'Жин оруулах'
+                            : 'Хайрцаг задлах',
+                        onTap: onEditQuantity,
+                      ),
+                    ),
+                  // "+" — баруун ирмэгийн босоо төвд; зөвхөн сагсанд орсон
+                  // үед (эхний нэмэлтийг карт дээр дарж хийнэ).
+                  if (inCart)
                   Positioned(
                     right: 0,
+                    top: 0,
                     bottom: 0,
-                    child: _ImageStepperButton(
-                      icon: Icons.add_rounded,
-                      tooltip: 'Нэгээр нэмэх',
-                      onTap: onTap,
+                    child: Center(
+                      child: _ImageStepperButton(
+                        kompakt: kompakt,
+                        icon: Icons.add_rounded,
+                        tooltip: 'Нэгээр нэмэх',
+                        onTap: onTap,
+                      ),
                     ),
                   ),
                 ],
@@ -2855,6 +3139,7 @@ class _ProductCard extends StatelessWidget {
         ),
       ),
     );
+    });
   }
 }
 
@@ -2865,7 +3150,11 @@ class _ImageStepperButton extends StatelessWidget {
     required this.onTap,
     required this.tooltip,
     this.negative = false,
+    this.kompakt = false,
   });
+
+  /// Нарийн карт (< 150px): жижиг товч — −, тоо, + хоорондоо давхцахгүй.
+  final bool kompakt;
 
   final IconData icon;
   final VoidCallback? onTap;
@@ -2888,11 +3177,13 @@ class _ImageStepperButton extends StatelessWidget {
     final bg = negative ? cs.error : cs.primary;
     final fg = negative ? cs.onError : cs.onPrimary;
 
+    final hit = kompakt ? 34.0 : _hitSize;
+    final visual = kompakt ? 28.0 : _visualSize;
     return Tooltip(
       message: tooltip,
       child: SizedBox(
-        width: _hitSize,
-        height: _hitSize,
+        width: hit,
+        height: hit,
         child: Material(
           color: Colors.transparent,
           child: InkWell(
@@ -2900,8 +3191,8 @@ class _ImageStepperButton extends StatelessWidget {
             customBorder: const CircleBorder(),
             child: Center(
               child: Container(
-                width: _visualSize,
-                height: _visualSize,
+                width: visual,
+                height: visual,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: bg,
@@ -2915,7 +3206,7 @@ class _ImageStepperButton extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Icon(icon, size: 20, color: fg),
+                child: Icon(icon, size: kompakt ? 16 : 20, color: fg),
               ),
             ),
           ),

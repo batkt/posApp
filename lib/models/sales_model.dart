@@ -284,6 +284,23 @@ class SalesModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Ширээний захиалга (вэб `songogdsonShiree`): `{objektiinId, objektiinNer,
+  /// shireeniiId, shireeniiNer}`. Сонгосон үед хүлээлгэх нь "Ширээнд хадгалах"
+  /// болж, төлөхөд сервер тухайн ширээний нээлттэй захиалгыг хаана.
+  Map<String, dynamic>? _shiree;
+  Map<String, dynamic>? get shiree => _shiree;
+  bool get shireeTeiEsekh =>
+      (_shiree?['shireeniiId']?.toString() ?? '').isNotEmpty;
+
+  void setShiree(Map<String, dynamic>? value) {
+    _shiree = value == null ? null : Map<String, dynamic>.from(value);
+    notifyListeners();
+  }
+
+  /// Гал тогоо (KDS) руу илгээх эсэх — вэбтэй ижил: ширээний захиалга
+  /// автоматаар илгээгдэнэ, ширээгүй ердийн борлуулалт илгээгдэхгүй.
+  bool get kdsRuuIlgeekh => shireeTeiEsekh;
+
   /// Incremented when the user leaves the receipt screen to start a new sale so
   /// mobile cashier [POSScreen] can jump the PageView back to the product grid.
   int _cashierReturnToProductsEpoch = 0;
@@ -1092,6 +1109,7 @@ class SalesModel extends ChangeNotifier {
   void clearSale() {
     _currentSale.clear();
     _guilgeeniiDugaar = null;
+    _shiree = null;
     _selectedCustomer = null;
     _dorvonNegManualPicks = const {};
     // Урамшууллын серверийн төлөв нь тухайн сагсных — шинэ захиалга дээр
@@ -1107,11 +1125,13 @@ class SalesModel extends ChangeNotifier {
   void restoreParkedSale(
     List<SaleItem> lines, {
     required String guilgeeniiDugaar,
+    Map<String, dynamic>? shiree,
   }) {
     _currentSale
       ..clear()
       ..addAll(lines);
     _guilgeeniiDugaar = guilgeeniiDugaar;
+    _shiree = shiree == null ? null : Map<String, dynamic>.from(shiree);
     notifyListeners();
   }
 

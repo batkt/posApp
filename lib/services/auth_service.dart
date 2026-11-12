@@ -131,10 +131,7 @@ class AuthService {
   /// [BackgroundWatchdogService]-triggered restarts / reboots without a human).
   Future<bool> _isTerminalDevice() async {
     final hw = await TerminalHardwareInfo.probe();
-    final result = (hw.kind == TerminalHardwareKind.eposOpenInApp ||
-            hw.kind == TerminalHardwareKind.neptunePax) ||
-        hw.manufacturer.toLowerCase().contains('pax') ||
-        hw.manufacturer.toLowerCase().contains('sunmi');
+    final result = hw.isPosTerminal;
     debugPrint(
         '>>> [AuthService] _isTerminalDevice: kind=${hw.kind} manufacturer=${hw.manufacturer} model=${hw.model} -> $result');
     return result;

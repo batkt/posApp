@@ -9,6 +9,7 @@ import '../../utils/app_date_range_picker.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/app_date_range_filter_button.dart';
 import 'tailan/baraa_tailan_tab.dart';
+import 'tailan/khudulguun_tailan_tab.dart';
 
 /// Тайлан — 2 таб, хугацааны шүүлт хуваалцана:
 ///   • Борлуулалт — төлбөрийн хэлбэрээр (`POST /borluulaltiinTailanKhelbereerAvya`)
@@ -25,7 +26,7 @@ class TailanScreen extends StatefulWidget {
 class _TailanScreenState extends State<TailanScreen>
     with SingleTickerProviderStateMixin {
   final TailanService _tailan = TailanService();
-  late final TabController _tabs = TabController(length: 2, vsync: this);
+  late final TabController _tabs = TabController(length: 3, vsync: this);
   late DateTimeRange _range;
   Future<TailanPostResult>? _future;
 
@@ -109,6 +110,7 @@ class _TailanScreenState extends State<TailanScreen>
             tabs: [
               Tab(text: l10n.tr('tailan_tab_payment')),
               Tab(text: l10n.tr('tailan_tab_baraa')),
+              const Tab(text: 'Хөдөлгөөн'),
             ],
           ),
           Padding(
@@ -182,6 +184,7 @@ class _TailanScreenState extends State<TailanScreen>
                   ],
                 ),
                 BaraaTailanTab(range: _range),
+                KhudulguunTailanTab(range: _range),
               ],
             ),
           ),

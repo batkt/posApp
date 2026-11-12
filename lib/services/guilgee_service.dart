@@ -145,6 +145,11 @@ class GuilgeeService {
     final queryMap = <String, dynamic>{
       'baiguullagiinId': bid,
       'tuluv': 0,
+      // Вэбтэй ижил: ширээний захиалга ширээний харагдацад, киоск/KDS
+      // захиалга "Захиалга" дараалалд тусдаа харагдана. Энд дуудаж сэргээвэл
+      // бичлэг устгагдаж ширээ/KDS-ээс алга болдог.
+      'shiree.shireeniiId': {r'$exists': false},
+      'zakhialga.dugaar': {r'$exists': false},
     };
     final sid = salbariinId.trim();
     if (restrictToSalbar && sid.isNotEmpty) {

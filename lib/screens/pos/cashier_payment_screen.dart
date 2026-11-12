@@ -13,6 +13,7 @@ import '../../payment/pos_payment_core.dart';
 import '../../services/khariltsagch_service.dart';
 import '../../services/pos_settings_service.dart';
 import '../../services/pos_transaction_service.dart';
+import '../../services/terminal_hardware_service.dart';
 import '../../services/qpay_service.dart';
 import '../../services/unipos_service.dart';
 import '../../services/offline/offline_guilgee_queue.dart';
@@ -117,6 +118,15 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   Future<void> _loadTokiTokhirgoo() async {
     final s = context.read<AuthModel>().posSession;
     if (s == null) return;
+    // Toki зөвхөн гар утасны (mobile) ПОС-д — Андройд ПОС терминал дээр
+    // (PAX/EPOS, Sunmi) төлбөрийн хэлбэрт харуулахгүй.
+    try {
+      final hw = await TerminalHardwareInfo.probe();
+      if (hw.isPosTerminal) {
+        if (mounted && _tokiAshiglakh) setState(() => _tokiAshiglakh = false);
+        return;
+      }
+    } catch (_) {}
     try {
       final org = await posSettingsService.fetchBaiguullaga(s.baiguullagiinId);
       final toki = (org?['tokhirgoo'] as Map?)?['toki'];

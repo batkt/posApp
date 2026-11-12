@@ -408,8 +408,10 @@ class MainActivity : FlutterFragmentActivity() {
         }
         // 1) Prefer known terminal-like packages (UniPOS/EPOS/etc)
         discoverUniPosFromSendHandlers(mine)?.let { return it }
-        // 2) Fallback: any other third-party SEND handler except our own app/browser.
-        return discoverAnyTerminalFromSendHandlers(mine)
+        // "Ямар ч SEND хүлээн авагч" руу унах fallback-ийг хассан: UniPOS
+        // суулгаагүй утсан дээр Discord г.м мессенжер нээгдэж байв. Терминалын
+        // апп олдохгүй бол UNIPOS_NOT_FOUND алдаа буцаана.
+        return null
     }
 
     private fun launchEpos(

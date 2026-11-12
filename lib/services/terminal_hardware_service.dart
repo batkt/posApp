@@ -35,6 +35,15 @@ class TerminalHardwareInfo {
   bool get usesEposOpenInApp =>
       kind == TerminalHardwareKind.eposOpenInApp && eposInAppReady;
 
+  /// Андройд ПОС терминал (PAX/EPOS, Sunmi) эсэх — энгийн утаснаас ялгана.
+  /// Нэвтрэлт (терминалын сесс хадгалах) болон төлбөрийн хэлбэр (Toki зөвхөн
+  /// утсанд) хоёулаа үүнийг ашиглана.
+  bool get isPosTerminal =>
+      kind == TerminalHardwareKind.eposOpenInApp ||
+      kind == TerminalHardwareKind.neptunePax ||
+      manufacturer.toLowerCase().contains('pax') ||
+      manufacturer.toLowerCase().contains('sunmi');
+
   static const MethodChannel _ch = MethodChannel('mn.posease.mobile.terminal.pos');
 
   static TerminalHardwareInfo? _cached;
