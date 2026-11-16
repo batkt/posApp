@@ -460,6 +460,183 @@ class VisualReceiptRenderer {
     }
   }
 
+  /// Борлуулалтын тайлан (төлбөрийн хэлбэрээр) — И-Баримтын баримттай ЯГ
+  /// адил загвар (өргөн, фонт, тасархай шугам, мөр), зөвхөн өгөгдөл нь өөр.
+  ///
+  /// [murud] — (нэр, дүн) жагсаалт; [hunglult] — хөнгөлөлтийн нийлбэр (null бол
+  /// харуулахгүй); [niitDun] — нийт орлого.
+  static Widget buildTailanReceiptWidget({
+    required String baiguullagiinNer,
+    required String salbarNer,
+    required String kassNer,
+    required DateTimeRange khugatsaa,
+    required List<MapEntry<String, double>> murud,
+    required double niitDun,
+    double? hunglult,
+  }) {
+    String ognoo(DateTime d) =>
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    final nowStr = DateTime.now().toString().substring(0, 16);
+
+    const thermalDashLine = Text(
+      '----------------------------------------------',
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        color: Colors.black,
+        fontSize: 11,
+        fontWeight: FontWeight.w900,
+        height: 1.0,
+      ),
+    );
+    const muriinZagvar = TextStyle(
+      color: Colors.black,
+      fontWeight: FontWeight.w500,
+      fontSize: 13,
+    );
+
+    return Container(
+      width: _paperWidth,
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: Text(
+              '${baiguullagiinNer.isNotEmpty ? baiguullagiinNer.toUpperCase() : 'POSEASE'} ТАЙЛАН',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                fontSize: 18,
+              ),
+            ),
+          ),
+          if (salbarNer.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                'Салбар: $salbarNer',
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          if (kassNer.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Касс: $kassNer',
+              style: const TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+              ),
+            ),
+          ],
+          const SizedBox(height: 2),
+          Text(
+            'Хугацаа: ${ognoo(khugatsaa.start)} — ${ognoo(khugatsaa.end)}',
+            style: const TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.w600,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Хэвлэсэн: $nowStr',
+            style: const TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.w400,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 1),
+          thermalDashLine,
+          const SizedBox(
+            width: double.infinity,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Төлбөрийн хэлбэр',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                Text(
+                  'Дүн',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 1),
+          if (murud.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 3),
+              child: Text('Борлуулалт алга', style: muriinZagvar),
+            ),
+          for (final m in murud)
+            _moneyRow(m.key, _fmt(m.value), fontSize: 14),
+          thermalDashLine,
+          if (hunglult != null)
+            _moneyRow('Хөнгөлөлт (нийлбэр)', _fmt(hunglult), fontSize: 14),
+          _moneyRow('Нийт орлого', _fmt(niitDun), fontSize: 16, isBold: true),
+        ],
+      ),
+    );
+  }
+
+  /// [buildTailanReceiptWidget]-ийг И-Баримттай адил замаар терминал дээр хэвлэнэ.
+  static Future<PrinterResult> printTailanReceipt({
+    required String baiguullagiinNer,
+    required String salbarNer,
+    required String kassNer,
+    required DateTimeRange khugatsaa,
+    required List<MapEntry<String, double>> murud,
+    required double niitDun,
+    double? hunglult,
+  }) async {
+    try {
+      final widget = buildTailanReceiptWidget(
+        baiguullagiinNer: baiguullagiinNer,
+        salbarNer: salbarNer,
+        kassNer: kassNer,
+        khugatsaa: khugatsaa,
+        murud: murud,
+        niitDun: niitDun,
+        hunglult: hunglult,
+      );
+      final Uint8List pngBytes = await renderWidgetToThermalPng(widget);
+      // Тайлан нь төлбөр биш тул amount дамжуулахгүй (0) — терминалын төлбөрийн
+      // апп руу дүнтэй хүсэлт явуулахаас сэргийлнэ.
+      return await PrinterService.printReceiptImage(
+        pngBytes,
+        dbRefNo: 'TAILAN-${DateTime.now().millisecondsSinceEpoch}',
+      );
+    } catch (e) {
+      return PrinterResult(
+        success: false,
+        backend: 'none',
+        message: 'Тайлан хэвлэхэд алдаа: $e',
+      );
+    }
+  }
+
   /// Renders a Flutter [Widget] to thermal-binarized PNG bytes using an offscreen PipelineOwner.
   static Future<Uint8List> renderWidgetToThermalPng(
     Widget widget, {

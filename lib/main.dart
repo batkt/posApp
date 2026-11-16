@@ -90,8 +90,12 @@ class _POSAppState extends State<POSApp> {
 
   /// Зөвхөн НЭВТЭРСЭН үед тоолно — нэвтрэх дэлгэц дээр хүлээж байгаа хүнийг
   /// "гаргах" зүйл байхгүй.
+  ///
+  /// Хугацааг backend тогтооно (`idevkhguiGarakhMinut`); 0 бол огт гаргахгүй.
   void _syncInactivityMonitor() {
-    final loggedIn = widget.authModel.isLoggedIn;
+    final minut = widget.authModel.idevkhguiGarakhMinut;
+    final loggedIn = widget.authModel.isLoggedIn && minut > 0;
+    if (minut > 0) _inactivity.setTimeout(Duration(minutes: minut));
     if (loggedIn && !_inactivity.isRunning) {
       _inactivity.start();
     } else if (!loggedIn && _inactivity.isRunning) {

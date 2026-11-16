@@ -6,8 +6,10 @@ import '../../models/locale_model.dart';
 import '../../services/tailan_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/app_date_range_picker.dart';
+import '../../utils/app_snackbar.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../widgets/app_date_range_filter_button.dart';
+import '../../widgets/visual_receipt_renderer.dart';
 import 'tailan/baraa_tailan_tab.dart';
 import 'tailan/khudulguun_tailan_tab.dart';
 
@@ -176,7 +178,10 @@ class _TailanScreenState extends State<TailanScreen>
                               setState(() => _future = f);
                               await f;
                             },
-                            child: _NegtgelPaymentList(data: r.data),
+                            child: _NegtgelPaymentList(
+                              data: r.data,
+                              range: _range,
+                            ),
                           );
                         },
                       ),
@@ -195,9 +200,10 @@ class _TailanScreenState extends State<TailanScreen>
 }
 
 class _NegtgelPaymentList extends StatelessWidget {
-  const _NegtgelPaymentList({required this.data});
+  const _NegtgelPaymentList({required this.data, required this.range});
 
   final dynamic data;
+  final DateTimeRange range;
 
   static double _asDouble(dynamic v) {
     if (v == null) return 0;
@@ -254,7 +260,7 @@ class _NegtgelPaymentList extends StatelessWidget {
         case 'qpay':
           return l10n.tr('tailan_pay_qpay');
         case 'toki':
-          return 'Toki';
+          return 'Токи';
         case 'khariltsakh':
           return l10n.tr('tailan_pay_khariltsakh');
         case 'zeel':
@@ -356,7 +362,90 @@ class _NegtgelPaymentList extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: 16),
+        _TailanKhevlekhTovch(
+          range: range,
+          murud: [
+            for (final m in paymentRows)
+              MapEntry(
+                labelFor(_turulKey(m['_id'])),
+                _asDouble(m['niitDun']),
+              ),
+          ],
+          hunglult:
+              hunglultRow != null ? _asDouble(hunglultRow['niitDun']) : null,
+          niitDun: paymentTotal,
+        ),
       ],
+    );
+  }
+}
+
+/// Дэлгэц дээр харагдаж буй тайланг И-Баримттай ижил загвараар терминалын
+/// принтерээр хэвлэнэ.
+class _TailanKhevlekhTovch extends StatefulWidget {
+  const _TailanKhevlekhTovch({
+    required this.range,
+    required this.murud,
+    required this.niitDun,
+    this.hunglult,
+  });
+
+  final DateTimeRange range;
+  final List<MapEntry<String, double>> murud;
+  final double niitDun;
+  final double? hunglult;
+
+  @override
+  State<_TailanKhevlekhTovch> createState() => _TailanKhevlekhTovchState();
+}
+
+class _TailanKhevlekhTovchState extends State<_TailanKhevlekhTovch> {
+  bool _khevlej = false;
+
+  Future<void> _khevle() async {
+    if (_khevlej) return;
+    setState(() => _khevlej = true);
+    try {
+      final auth = context.read<AuthModel>();
+      final res = await VisualReceiptRenderer.printTailanReceipt(
+        baiguullagiinNer: auth.merchantDisplayName,
+        salbarNer: auth.activeSalbariinLabel,
+        kassNer: auth.currentUser?.name ?? '',
+        khugatsaa: widget.range,
+        murud: widget.murud,
+        niitDun: widget.niitDun,
+        hunglult: widget.hunglult,
+      );
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        res.success ? 'Тайлан хэвлэгдлээ' : res.message,
+        variant: res.success ? AppSnackVariant.success : AppSnackVariant.error,
+      );
+    } finally {
+      if (mounted) setState(() => _khevlej = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: FilledButton.icon(
+        onPressed: _khevlej ? null : _khevle,
+        icon: _khevlej
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.print_rounded),
+        label: const Text('Хэвлэх'),
+      ),
     );
   }
 }

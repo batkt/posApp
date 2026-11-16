@@ -15,7 +15,16 @@ class InactivityMonitor {
   static const Duration defaultTimeout = Duration(minutes: 15);
 
   final void Function() onTimeout;
-  final Duration timeout;
+
+  /// Backend-ээс ирсэн хугацаагаар солигдож болно ([setTimeout]).
+  Duration timeout;
+
+  /// Хугацааг шинэчилнэ; ажиллаж байвал шинэ хугацаагаар дахин эхэлнэ.
+  void setTimeout(Duration value) {
+    if (value == timeout) return;
+    timeout = value;
+    if (isRunning) _restart();
+  }
 
   Timer? _timer;
   bool _started = false;

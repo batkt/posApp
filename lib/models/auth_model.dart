@@ -6,6 +6,7 @@ import 'package:local_auth/local_auth.dart';
 import '../auth/staff_screen_access.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/inactivity_monitor.dart';
 import '../services/pos_settings_service.dart';
 import '../services/socket_service.dart';
 import '../services/terminal_session_store.dart';
@@ -139,6 +140,18 @@ class AuthModel extends ChangeNotifier {
 
   /// Branch + org for `posBack` sale APIs (set on real API login).
   PosSession? get posSession => _posSession;
+
+  /// Идэвхгүй байвал хэдэн минутын дараа гаргах вэ — backend нэвтрэлтийн
+  /// хариуны `result.idevkhguiGarakhMinut`-аар тогтооно (0 = хэзээ ч
+  /// гаргахгүй, жишээ нь киоск/KDS дэлгэц). Хуучин backend утга илгээхгүй бол 15.
+  int get idevkhguiGarakhMinut {
+    final v = _posSession?.ajiltan['idevkhguiGarakhMinut'];
+    final n = v is num ? v.toInt() : int.tryParse(v?.toString() ?? '');
+    if (n == null || n < 0) {
+      return InactivityMonitor.defaultTimeout.inMinutes;
+    }
+    return n;
+  }
 
   /// More than one салбар on the account — show [BranchSelectScreen] before [PostLoginHome].
   bool get needsBranchSelection =>
