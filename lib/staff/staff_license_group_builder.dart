@@ -2,6 +2,11 @@ import 'dart:convert';
 
 /// License module row from `erkhiinMedeelelAvya` → `moduluud` (same shape as web
 /// `erkhiinTokhirgooModal` / `khereglegchiinErkhiinTokhirgoo.js`).
+///
+/// `odoogiin` is counted live by posBackv2 on every request. Mobile / terminal
+/// modules come back with `tuhuurumj` ("mobile" | "terminal") and `idevkhtei`
+/// (enabled for the organization on admin.zevtabs.mn) — they are NOT seat
+/// counted, only on/off.
 class StaffLicenseModule {
   StaffLicenseModule({
     required this.id,
@@ -9,31 +14,43 @@ class StaffLicenseModule {
     required this.zam,
     required this.bolomjit,
     required this.odoogiin,
+    this.tuhuurumj,
+    this.idevkhtei = true,
   });
 
   final String id;
   final String ner;
   final String zam;
-  final int bolomjit;
+  final int? bolomjit;
   final int odoogiin;
+  final String? tuhuurumj;
+  final bool idevkhtei;
 
-  int get initialRemaining => (bolomjit - odoogiin).clamp(0, 1 << 30);
+  bool get isDevice => tuhuurumj != null;
+
+  /// Remaining seats (may be negative when already over license, like web).
+  /// `null` = not limited (device module or no `bolomjit`).
+  int? get initialRemaining =>
+      isDevice || bolomjit == null ? null : bolomjit! - odoogiin;
 
   factory StaffLicenseModule.fromJson(Map<String, dynamic> m) {
+    final t = m['tuhuurumj']?.toString();
     return StaffLicenseModule(
       id: m['_id']?.toString() ?? m['id']?.toString() ?? '',
       ner: m['ner']?.toString() ?? '',
-      zam: m['zam']?.toString() ?? '',
-      bolomjit: _toInt(m['bolomjit']),
-      odoogiin: _toInt(m['odoogiin']),
+      zam: StaffLicenseGroupBuilder.normalizeZam(m['zam']?.toString() ?? ''),
+      bolomjit: _toIntOrNull(m['bolomjit']),
+      odoogiin: _toIntOrNull(m['odoogiin']) ?? 0,
+      tuhuurumj: (t == 'mobile' || t == 'terminal') ? t : null,
+      idevkhtei: m['idevkhtei'] != false,
     );
   }
 
-  static int _toInt(dynamic v) {
+  static int? _toIntOrNull(dynamic v) {
     if (v is int) return v;
     if (v is num) return v.toInt();
-    if (v is String) return int.tryParse(v) ?? 0;
-    return 0;
+    if (v is String) return int.tryParse(v);
+    return null;
   }
 }
 
@@ -44,15 +61,20 @@ class StaffWindowPermRow {
     required this.label,
     required this.initialRemaining,
     this.switchDisabled = false,
-  }) : remaining = initialRemaining;
+    this.tuhuurumj,
+    this.idevkhtei = true,
+  });
 
   final String href;
   final String label;
-  final int initialRemaining;
-  final bool switchDisabled;
 
-  /// Remaining license seats while editing (mirrors web `uldegdel` mutation).
-  int remaining;
+  /// Remaining seats when the editor opened (`null` = unlimited / device).
+  final int? initialRemaining;
+  final bool switchDisabled;
+  final String? tuhuurumj;
+  final bool idevkhtei;
+
+  bool get isDevice => tuhuurumj != null;
 }
 
 /// Top-level POS route (`/khyanalt/…` with 3 segments) vs folder with children.
@@ -110,6 +132,36 @@ class StaffLicenseGroupBuilder {
     return _groupTitles[k] ?? groupSegment;
   }
 
+  /// Same as web `tsonkhniiTokhirgooJigdlye`: keys may be stored with a full
+  /// URL prefix — always compare in `/khyanalt/...` form.
+  static String normalizeZam(String zam) {
+    var z = zam.trim();
+    final i = z.indexOf('/khyanalt/');
+    if (i > 0) z = z.substring(i);
+    if (z.isNotEmpty && !z.startsWith('/') && !z.startsWith('http')) {
+      z = '/$z';
+    }
+    return z;
+  }
+
+  /// Normalizes every key of a stored `tsonkhniiTokhirgoo`, merging duplicates
+  /// towards `true` (web parity).
+  static Map<String, dynamic> normalizeTokhirgoo(Map raw) {
+    final out = <String, dynamic>{};
+    raw.forEach((k, v) {
+      final key = k.toString().contains('/khyanalt/')
+          ? normalizeZam(k.toString())
+          : k.toString();
+      final on = v == true || (v is String && v.toLowerCase() == 'true');
+      if (on || out[key] == true) {
+        out[key] = true;
+      } else {
+        out.putIfAbsent(key, () => false);
+      }
+    });
+    return out;
+  }
+
   /// Paths where the web disables the switch (user registry).
   static bool isHrefSwitchDisabled(String href) {
     final h = href.toLowerCase();
@@ -148,6 +200,8 @@ class StaffLicenseGroupBuilder {
         label: a.ner,
         initialRemaining: a.initialRemaining,
         switchDisabled: isHrefSwitchDisabled(a.zam),
+        tuhuurumj: a.tuhuurumj,
+        idevkhtei: a.idevkhtei,
       );
 
       if (isLeaf) {

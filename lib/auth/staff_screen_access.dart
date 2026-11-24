@@ -63,7 +63,7 @@ class StaffScreenAccess {
   /// Web `/khyanalt/tailan/*` — Тайлан (reports).
   final bool allowsTailan;
 
-  /// `tsonkhniiTokhirgoo['baraaZasakh']` or admin — бараа засах (app-only key, see staff editor).
+  /// Бараа засах — no separate permission; every logged-in employee may edit.
   final bool allowsBaraaEdit;
 
   /// Same as [allowsBarimtiinJagsaalt] — barcode/receipt history screen guard.
@@ -151,8 +151,8 @@ class StaffScreenAccess {
         match('/khyanalt/hynalt') ||
         match('khyanalt/hynalt');
     final tailan = full || match('khyanalt/tailan');
-    final baraaZasakh = full ||
-        (map != null && (_truthy(map['baraaZasakh']) || _truthy(map['baraa_zasakh'])));
+    // Бараа засахад тусгай эрх шаардахгүй — нэвтэрсэн бүх ажилтан засна.
+    const baraaZasakh = true;
 
     return StaffScreenAccess(
       hasFullAccess: full,

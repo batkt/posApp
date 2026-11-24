@@ -201,17 +201,21 @@ class _StaffPermissionEditorScreenState extends State<StaffPermissionEditorScree
   List<Map<String, dynamic>> _branches = [];
 
   late Map<String, dynamic> _tokhirgoo;
+
+  /// Saved permissions when the editor opened (normalized) — web `ankhniiErkh`.
+  late Map<String, dynamic> _ankhniiTokhirgoo;
   late List<String> _salbaruud;
 
   @override
   void initState() {
     super.initState();
     final raw = widget.ajiltanRow['tsonkhniiTokhirgoo'];
-    if (raw is Map) {
-      _tokhirgoo = Map<String, dynamic>.from(raw);
-    } else {
-      _tokhirgoo = {};
-    }
+    // Web parity: stored keys may carry a URL prefix; normalize so switches
+    // reflect real state and saves don't create duplicate keys.
+    _tokhirgoo = raw is Map
+        ? StaffLicenseGroupBuilder.normalizeTokhirgoo(raw)
+        : <String, dynamic>{};
+    _ankhniiTokhirgoo = Map<String, dynamic>.from(_tokhirgoo);
     final sal = widget.ajiltanRow['salbaruud'];
     if (sal is List) {
       _salbaruud = sal.map((e) => e.toString()).toList();
@@ -266,22 +270,63 @@ class _StaffPermissionEditorScreenState extends State<StaffPermissionEditorScree
 
   bool _routeEnabled(String href) => _truthy(_tokhirgoo[href]);
 
-  void _setRoute(String href, bool value, StaffWindowPermRow row) {
-    if (row.switchDisabled) return;
-    if (value) {
-      if (row.remaining <= 0) {
-        showAppSnackBar(context, AppLocalizations.of(context).tr('staff_admin_slots'));
-        return;
-      }
-      row.remaining--;
-      setState(() => _tokhirgoo[href] = true);
-    } else {
-      row.remaining++;
-      setState(() => _tokhirgoo[href] = false);
-    }
+  /// Remaining seats with the current (unsaved) edits applied — web
+  /// `getEffectiveUldegdel`. `null` = not seat counted.
+  int? _effectiveRemaining(StaffWindowPermRow row) {
+    final r = row.initialRemaining;
+    if (row.isDevice || r == null) return null;
+    final initialOn = _truthy(_ankhniiTokhirgoo[row.href]);
+    final currentOn = _routeEnabled(row.href);
+    if (!initialOn && currentOn) return r - 1;
+    if (initialOn && !currentOn) return r + 1;
+    return r;
   }
 
-  void _setButsaalt(bool v) => setState(() => _tokhirgoo['butsaalt'] = v);
+  /// Whether the switch may be turned ON — web `asaakhBolomjtoi`.
+  /// Turning OFF is always allowed.
+  bool _canEnable(StaffWindowPermRow row) {
+    if (row.switchDisabled) return false;
+    if (row.isDevice) return row.idevkhtei;
+    if (row.initialRemaining == null) return true;
+    if (_truthy(_ankhniiTokhirgoo[row.href])) return true;
+    return row.initialRemaining! > 0;
+  }
+
+  void _setRoute(String href, bool value, StaffWindowPermRow row) {
+    if (row.switchDisabled) return;
+    if (value && !_canEnable(row)) {
+      final l10n = AppLocalizations.of(context);
+      showAppSnackBar(
+        context,
+        row.isDevice
+            ? l10n.tr(row.tuhuurumj == 'mobile'
+                ? 'staff_device_off_mobile'
+                : 'staff_device_off_terminal')
+            : l10n.tr('staff_admin_slots'),
+      );
+      return;
+    }
+    setState(() => _tokhirgoo[href] = value);
+  }
+
+  void _setFlag(String key, bool v) => setState(() => _tokhirgoo[key] = v);
+
+  Widget _flagTile(String key, String titleKey, String subtitleKey) {
+    final l10n = AppLocalizations.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return SwitchListTile(
+      title: Text(l10n.tr(titleKey)),
+      subtitle: Text(
+        l10n.tr(subtitleKey),
+        style: textTheme.bodySmall?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+        ),
+      ),
+      value: _truthy(_tokhirgoo[key]),
+      onChanged: (v) => _setFlag(key, v),
+    );
+  }
 
   void _toggleSalbar(String id, bool on) {
     setState(() {
@@ -398,33 +443,26 @@ class _StaffPermissionEditorScreenState extends State<StaffPermissionEditorScree
                     ),
                     const SizedBox(height: 20),
                     _SectionTitle(text: l10n.tr('staff_section_action')),
+                    // Same action permissions (and order) as web
+                    // erkhiinTokhirgooModal "Үйлдэл хийх эрх".
                     Card(
-                      child: SwitchListTile(
-                        title: Text(l10n.tr('staff_butsalt_title')),
-                        subtitle: Text(
-                          l10n.tr('staff_butsalt_subtitle'),
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        value: _truthy(_tokhirgoo['butsaalt']),
-                        onChanged: _setButsaalt,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    _SectionTitle(text: l10n.tr('staff_section_baraa')),
-                    Card(
-                      child: SwitchListTile(
-                        title: Text(l10n.tr('staff_baraa_edit_title')),
-                        subtitle: Text(
-                          l10n.tr('staff_baraa_edit_subtitle'),
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        value: _truthy(_tokhirgoo['baraaZasakh']),
-                        onChanged: (v) =>
-                            setState(() => _tokhirgoo['baraaZasakh'] = v),
+                      child: Column(
+                        children: [
+                          _flagTile('butsaalt', 'staff_butsalt_title',
+                              'staff_butsalt_subtitle'),
+                          _flagTile('uniiOorchlogch', 'staff_unii_title',
+                              'staff_unii_subtitle'),
+                          _flagTile(
+                              'nukhunOrlogo',
+                              'staff_nukhun_borluulalt_title',
+                              'staff_nukhun_borluulalt_subtitle'),
+                          _flagTile(
+                              'nukhunOrlogoAvakh',
+                              'staff_nukhun_orlogo_title',
+                              'staff_nukhun_orlogo_subtitle'),
+                          _flagTile('udriinTailan', 'staff_udriin_tailan_title',
+                              'staff_udriin_tailan_subtitle'),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -479,8 +517,27 @@ class _StaffPermissionEditorScreenState extends State<StaffPermissionEditorScree
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final enabled = _routeEnabled(row.href);
-    final slotText =
-        l10n.tr('staff_admin_slots_left').replaceAll('{n}', '${row.remaining}');
+    final remaining = _effectiveRemaining(row);
+    final String? slotText;
+    Color? slotColor;
+    if (row.isDevice) {
+      slotText = row.idevkhtei
+          ? l10n.tr('staff_device_on')
+          : l10n.tr(row.tuhuurumj == 'mobile'
+              ? 'staff_device_off_mobile'
+              : 'staff_device_off_terminal');
+      if (!row.idevkhtei) slotColor = colorScheme.error;
+    } else if (remaining != null) {
+      slotText = remaining < 0
+          ? l10n.tr('staff_admin_slots_over').replaceAll('{n}', '$remaining')
+          : l10n.tr('staff_admin_slots_left').replaceAll('{n}', '$remaining');
+      if (remaining < 0) slotColor = colorScheme.error;
+    } else {
+      slotText = null;
+    }
+    // Turning OFF is always allowed; turning ON only when a seat is left
+    // (or the device is enabled for the org) — same as web.
+    final canToggle = !row.switchDisabled && (enabled || _canEnable(row));
     return Card(
       margin: EdgeInsets.only(bottom: nested ? 4 : 10),
       color: nested
@@ -491,14 +548,16 @@ class _StaffPermissionEditorScreenState extends State<StaffPermissionEditorScree
           title,
           style: textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
         ),
-        subtitle: Text(
-          slotText,
-          style: textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant),
-        ),
-        value: enabled,
-        onChanged: row.switchDisabled
+        subtitle: slotText == null
             ? null
-            : (v) => _setRoute(row.href, v, row),
+            : Text(
+                slotText,
+                style: textTheme.labelSmall?.copyWith(
+                  color: slotColor ?? colorScheme.onSurfaceVariant,
+                ),
+              ),
+        value: enabled,
+        onChanged: canToggle ? (v) => _setRoute(row.href, v, row) : null,
       ),
     );
   }

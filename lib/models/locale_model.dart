@@ -210,6 +210,22 @@ class AppLocalizations {
           'License module list is empty. Check organization license.',
       'staff_admin_slots': 'No remaining license capacity for this window.',
       'staff_admin_slots_left': 'Available permission: {n}',
+      'staff_admin_slots_over': 'Over license: {n}',
+      'staff_device_off_mobile':
+          'Mobile app is not enabled for this organization.',
+      'staff_device_off_terminal':
+          'Terminal is not enabled for this organization.',
+      'staff_device_on': 'Enabled for the organization',
+      'staff_unii_title': 'Change price',
+      'staff_unii_subtitle': 'Manually change product price on the sales screen',
+      'staff_nukhun_borluulalt_title': 'Backdated sales',
+      'staff_nukhun_borluulalt_subtitle':
+          'Record POS sales with a past date (when enabled in settings)',
+      'staff_nukhun_orlogo_title': 'Backdated stock receipts',
+      'staff_nukhun_orlogo_subtitle':
+          'Receive stock with a past date (when enabled in settings)',
+      'staff_udriin_tailan_title': 'Daily report',
+      'staff_udriin_tailan_subtitle': 'View Reports → Daily report',
       'staff_editor_title': 'Staff permissions',
       'staff_section_branch': 'Branch access',
       'staff_section_action': 'Action permissions',
@@ -217,7 +233,7 @@ class AppLocalizations {
       'staff_butsalt_title': 'Returns',
       'staff_butsalt_subtitle': 'Allow processing returns',
       'staff_section_baraa': 'Product edit',
-      'staff_baraa_edit_title': 'Edit products in app',
+      'staff_baraa_edit_title': 'Edit products',
       'staff_baraa_edit_subtitle':
           'Change price, barcodes, VAT, stock, and flags on the product details screen',
       'staff_admin_saved': 'Saved.',
@@ -827,6 +843,21 @@ class AppLocalizations {
           'Лицензийн цонхны жагсаалт хоосон байна. Байгууллагын лицензийг шалгана уу.',
       'staff_admin_slots': 'Энэ цонхны боломжит эрх дууссан байна.',
       'staff_admin_slots_left': 'Боломжит эрх: {n}',
+      'staff_admin_slots_over': 'Лицензээс хэтэрсэн: {n}',
+      'staff_device_off_mobile': 'Мобайл аппын эрх байгууллагад идэвхгүй байна.',
+      'staff_device_off_terminal': 'Терминалын эрх байгууллагад идэвхгүй байна.',
+      'staff_device_on': 'Байгууллагад идэвхтэй',
+      'staff_unii_title': 'Үнэ өөрчлөх',
+      'staff_unii_subtitle':
+          'Борлуулалтын дэлгэцэд барааны үнийг гараар өөрчлөх боломжтой эсэх',
+      'staff_nukhun_borluulalt_title': 'Борлуулалт нөхөж хийх',
+      'staff_nukhun_borluulalt_subtitle':
+          'ПОС-ын борлуулалтыг өнгөрсөн огноогоор нөхөж хийх (Тохиргоонд асаалттай үед)',
+      'staff_nukhun_orlogo_title': 'Орлого нөхөж хийх',
+      'staff_nukhun_orlogo_subtitle':
+          'Бараа орлогодохыг өнгөрсөн огноогоор нөхөж хийх (Тохиргоонд асаалттай үед)',
+      'staff_udriin_tailan_title': 'Өдрийн тайлан',
+      'staff_udriin_tailan_subtitle': 'Тайлан → Өдрийн тайланг харах',
       'staff_editor_title': 'Ажилтны эрх',
       'staff_section_branch': 'Хэрэглэгчийн салбарын эрх',
       'staff_section_action': 'Үйлдэл хийх эрх',
@@ -834,7 +865,7 @@ class AppLocalizations {
       'staff_butsalt_title': 'Буцаалт',
       'staff_butsalt_subtitle': 'Буцаалтын үйлдэл хийх эсэх',
       'staff_section_baraa': 'Бараа засах',
-      'staff_baraa_edit_title': 'Бараа засах эрх (апп)',
+      'staff_baraa_edit_title': 'Бараа засах эрх',
       'staff_baraa_edit_subtitle':
           'Үнэ, код, НӨАТ/НХАТ, үлдэгдэл зэргийг барааны дэлгэрэнгүй дээр өөрчлөх',
       'staff_admin_saved': 'Амжилттай хадгалагдлаа.',
