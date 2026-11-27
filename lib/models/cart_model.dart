@@ -201,6 +201,7 @@ class Product {
   factory Product.fromJson(Map<String, dynamic> json) {
     final codeStr = _asOptionalString(json['code']);
     final barCodeStr = _asOptionalString(json['barCode']);
+    final zurgiinIdStr = _asOptionalString(json['zurgiinId']);
     return Product(
       id: json['_id'] ?? '',
       name: json['ner'] ?? '',
@@ -208,8 +209,8 @@ class Product {
       price: _asDouble(json['niitUne']),
       costPrice: _asDouble(json['urtugUne']),
       category: json['angilal'] ?? '',
-      imageUrl: json['zurgiinId'] != null
-          ? '${ApiConfig.baseUrl}/file?path=baraa/${json['zurgiinId']}'
+      imageUrl: zurgiinIdStr != null
+          ? '${ApiConfig.baseUrl}/file?path=baraa/$zurgiinIdStr'
           : 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=400&fit=crop',
       barcode: barCodeStr,
       stock: _asInt(json['uldegdel']),

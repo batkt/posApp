@@ -45,6 +45,20 @@ class SocketService {
     return sid.isEmpty || sid == session.salbariinId;
   }
 
+  /// Терминал руу ирэх хэвлэх/төлбөрийн хүсэлт ЗААВАЛ энэ байгууллага, энэ
+  /// салбарынх байх ёстой. Сервер өмнө нь бүх клиент рүү (`io.emit`) илгээдэг
+  /// байсан тул өөр байгууллагын баримт хэвлэгдэж байв — талбар дутуу бол ч
+  /// хүлээж авахгүй.
+  bool _terminalKhuseeltMiinkhEsekh(dynamic data, PosSession session) {
+    if (data is! Map) return false;
+    final bid = data['baiguullagiinId']?.toString() ?? '';
+    final sid = data['salbariinId']?.toString() ?? '';
+    return bid.isNotEmpty &&
+        sid.isNotEmpty &&
+        bid == session.baiguullagiinId &&
+        sid == session.salbariinId;
+  }
+
   /// Debounced pulses when warehouse stock (`uldegdel`) changed for this branch.
   Stream<void> get uldegdelChanged => _uldegdelController.stream;
 
@@ -112,9 +126,11 @@ class SocketService {
       );
 
       void joinRoom() {
+        // Сервер токеноор байгууллагыг шалгаж байж салбарын өрөөнд оруулна.
         _socket!.emit('joinBranch', {
           'baiguullagiinId': session.baiguullagiinId,
           'salbariinId': session.salbariinId,
+          'token': token,
         });
       }
 
@@ -133,12 +149,14 @@ class SocketService {
         }
       });
       _socket!.on('terminalBarimtKhuseelt', (data) {
-        if (data is Map && !_barimtKhuseeltController.isClosed) {
+        if (_terminalKhuseeltMiinkhEsekh(data, session) &&
+            !_barimtKhuseeltController.isClosed) {
           _barimtKhuseeltController.add(Map<String, dynamic>.from(data));
         }
       });
       _socket!.on('terminalTulburKhuseelt', (data) {
-        if (data is Map && !_tulburKhuseeltController.isClosed) {
+        if (_terminalKhuseeltMiinkhEsekh(data, session) &&
+            !_tulburKhuseeltController.isClosed) {
           _tulburKhuseeltController.add(Map<String, dynamic>.from(data));
         }
       });

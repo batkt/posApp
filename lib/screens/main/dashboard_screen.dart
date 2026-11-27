@@ -10,6 +10,7 @@ import '../../services/hynalt_tailan_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/mnt_amount_formatter.dart';
 import '../../utils/mongolian_date_formatter.dart';
+import '../../utils/sale_reprint.dart';
 import 'low_stock_baraa_screen.dart';
 import 'out_of_stock_baraa_screen.dart';
 
@@ -62,6 +63,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else {
       _load();
     }
+  }
+
+  /// "Сүүлийн борлуулалт"-аас сонгосон борлуулалтын баримтыг дахин хэвлэх
+  /// (И-Баримт + зарлагын баримт) — нийтлэг [openSaleReprint]-ийг ашиглана.
+  Future<void> _dakhinKhevlekh(CompletedSale sale) async {
+    final neesen = await openSaleReprint(context, sale);
+    // Шинээр И-Баримт авсан байж болох тул жагсаалтыг шинэчилнэ
+    if (neesen && mounted) _load();
   }
 
   DateTimeRange _currentMonthLocal() {
@@ -440,6 +449,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             lineCount: sale.items.length,
                             l10n: l10n,
                             cashierName: _ajiltanNerFromSale(sale),
+                            onTap: () => _dakhinKhevlekh(sale),
                           );
                         }).toList(),
                       ),
@@ -601,6 +611,9 @@ class _SaleListTile extends StatelessWidget {
   final AppLocalizations l10n;
   final String? cashierName;
 
+  /// Дарахад баримтыг (И-Баримт / зарлагын баримт) дахин хэвлэх дэлгэц нээнэ.
+  final VoidCallback? onTap;
+
   const _SaleListTile({
     required this.saleId,
     required this.amount,
@@ -609,6 +622,7 @@ class _SaleListTile extends StatelessWidget {
     required this.lineCount,
     required this.l10n,
     this.cashierName,
+    this.onTap,
   });
 
   @override
@@ -621,7 +635,9 @@ class _SaleListTile extends StatelessWidget {
         .replaceAll('{lines}', '$lineCount');
     final cName = cashierName;
 
-    return Container(
+    return InkWell(
+      onTap: onTap,
+      child: Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         border: Border(
@@ -683,7 +699,16 @@ class _SaleListTile extends StatelessWidget {
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
+          if (onTap != null) ...[
+            const SizedBox(width: 4),
+            Icon(
+              Icons.print_outlined,
+              size: 18,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ],
         ],
+      ),
       ),
     );
   }

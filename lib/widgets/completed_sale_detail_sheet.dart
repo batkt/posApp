@@ -8,6 +8,7 @@ import '../models/sales_model.dart';
 import '../theme/app_theme.dart';
 import '../utils/mnt_amount_formatter.dart';
 import '../utils/mongolian_date_formatter.dart';
+import '../utils/sale_reprint.dart';
 import 'authenticated_image.dart';
 
 String _fmtMnt(double v) => MntAmountFormatter.formatTugrik(v);
@@ -804,6 +805,29 @@ class _SaleFooter extends StatelessWidget {
             ),
 
             const SizedBox(height: 14),
+
+            // Баримт дахин хэвлэх — И-Баримт (хадгалсныг серверээс ачаална)
+            // ба зарлагын баримт хоёулаа баримтын дэлгэц дээр гарна.
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: OutlinedButton.icon(
+                onPressed: () => openSaleReprint(context, sale),
+                icon: const Icon(Icons.print_outlined),
+                style: OutlinedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                label: Text(
+                  'Баримт хэвлэх',
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
 
             // Close button
             SizedBox(

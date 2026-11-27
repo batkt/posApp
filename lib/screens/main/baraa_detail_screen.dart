@@ -371,6 +371,16 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
     String? zurgiinId;
     if (_selectedImage != null) {
       zurgiinId = await _productApi.uploadProductImage(_selectedImage!);
+      if (!mounted) return;
+      if (zurgiinId == null || zurgiinId.isEmpty) {
+        setState(() => _saving = false);
+        showAppSnackBar(
+          context,
+          'Зураг хуулахад алдаа гарлаа',
+          variant: AppSnackVariant.error,
+        );
+        return;
+      }
     }
 
     final body = <String, dynamic>{
@@ -432,10 +442,14 @@ class _BaraaDetailScreenState extends State<BaraaDetailScreen> {
       setState(() {
         _item = found;
         _editing = false;
+        _selectedImage = null;
         _applyProductToForm();
       });
     } catch (_) {
-      setState(() => _editing = false);
+      setState(() {
+        _editing = false;
+        _selectedImage = null;
+      });
     }
 
     showAppSnackBar(context, l10n.tr('baraa_saved'), variant: AppSnackVariant.success);

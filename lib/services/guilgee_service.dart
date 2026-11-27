@@ -66,6 +66,47 @@ class GuilgeeService {
 
   final ApiService _api;
 
+  /// Борлуулалтын ХАДГАЛСАН И-Баримт (вэбийн дахин хэвлэхтэй ижил:
+  /// `GET /ebarimtJagsaaltAvya`, guilgeeniiDugaar-аар). Устгаагүй хамгийн
+  /// сүүлийнхийг буцаана; байхгүй/алдаатай бол null.
+  Future<Map<String, dynamic>?> fetchSavedEbarimt({
+    required String baiguullagiinId,
+    required String guilgeeniiDugaar,
+    String? salbariinId,
+  }) async {
+    try {
+      final query = <String, dynamic>{
+        'guilgeeniiDugaar': guilgeeniiDugaar,
+        if (salbariinId != null && salbariinId.isNotEmpty)
+          'salbariinId': salbariinId,
+      };
+      final response = await _api.get<Map<String, dynamic>>(
+        '/ebarimtJagsaaltAvya',
+        queryParams: {
+          'query': jsonEncode(query),
+          'order': jsonEncode({'createdAt': -1}),
+          'khuudasniiDugaar': '1',
+          'khuudasniiKhemjee': '5',
+          'baiguullagiinId': baiguullagiinId,
+        },
+        parser: _guilgeeTuukhRootAsMap,
+      );
+      if (!response.success || response.data == null) return null;
+      final jagsaalt = _guilgeeListJagsaaltFromResponse(response.data!) ?? const [];
+      final murud = jagsaalt
+          .whereType<Map>()
+          .map((e) => _stringKeyedMap(e))
+          .toList();
+      if (murud.isEmpty) return null;
+      return murud.firstWhere(
+        (m) => m['ustgasanOgnoo'] == null,
+        orElse: () => murud.first,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<GuilgeeListResult> listGuilgeeniiTuukh({
     required String baiguullagiinId,
     required String salbariinId,
@@ -528,6 +569,8 @@ CompletedSale completedSaleFromGuilgeeDoc(Map<String, dynamic> doc) {
     noatguiSum: noatguiDun,
     ajiltan: _ajiltanFromDoc(doc['ajiltan']),
     ebarimtAvsan: doc['ebarimtAvsanEsekh'] == true,
+    mongoId: (doc['_id'] is Map ? doc['_id'][r'$oid'] : doc['_id'])?.toString(),
+    salbariinId: doc['salbariinId']?.toString(),
   );
 }
 

@@ -228,6 +228,13 @@ class CompletedSale {
   /// From `guilgee.ebarimtAvsanEsekh` when loaded from POS API.
   final bool ebarimtAvsan;
 
+  /// Гүйлгээний Mongo `_id` (серверээс ачаалсан үед) — дахин хэвлэхэд
+  /// И-Баримт авах (`POST /ebarimtShivye`) үүнийг шаарддаг.
+  final String? mongoId;
+
+  /// Борлуулалт хийгдсэн салбар — хадгалсан И-Баримтыг хайхад.
+  final String? salbariinId;
+
   /// Total discount amount, including header discount, promotional discounts,
   /// and line-level discounts.
   double get effectiveDiscount {
@@ -258,6 +265,8 @@ class CompletedSale {
     this.noatguiSum = 0,
     this.ajiltan,
     this.ebarimtAvsan = false,
+    this.mongoId,
+    this.salbariinId,
   });
 
   double get netSubtotal => (subtotal - discount).clamp(0.0, double.infinity);

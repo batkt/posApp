@@ -277,20 +277,43 @@ class ProductService {
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
-      if (response.statusCode == 200) {
+      if (response.statusCode >= 200 && response.statusCode < 300) {
         final resBody = response.body.trim();
+        String? uploadedFilename;
         if (resBody.startsWith('{')) {
           final decoded = jsonDecode(resBody);
           if (decoded is Map && decoded['filename'] != null) {
-            return decoded['filename'].toString();
+            uploadedFilename = decoded['filename'].toString().trim();
+          }
+        } else {
+          uploadedFilename = resBody.replaceAll('"', '').trim();
+        }
+        if (uploadedFilename != null && uploadedFilename.isNotEmpty) {
+          final confirmed = await confirmFile(uploadedFilename, path: 'baraa');
+          if (confirmed) {
+            return uploadedFilename;
           }
         }
-        return resBody.replaceAll('"', '');
       }
     } catch (e) {
       debugPrint('uploadProductImage error: $e');
     }
     return null;
+  }
+
+  /// Move uploaded temp file into permanent folder via `POST /confirmFile`.
+  Future<bool> confirmFile(String filename, {String path = 'baraa'}) async {
+    try {
+      final response = await _apiService.post<dynamic>(
+        '/confirmFile',
+        body: {'filename': filename, 'path': path},
+        parser: (d) => d,
+      );
+      return response.success;
+    } catch (e) {
+      debugPrint('confirmFile error: $e');
+      return false;
+    }
   }
 
   /// Search barcode in BBNS / Ebarimt database (`GET /bbns-barcode-search?barcode=...`).

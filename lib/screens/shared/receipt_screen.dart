@@ -114,7 +114,13 @@ class ReceiptScreen extends StatefulWidget {
     this.cashierSlipTotals,
     this.saleLines,
     this.vatExcludedSale = false,
+    this.dakhinKhevlekh = false,
   });
+
+  /// Өмнөх борлуулалтыг (Хянах самбарын "Сүүлийн борлуулалт") дахин хэвлэх
+  /// горим — "Шинэ захиалга эхлүүлэх" (сагсыг цэвэрлэдэг) товчийн оронд зүгээр
+  /// "Буцах" гарна; одоогийн сагсанд огт хүрэхгүй.
+  final bool dakhinKhevlekh;
 
   /// Борлуулалтыг НӨАТ-ГҮЙ авсан эсэх — кассчны "НӨАТ ашиглах эсэх"
   /// унтраалгын БОДИТ төлөв ([PosWebTaxContext.vatExcludedSale]).
@@ -1085,11 +1091,17 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                     children: [
                       SizedBox(
                         width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: () => _startNewOrder(context),
-                          icon: const Icon(Icons.add_shopping_cart),
-                          label: const Text('Шинэ захиалга эхлүүлэх'),
-                        ),
+                        child: widget.dakhinKhevlekh
+                            ? FilledButton.icon(
+                                onPressed: () => Navigator.of(context).pop(),
+                                icon: const Icon(Icons.arrow_back),
+                                label: const Text('Буцах'),
+                              )
+                            : FilledButton.icon(
+                                onPressed: () => _startNewOrder(context),
+                                icon: const Icon(Icons.add_shopping_cart),
+                                label: const Text('Шинэ захиалга эхлүүлэх'),
+                              ),
                       ),
                       const SizedBox(height: 8),
                       // И-Баримтын тохиргоо асаалттай үед нэмэлт товч гарна —

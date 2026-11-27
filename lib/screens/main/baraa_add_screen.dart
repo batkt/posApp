@@ -279,6 +279,16 @@ class _BaraaAddScreenState extends State<BaraaAddScreen> {
     String? zurgiinId;
     if (_selectedImage != null) {
       zurgiinId = await _productApi.uploadProductImage(_selectedImage!);
+      if (!mounted) return;
+      if (zurgiinId == null || zurgiinId.isEmpty) {
+        setState(() => _saving = false);
+        showAppSnackBar(
+          context,
+          'Зураг хуулахад алдаа гарлаа',
+          variant: AppSnackVariant.error,
+        );
+        return;
+      }
     }
 
     final body = <String, dynamic>{

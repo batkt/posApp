@@ -28,6 +28,8 @@ android {
         jniLibs {
             // PAX DAL (DeviceConfig) expects extracted .so files under app nativeLibraryDir.
             useLegacyPackaging = true
+            // pax_sdk ships libpaxcanvas.so with 4 KB ELF alignment, which fails Google Play's 16 KB page size check.
+            excludes += setOf("**/arm64-v8a/libpaxcanvas.so")
         }
     }
 
@@ -56,12 +58,6 @@ android {
             ndkBuild {
                 arguments("APP_LDFLAGS+=-Wl,-z,max-page-size=16384")
             }
-        }
-    }
-
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
         }
     }
 
